@@ -1,0 +1,334 @@
+[
+  {
+    "sku": "CN001",
+    "name": "Arctic Pearl",
+    "material": "porcelain",
+    "tile_width_cm": 60,
+    "tile_length_cm": 60,
+    "application": "Indoor floor",
+    "surfaces": [
+      "floor"
+    ],
+    "locations": [
+      "indoor"
+    ],
+    "commercial": false,
+    "finish": "polished",
+    "slip_rating": "R9",
+    "price_per_m2": 31.0,
+    "currency": "USD",
+    "stock_m2": 820.0,
+    "tiles_per_box": 4,
+    "style": "Marble"
+  },
+  {
+    "sku": "CN002",
+    "name": "Desert Sand",
+    "material": "porcelain",
+    "tile_width_cm": 60,
+    "tile_length_cm": 120,
+    "application": "Indoor floor",
+    "surfaces": [
+      "floor"
+    ],
+    "locations": [
+      "indoor"
+    ],
+    "commercial": false,
+    "finish": "matt",
+    "slip_rating": "R10",
+    "price_per_m2": 36.0,
+    "currency": "USD",
+    "stock_m2": 430.0,
+    "tiles_per_box": 2,
+    "style": "Stone"
+  },
+  {
+    "sku": "CN003",
+    "name": "Nordic Oak",
+    "material": "porcelain",
+    "tile_width_cm": 20,
+    "tile_length_cm": 120,
+    "application": "Indoor floor",
+    "surfaces": [
+      "floor"
+    ],
+    "locations": [
+      "indoor"
+    ],
+    "commercial": false,
+    "finish": "matt",
+    "slip_rating": "R10",
+    "price_per_m2": 39.0,
+    "currency": "USD",
+    "stock_m2": 510.0,
+    "tiles_per_box": 5,
+    "style": "Wood"
+  },
+  {
+    "sku": "CN004",
+    "name": "Ocean Grip",
+    "material": "porcelain",
+    "tile_width_cm": 60,
+    "tile_length_cm": 60,
+    "application": "Outdoor",
+    "surfaces": [
+      "floor"
+    ],
+    "locations": [
+      "outdoor"
+    ],
+    "commercial": false,
+    "finish": "textured",
+    "slip_rating": "R12",
+    "price_per_m2": 34.0,
+    "currency": "USD",
+    "stock_m2": 300.0,
+    "tiles_per_box": 4,
+    "style": "Modern"
+  },
+  {
+    "sku": "CN005",
+    "name": "Urban Graphite",
+    "material": "porcelain",
+    "tile_width_cm": 60,
+    "tile_length_cm": 60,
+    "application": "Indoor/Commercial",
+    "surfaces": [
+      "floor"
+    ],
+    "locations": [
+      "indoor"
+    ],
+    "commercial": true,
+    "finish": "matt",
+    "slip_rating": "R10",
+    "price_per_m2": 29.0,
+    "currency": "USD",
+    "stock_m2": 740.0,
+    "tiles_per_box": 4,
+    "style": "Industrial"
+  },
+  {
+    "sku": "CN006",
+    "name": "Royal Calacatta",
+    "material": "porcelain",
+    "tile_width_cm": 120,
+    "tile_length_cm": 120,
+    "application": "Premium indoor",
+    "surfaces": [
+      "floor"
+    ],
+    "locations": [
+      "indoor"
+    ],
+    "commercial": false,
+    "finish": "polished",
+    "slip_rating": "R9",
+    "price_per_m2": 61.0,
+    "currency": "USD",
+    "stock_m2": 190.0,
+    "tiles_per_box": 1,
+    "style": "Luxury marble"
+  },
+  {
+    "sku": "CN007",
+    "name": "Ivory Mist",
+    "material": "ceramic",
+    "tile_width_cm": 30,
+    "tile_length_cm": 60,
+    "application": "Wall",
+    "surfaces": [
+      "wall"
+    ],
+    "locations": [
+      "indoor"
+    ],
+    "commercial": false,
+    "finish": "gloss",
+    "slip_rating": null,
+    "price_per_m2": 19.0,
+    "currency": "USD",
+    "stock_m2": 980.0,
+    "tiles_per_box": 8,
+    "style": "Minimal"
+  },
+  {
+    "sku": "CN008",
+    "name": "Aqua Shield",
+    "material": "ceramic",
+    "tile_width_cm": 30,
+    "tile_length_cm": 60,
+    "application": "Bathroom wall",
+    "surfaces": [
+      "wall"
+    ],
+    "locations": [
+      "indoor"
+    ],
+    "commercial": false,
+    "finish": "gloss",
+    "slip_rating": null,
+    "price_per_m2": 23.0,
+    "currency": "USD",
+    "stock_m2": 620.0,
+    "tiles_per_box": 8,
+    "style": "Contemporary"
+  },
+  {
+    "sku": "CN009",
+    "name": "Terra Rustic",
+    "material": "porcelain",
+    "tile_width_cm": 30,
+    "tile_length_cm": 60,
+    "application": "Outdoor",
+    "surfaces": [
+      "floor"
+    ],
+    "locations": [
+      "outdoor"
+    ],
+    "commercial": false,
+    "finish": "textured",
+    "slip_rating": "R12",
+    "price_per_m2": 27.0,
+    "currency": "USD",
+    "stock_m2": 350.0,
+    "tiles_per_box": 8,
+    "style": "Rustic"
+  },
+  {
+    "sku": "CN010",
+    "name": "Metro White",
+    "material": "ceramic",
+    "tile_width_cm": 10,
+    "tile_length_cm": 30,
+    "application": "Kitchen wall",
+    "surfaces": [
+      "wall"
+    ],
+    "locations": [
+      "indoor"
+    ],
+    "commercial": false,
+    "finish": "gloss",
+    "slip_rating": null,
+    "price_per_m2": 17.0,
+    "currency": "USD",
+    "stock_m2": 1200.0,
+    "tiles_per_box": 30,
+    "style": "Subway"
+  },
+  {
+    "sku": "CN011",
+    "name": "Black Onyx",
+    "material": "porcelain",
+    "tile_width_cm": 60,
+    "tile_length_cm": 120,
+    "application": "Indoor",
+    "surfaces": [
+      "floor",
+      "wall"
+    ],
+    "locations": [
+      "indoor"
+    ],
+    "commercial": false,
+    "finish": "polished",
+    "slip_rating": "R9",
+    "price_per_m2": 48.0,
+    "currency": "USD",
+    "stock_m2": 260.0,
+    "tiles_per_box": 2,
+    "style": "Luxury"
+  },
+  {
+    "sku": "CN012",
+    "name": "Sandstone Pro",
+    "material": "porcelain",
+    "tile_width_cm": 60,
+    "tile_length_cm": 60,
+    "application": "Commercial",
+    "surfaces": [
+      "floor"
+    ],
+    "locations": [
+      "indoor"
+    ],
+    "commercial": true,
+    "finish": "textured",
+    "slip_rating": "R11",
+    "price_per_m2": 42.0,
+    "currency": "USD",
+    "stock_m2": 400.0,
+    "tiles_per_box": 4,
+    "style": "Natural"
+  },
+  {
+    "sku": "CN013",
+    "name": "Pearl Mosaic",
+    "material": "ceramic",
+    "tile_width_cm": 30,
+    "tile_length_cm": 30,
+    "application": "Bathroom wall",
+    "surfaces": [
+      "wall"
+    ],
+    "locations": [
+      "indoor"
+    ],
+    "commercial": false,
+    "finish": "gloss",
+    "slip_rating": null,
+    "price_per_m2": 26.0,
+    "currency": "USD",
+    "stock_m2": 220.0,
+    "tiles_per_box": 12,
+    "style": "Decorative"
+  },
+  {
+    "sku": "CN014",
+    "name": "Garden Slate",
+    "material": "porcelain",
+    "tile_width_cm": 40,
+    "tile_length_cm": 80,
+    "application": "Outdoor",
+    "surfaces": [
+      "floor"
+    ],
+    "locations": [
+      "outdoor"
+    ],
+    "commercial": false,
+    "finish": "textured",
+    "slip_rating": "R12",
+    "price_per_m2": 33.0,
+    "currency": "USD",
+    "stock_m2": 270.0,
+    "tiles_per_box": 4,
+    "style": "Slate"
+  },
+  {
+    "sku": "CN015",
+    "name": "Concrete Light",
+    "material": "porcelain",
+    "tile_width_cm": 60,
+    "tile_length_cm": 120,
+    "application": "Indoor",
+    "surfaces": [
+      "floor",
+      "wall"
+    ],
+    "locations": [
+      "indoor"
+    ],
+    "commercial": false,
+    "finish": "matt",
+    "slip_rating": "R10",
+    "price_per_m2": 35.0,
+    "currency": "USD",
+    "stock_m2": 560.0,
+    "tiles_per_box": 2,
+    "style": "Contemporary"
+  }
+]

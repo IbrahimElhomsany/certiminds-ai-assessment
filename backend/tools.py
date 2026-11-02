@@ -28,7 +28,7 @@ def _area(x: Decimal) -> Decimal:
     return x.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
 
-# ---------------------------------------------------------------- E.8 quantity calculator
+# ------------------------ E.8 quantity calculator
 
 class QuantityResult(BaseModel):
     sku: Optional[str] = None
@@ -105,7 +105,7 @@ def calculate_tile_quantity(sku: str, area_m2: float,
     return result
 
 
-# ---------------------------------------------------------------- E.9 inventory
+# ----------------- E.9 inventory
 
 class StockStatus(str, Enum):
     AVAILABLE = "AVAILABLE"

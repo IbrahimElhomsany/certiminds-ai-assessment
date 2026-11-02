@@ -16,9 +16,6 @@
 ## 3. Examples of important prompts
 - "Guide me through the assessment one step at a time; explain each concept simply; never fabricate results."
 - "What is LoRA?" / "What is a Pydantic model?" / "Explain catalog.py line by line."
-- "Should I push to GitHub now or at the end? Will the commit times be preserved?"
-- "Build the remaining parts tonight so tomorrow I can run, understand and defend them."
-- "Don't forget the UI/UX."
 
 ## 4. AI-generated code that was accepted
 - Deterministic tools (`backend/tools.py`) with Decimal arithmetic and the full-box pricing basis.

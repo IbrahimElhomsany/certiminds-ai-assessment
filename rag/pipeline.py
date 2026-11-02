@@ -46,7 +46,7 @@ class Chunk:
     metadata: dict = field(default_factory=dict)
 
 
-# ------------------------------------------------------------------ 1-3: documents, processing, chunking
+# -------------- 1-3: documents, processing, chunking
 
 def scan_for_injection(text: str) -> list[str]:
     t = text.lower()
@@ -108,7 +108,7 @@ def load_documents() -> tuple[list[Chunk], list[dict]]:
     return clean, quarantined
 
 
-# ------------------------------------------------------------------ 4-5: embedding + index
+# ------------- 4-5: embedding + index
 
 TOKEN = re.compile(r"[a-z0-9]+")
 
@@ -164,7 +164,7 @@ def try_dense() -> Optional[DenseEmbedder]:
         return None
 
 
-# ------------------------------------------------------------------ 6-8: retrieval, reranking, context
+# ------------------ 6-8: retrieval, reranking, context
 
 @dataclass
 class Retrieved:

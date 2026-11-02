@@ -36,7 +36,7 @@ SECURITY_FLAGS_REFUSE = {"prompt_injection", "system_prompt_extraction", "other_
                          "retrieved_doc_as_instructions"}
 
 
-# =============================================================== tools the AI may use
+# =============== tools the AI may use
 
 TOOL_DEFINITIONS = [
     {"name": "recommend_products",
@@ -169,7 +169,7 @@ class ToolExecutor:
         return {"documents": build_context(results)}
 
 
-# =============================================================== deterministic workflow (no LLM)
+# ===================== deterministic workflow (no LLM)
 
 def money(x: float) -> str:
     return f"${x:,.2f}"
@@ -301,7 +301,7 @@ def workflow_reply(message: str, analysis: StructuredAnalysis, session: Session,
     return "\n".join([head, *lines, tail])
 
 
-# =============================================================== Claude tool-use agent
+# ================================= Claude tool-use agent
 
 def agent_system_prompt(session: Session, analysis: StructuredAnalysis, rag_context: str, flags: list[str]) -> str:
     return f"""You are the AI sales consultant for Ceramica Nova, a tiles and ceramics company.

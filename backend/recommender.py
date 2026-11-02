@@ -13,6 +13,8 @@ and every decision can be explained and tested. The LLM only phrases the result.
 from dataclasses import dataclass, field
 from typing import Optional
 
+import re
+
 from backend.catalog import CATALOG, Product
 from backend.schemas import CustomerRequirements
 from backend.tools import StockStatus, calculate_tile_quantity, check_inventory
@@ -24,6 +26,19 @@ STYLE_SYNONYMS = {
     "slate": ["slate", "stone"], "subway": ["subway"], "contemporary": ["contemporary", "modern"],
     "decorative": ["decorative"], "natural": ["natural", "stone"],
 }
+
+
+def style_targets(style: str) -> set[str]:
+    """'wood-look', 'Wood effect', 'luxury marble style' -> the catalog style words to match."""
+    s = re.sub(r"[-_]", " ", style.lower())
+    for w in (" look", " effect", " style", " finish"):
+        s = s.replace(w, "")
+    s = s.strip()
+    targets = set(STYLE_SYNONYMS.get(s, [s]))
+    for key, syns in STYLE_SYNONYMS.items():
+        if re.search(rf"\b{key}\b", s):
+            targets.update(syns)
+    return targets
 
 
 @dataclass
@@ -75,7 +90,7 @@ def score_product(p: Product, req: CustomerRequirements, wants_cheap: bool, want
     elif p.slip_value >= 11:
         reasons.append(f"slip rating {p.slip_rating}")
     if req.preferred_style:
-        targets = STYLE_SYNONYMS.get(req.preferred_style.lower(), [req.preferred_style.lower()])
+        targets = style_targets(req.preferred_style)
         if any(t in p.style.lower() for t in targets):
             score += 20; reasons.append(f"matches the {req.preferred_style} style ({p.style})")
     if req.preferred_color and req.preferred_color.lower() in (p.name + " " + p.style).lower():

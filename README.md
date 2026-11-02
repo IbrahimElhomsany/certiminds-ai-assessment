@@ -70,6 +70,9 @@ python -m evaluation.run_eval --mode claude   # real agent (uses API credit)
 ## Model adaptation (Apple Silicon)
 
 ```bash
+# If your Python comes from Anaconda and MLX aborts with "MLX requires Open MPI but this is MPICH",
+# use a separate environment for training (what we did):
+#   conda create -n mlxtrain python=3.12 -y && conda activate mlxtrain && pip install "mlx-lm>=0.20" pydantic
 pip install -r requirements-train.txt
 bash training/train.sh
 python -m training.evaluate_models

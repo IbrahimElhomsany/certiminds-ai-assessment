@@ -11,7 +11,7 @@ Teach a small open-weight model the **behaviour** of a Ceramica Nova sales assis
 | Method | LoRA adapters on a 4-bit quantized base (QLoRA-style) with Apple MLX (`mlx_lm.lora`) | Parameter-efficient: base weights frozen, only small adapter matrices trained; no GPU server needed |
 | Hardware | MacBook Air M4, 16 GB unified memory | Candidate's own laptop |
 | Hyperparameters | rank 8, scale 20, dropout 0.05, LoRA on last 16 of 24 layers, lr 1e-4, batch 4, 400 iterations, max length 1024, loss on the answer only (`mask_prompt`) | Standard small-model LoRA settings; enough steps for ~6-7 epochs over 238 examples; see `lora_config.yaml` |
-| Training duration | _fill in from `logs/train_log.txt`_ | |
+| Training duration | about 25 minutes (11:17:20 to 11:42:41 on 2026-11-02, Apple M4 16 GB), final validation loss 0.004 | |
 
 ## Dataset (`generate_dataset.py`)
 - **238 training, 27 validation, 45 test** examples (requirement: at least 100 and 20).
@@ -21,6 +21,9 @@ Teach a small open-weight model the **behaviour** of a Ceramica Nova sales assis
 
 ## How to run
 ```bash
+# If your Python comes from Anaconda and MLX aborts with "MLX requires Open MPI but this is MPICH",
+# use a separate environment for training (what we did):
+#   conda create -n mlxtrain python=3.12 -y && conda activate mlxtrain && pip install "mlx-lm>=0.20" pydantic
 pip install -r requirements-train.txt
 bash training/train.sh                     # dataset + training, log saved to training/logs/train_log.txt
 python -m training.evaluate_models         # baseline vs adapted, same test set and settings

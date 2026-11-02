@@ -131,3 +131,36 @@ def test_discount_above_12_needs_approval_even_if_llm_asks():
     ])
     r = SalesAgent(GW, client=fake).chat("USR-1001", "Quote 25 sqm Ocean Grip balcony floor with 20% off", "t-disc")
     assert r["quote"]["approval_required"] is True and r["quote"]["status"] == "PENDING_HUMAN_APPROVAL"
+
+
+def test_output_guard_accepts_simple_arithmetic_on_grounded_numbers():
+    # "$222.40 below your $1,000 budget" = 1000 - 777.60 -> grounded, not invented
+    assert check_output("That leaves $222.40 of your budget", {1000.0, 777.6}) == []
+    assert check_output("about $778 in total", {777.6}) == []          # whole-dollar rounding
+    assert check_output("only $5 per m2", {1000.0, 777.6}) != []       # brand-new number still blocked
+
+
+def test_amounts_from_earlier_turns_stay_grounded():
+    from backend.agent import SalesAgent
+    from backend.gateway import LLMGateway
+    from backend.providers import MockProvider
+    agent = SalesAgent(LLMGateway([MockProvider()], sleep=lambda s: None), client=None)
+    r1 = agent.chat("USR-1001", "I need tiles for a 25 m2 outdoor balcony, budget $1000")
+    from backend.store import SESSIONS
+    assert SESSIONS[r1["session_id"]].grounded_numbers   # tool results remembered for later turns
+
+
+def test_style_synonyms_handle_look_and_effect():
+    from backend.recommender import recommend
+    from backend.schemas import CustomerRequirements
+    req = CustomerRequirements(indoor_outdoor="indoor", floor_or_wall="floor", area_m2=30, preferred_style="wood-look")
+    recs, _rejected = recommend(req)
+    assert "CN003" in [r.sku for r in recs]          # Nordic Oak (style "Wood")
+
+
+def test_catalog_price_of_product_named_in_reply_is_grounded():
+    from backend.agent import SalesAgent, ToolExecutor
+    from backend.store import Session
+    prices = SalesAgent._catalog_prices(ToolExecutor(Session("s-test", "USR-1001")), "Ocean Grip (CN004) costs $34.00 per m2")
+    assert 34.0 in prices
+

@@ -1,0 +1,3 @@
+train: 238 examples {'discovery': 24, 'inventory': 24, 'recommendation_ar': 22, 'recommendation': 65, 'comparison': 19, 'unsuitable': 19, 'refusal': 36, 'objection': 19, 'off_topic': 10}
+valid: 27 examples {'recommendation': 8, 'objection': 2, 'recommendation_ar': 3, 'discovery': 3, 'unsuitable': 2, 'refusal': 4, 'comparison': 2, 'inventory': 3}
+test: 45 examples {'refusal': 7, 'recommendation': 12, 'comparison': 4, 'recommendation_ar': 4, 'unsuitable': 4, 'discovery': 4, 'off_topic': 2, 'objection': 4, 'inventory': 4}

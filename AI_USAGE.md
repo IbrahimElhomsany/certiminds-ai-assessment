@@ -34,7 +34,10 @@ Changes made after running the code and checking the results:
 - "I need tiles for my new home" didn't ask which room the tiles were for. The missing-information logic was changed to always ask for the application.
 - Arabic application names (e.g. شرفة) were mapped to English values so the rules apply.
 - A planned dense-embedding-only RAG was changed to **hybrid with a BM25 fallback**, because the embedding model download couldn't be guaranteed in every environment.
-- _(Ibrahim: add anything you changed or rejected yourself tomorrow.)_
+- **Output guard false positive (found by me in live UI testing on 2026-11-02).** Claude's correct reply "about $222 left in your budget" was blocked as an invented price, so the app fell back to workflow mode. The guard was changed to accept simple arithmetic on grounded numbers and to remember tool results across turns; new numbers are still blocked. Regression tests added.
+- **Training environment:** Claude first suggested removing Anaconda's MPICH package; the dry run showed it would downgrade Anaconda's Python (3.13 to 3.10) and break the project venv, so that was rejected and training was moved to a separate `mlxtrain` environment.
+- I added my own explanatory comments to `backend/tools.py`.
+- The "is the improvement practically meaningful?" text in `reports/model_comparison.md` was drafted by Claude from my real comparison numbers and reviewed by me; it states the weaknesses (unfair intent metric, new objection failure).
 
 ## 6. How outputs were verified
 - Unit and integration tests (`pytest`): tools, gateway failure handling, API, RAG, agent guardrails, dataset quality. Results in `RESULTS.md`.

@@ -368,13 +368,14 @@ class SalesAgent:
         tools = ToolExecutor(session)
         tools.allowed_numbers |= numbers_in(message)                 # numbers the customer said
         tools.allowed_numbers |= numbers_in(json.dumps(session.requirements.model_dump()))
+        tools.allowed_numbers |= session.grounded_numbers            # tool results from earlier turns
         mode, violations, reply = "workflow", [], None
 
         if self.client is not None and analysis.intent != "unsafe_request":
             try:
                 reply = self._agent_loop(session, analysis, retrieved, tools, flags)
                 mode = "agent"
-                violations = check_output(reply, tools.allowed_numbers | self._catalog_prices(tools))
+                violations = check_output(reply, tools.allowed_numbers | self._catalog_prices(tools, reply))
                 if violations:
                     log_event("output_guard_blocked", violations=violations)
                     METRICS.error("OUTPUT_GUARD")
@@ -386,12 +387,13 @@ class SalesAgent:
         if reply is None:
             reply = workflow_reply(message, analysis, session, tools, flags)
             mode = "workflow" if mode == "workflow" else "workflow_fallback"
-            final_violations = check_output(reply, tools.allowed_numbers | self._catalog_prices(tools))
+            final_violations = check_output(reply, tools.allowed_numbers | self._catalog_prices(tools, reply))
             if final_violations:   # should never happen; fail closed
                 reply = "Sorry, I couldn't verify that answer. A sales representative will follow up."
                 violations += final_violations
 
         session.history.append({"role": "assistant", "content": reply})
+        session.grounded_numbers |= tools.allowed_numbers
         total_ms = round((time.perf_counter() - start) * 1000, 1)
         METRICS.record_latency("total", total_ms)
         return {
@@ -407,12 +409,19 @@ class SalesAgent:
         }
 
     @staticmethod
-    def _catalog_prices(tools: ToolExecutor) -> set[float]:
+    def _catalog_prices(tools: ToolExecutor, reply: str = "") -> set[float]:
+        """Catalog prices of products seen in tool results OR named in the reply itself.
+        A product's real catalog price is grounded even if Claude read it from the
+        retrieved product card instead of calling a tool."""
         prices = set()
-        for c in tools.calls:
-            for sku in re.findall(r"CN\d{3}", json.dumps(c["output"], default=str)):
-                if sku in CATALOG:
-                    prices.add(CATALOG[sku].price_per_m2)
+        text = " ".join(json.dumps(c["output"], default=str) for c in tools.calls)
+        for sku in re.findall(r"CN\d{3}", text + " " + reply):
+            if sku in CATALOG:
+                prices.add(CATALOG[sku].price_per_m2)
+        low = reply.lower()
+        for p in CATALOG.values():
+            if p.name.lower() in low:
+                prices.add(p.price_per_m2)
         return prices
 
     def _agent_loop(self, session, analysis, retrieved, tools: ToolExecutor, flags) -> str:

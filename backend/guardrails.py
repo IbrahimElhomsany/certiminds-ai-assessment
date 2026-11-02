@@ -53,14 +53,36 @@ def numbers_in(text: str) -> set[float]:
     return out
 
 
+def _expand_grounded(allowed: set[float]) -> set[float]:
+    """Grounded amounts = numbers from tools/catalog/customer, plus the difference of any two
+    larger amounts (>= 100) among them (e.g. "$222.40 under your $1,000 budget" = 1000 - 777.60). Only simple arithmetic
+    on already-grounded numbers is accepted, never a brand-new number."""
+    base = {round(x, 2) for x in allowed if x >= 0}
+    out = set(base)
+    nums = sorted(x for x in base if x >= 100)[:300]   # totals/budgets only, so small invented prices can't sneak in
+    for i, a in enumerate(nums):
+        for b in nums[i + 1:]:
+            out.add(round(b - a, 2))
+    return out
+
+
+def _is_grounded(value: float, raw: str, grounded: set[float]) -> bool:
+    if value in grounded:
+        return True
+    if "." not in raw:            # whole-dollar amount: accept rounding, e.g. "$778" for 777.60
+        return any(abs(g - value) < 1 for g in grounded)
+    return False
+
+
 def check_output(reply: str, allowed_numbers: set[float]) -> list[str]:
     """Returns a list of violations. Empty list = reply is safe to send."""
     violations = []
     if CANARY.lower() in reply.lower():
         violations.append("system_prompt_leak")
+    grounded = _expand_grounded(allowed_numbers)
     for amount in MONEY.findall(reply):
         value = round(float(amount.replace(",", "")), 2)
-        if value not in allowed_numbers:
+        if not _is_grounded(value, amount, grounded):
             violations.append(f"ungrounded_amount:${amount}")
     t = reply.lower()
     for p in FORBIDDEN_OUTPUT:

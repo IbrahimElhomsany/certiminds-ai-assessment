@@ -23,6 +23,7 @@ class Session:
     history: list = field(default_factory=list)        # [{"role": "user"|"assistant", "content": str}]
     last_recommended: list = field(default_factory=list)
     quote_ids: list = field(default_factory=list)
+    grounded_numbers: set = field(default_factory=set)  # amounts from earlier tool results in this conversation
 
 
 SESSIONS: dict[str, Session] = {}

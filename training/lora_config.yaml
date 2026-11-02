@@ -1,0 +1,23 @@
+# MLX-LM LoRA fine-tuning config (E.11). Run:  mlx_lm.lora -c training/lora_config.yaml
+# Base model is 4-bit quantized, so training LoRA adapters on it is QLoRA-style.
+model: "mlx-community/Qwen2.5-0.5B-Instruct-4bit"
+train: true
+fine_tune_type: lora
+data: "training/data"            # train.jsonl / valid.jsonl / test.jsonl in chat ("messages") format
+seed: 42
+num_layers: 16                   # apply LoRA to the last 16 transformer blocks (of 24)
+batch_size: 4
+iters: 400                       # ~6.7 epochs over 238 examples
+learning_rate: 1.0e-4
+steps_per_report: 10
+steps_per_eval: 50
+val_batches: -1                  # evaluate on the full validation set
+save_every: 100
+adapter_path: "training/adapters"
+max_seq_length: 1024
+mask_prompt: true                # loss only on the assistant answer, not on the prompt
+grad_checkpoint: false
+lora_parameters:
+  rank: 8
+  scale: 20.0
+  dropout: 0.05

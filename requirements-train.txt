@@ -1,0 +1,2 @@
+# Model adaptation only (Apple Silicon Mac)
+mlx-lm>=0.20

@@ -5,4 +5,4 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 training/models/
-training/adapters/*.safetensors
+training/adapters/0*_adapters.safetensors

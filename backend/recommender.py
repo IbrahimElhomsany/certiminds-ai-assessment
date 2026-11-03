@@ -67,16 +67,18 @@ def hard_constraint_failures(p: Product, req: CustomerRequirements) -> list[str]
     fails = []
     surface = req.floor_or_wall
     if surface and surface not in p.surfaces:
-        fails.append(f"not suitable for {surface}s" + (" (wall-only product, BR-02)" if surface == "floor" else ""))
+        fails.append(f"it isn't made for {surface}s" + (" (it's a wall-only tile, BR-02)" if surface == "floor" else ""))
     if req.indoor_outdoor and req.indoor_outdoor not in p.locations:
-        fails.append(f"not rated for {req.indoor_outdoor} use")
+        fails.append(f"it isn't made for {req.indoor_outdoor} use")
     outdoor_floor = req.indoor_outdoor == "outdoor" and surface != "wall"
-    if (outdoor_floor or req.slip_requirement == "high") and surface != "wall" and p.slip_value < 11:
-        fails.append(f"slip rating {p.slip_rating or 'none'} is below R11 (BR-01)")
+    # bathroom and shower floors are wet areas: the slip-rating guide says R11 or higher
+    wet_room = any(w in (req.application or "").lower() for w in ("bath", "shower", "pool", "wet"))
+    if (outdoor_floor or wet_room or req.slip_requirement == "high") and surface != "wall" and p.slip_value < 11:
+        fails.append(f"its slip rating ({p.slip_rating or 'none'}) is too slippery for this area, which needs R11 or higher (BR-01)")
     if req.traffic_level == "high" and surface != "wall" and p.material != "porcelain":
-        fails.append("not porcelain, unsuitable for high-traffic flooring (BR-03)")
+        fails.append("it's not porcelain, so it won't last on a busy floor (BR-03)")
     if req.traffic_level == "high" and surface != "wall" and p.slip_value < 10:
-        fails.append(f"slip rating {p.slip_rating} is too low for a busy commercial floor")
+        fails.append(f"its slip rating ({p.slip_rating}) is too low for a busy commercial floor")
     return fails
 
 
@@ -84,21 +86,21 @@ def score_product(p: Product, req: CustomerRequirements, wants_cheap: bool, want
                   required_area: Optional[float]):
     score, reasons = 50.0, []
     if req.traffic_level == "high" and p.commercial:
-        score += 25; reasons.append("designed for commercial use (BR-03)")
+        score += 25; reasons.append("made for busy commercial floors")
     if req.slip_requirement == "high" and p.slip_value >= 12:
-        score += 8; reasons.append(f"highest slip resistance {p.slip_rating}")
+        score += 8; reasons.append(f"top anti-slip rating ({p.slip_rating})")
     elif p.slip_value >= 11:
-        reasons.append(f"slip rating {p.slip_rating}")
+        reasons.append(f"anti-slip ({p.slip_rating})")
     if req.preferred_style:
         targets = style_targets(req.preferred_style)
         if any(t in p.style.lower() for t in targets):
-            score += 20; reasons.append(f"matches the {req.preferred_style} style ({p.style})")
+            score += 20; reasons.append(f"the {req.preferred_style.lower()} look you asked for")
     if req.preferred_color and req.preferred_color.lower() in (p.name + " " + p.style).lower():
-        score += 8; reasons.append(f"matches colour preference '{req.preferred_color}'")
+        score += 8; reasons.append(f"in the {req.preferred_color.lower()} tone you asked for")
     if wants_cheap:
-        score += max(0, 40 - p.price_per_m2); reasons.append(f"budget-friendly at ${p.price_per_m2:.0f}/m2")
+        score += max(0, 40 - p.price_per_m2 / 3.64); reasons.append(f"budget-friendly at QAR {p.price_per_m2:.0f} per m²")
     if wants_luxury:
-        score += p.price_per_m2 / 3; reasons.append("premium product")
+        score += p.price_per_m2 / 3.64 / 3; reasons.append("premium finish")
 
     subtotal = boxes = None
     status, available = None, True
@@ -109,15 +111,15 @@ def score_product(p: Product, req: CustomerRequirements, wants_cheap: bool, want
         status, available = inv.status.value, inv.immediately_available
         if inv.status != StockStatus.AVAILABLE:
             score -= 40 if req.urgency == "high" else 20
-            reasons.append(f"only {inv.stock_m2:g} m2 in stock (need {q.total_purchasable_area_m2:g} m2)")
+            reasons.append(f"only {inv.stock_m2:g} m² in stock (you need {q.total_purchasable_area_m2:g} m²)")
         else:
-            reasons.append("in stock for the full quantity")
+            reasons.append("in stock")
         if req.budget is not None:
             if subtotal <= req.budget:
-                score += 15; reasons.append(f"estimated ${subtotal:,.2f} fits the ${req.budget:,.0f} budget")
+                score += 15; reasons.append(f"estimated QAR {subtotal:,.2f} fits the QAR {req.budget:,.0f} budget")
             else:
                 score -= min(30, (subtotal - req.budget) / req.budget * 50)
-                reasons.append(f"estimated ${subtotal:,.2f} is above the ${req.budget:,.0f} budget")
+                reasons.append(f"estimated QAR {subtotal:,.2f} is above the QAR {req.budget:,.0f} budget")
     return score, reasons, subtotal, boxes, status, available
 
 
@@ -140,6 +142,40 @@ def recommend(req: CustomerRequirements, wants_cheap: bool = False, wants_luxury
 def check_suitability(sku: str, req: CustomerRequirements) -> list[str]:
     """For requests like 'I want Arctic Pearl for my pool deck' (scenario 5)."""
     return hard_constraint_failures(CATALOG[sku], req)
+
+
+SET_KEYWORDS = {      # bathroom sets (sold per set) and the words customers use for them
+    "SN001": [r"luna", r"\bbasins?\b", r"wash ?basins?", r"\bsinks?\b", r"مغسلة"],
+    "SN002": [r"aria", r"shower sets?", r"hand ?shower", r"shower ?heads?", r"rain ?shower", r"shower mixer", r"\bدش\b"],
+    "SN003": [r"\bwc\b", r"toilets?", r"water closet", r"مرحاض"],
+}
+BUNDLE_WORDS = r"complete bathroom|full bathroom|bathroom bundle|whole bathroom|everything for the bathroom"
+NUMBER_WORDS = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
+
+
+def find_mentioned_sets(text: str) -> dict[str, int]:
+    """{sku: quantity} for bathroom sets named in the text. "2 basins" -> 2, otherwise 1.
+    "complete bathroom" means one of each."""
+    t = text.lower()
+    if re.search(BUNDLE_WORDS, t):
+        return {sku: 1 for sku in SET_KEYWORDS}
+    found = {}
+    for sku, patterns in SET_KEYWORDS.items():
+        for pat in patterns:
+            m = re.search(pat, t)
+            if m:
+                before = t[:m.start()].split()[-2:]          # "2 basins", "two luna basins"
+                qty = 1
+                for w in reversed(before):
+                    if w.isdigit() and 0 < int(w) <= 50:
+                        qty = int(w)
+                        break
+                    if w in NUMBER_WORDS:
+                        qty = NUMBER_WORDS[w]
+                        break
+                found[sku] = qty
+                break
+    return found
 
 
 def find_mentioned_skus(text: str) -> list[str]:

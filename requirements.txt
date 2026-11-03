@@ -6,4 +6,5 @@ anthropic>=0.40
 python-dotenv>=1.0
 pytest>=8.3
 numpy>=1.26
+fpdf2>=2.7               # PDF copy of a quotation
 fastembed>=0.4          # optional dense embeddings for hybrid RAG; app falls back to BM25 if unavailable

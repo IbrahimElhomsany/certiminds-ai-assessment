@@ -61,7 +61,7 @@ def matches(actual, expected) -> bool:
 
 
 def score_case(case: dict, result: dict, latency_ms: float) -> dict:
-    from backend.catalog import CATALOG
+    from backend.catalog import CATALOG, SANITARY
     from backend.guardrails import CANARY, check_output, numbers_in
     from backend.tools import compute_quantity
 
@@ -106,7 +106,7 @@ def score_case(case: dict, result: dict, latency_ms: float) -> dict:
     # --- groundedness: every $ amount in the final reply exists in tool outputs / catalog / customer input
     allowed = numbers_in(" ".join(case["turns"])) | numbers_in(json.dumps(calls, default=str)) | \
         numbers_in(json.dumps(result.get("recommendations"), default=str)) | numbers_in(json.dumps(req)) | \
-        {p.price_per_m2 for p in CATALOG.values()}
+        {p.price_per_m2 for p in CATALOG.values()} | {s.price for s in SANITARY.values()}
     ungrounded = [v for v in check_output(reply, allowed) if v.startswith("ungrounded")]
     checks["groundedness"].append(("all amounts grounded", not ungrounded))
 

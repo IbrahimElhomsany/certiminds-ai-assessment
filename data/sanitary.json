@@ -1,0 +1,44 @@
+[
+  {
+    "sku": "SN001",
+    "name": "Luna Countertop Basin Set",
+    "category": "basin",
+    "description": "Oval countertop washbasin in white ceramic with a matching single-lever mixer tap",
+    "includes": ["countertop washbasin", "single-lever basin mixer", "pop-up waste"],
+    "finish": "gloss white / chrome",
+    "style": "Modern",
+    "rooms": ["bathroom"],
+    "price": 1250.0,
+    "currency": "QAR",
+    "unit": "set",
+    "stock_units": 40
+  },
+  {
+    "sku": "SN002",
+    "name": "Aria Shower Set",
+    "category": "shower",
+    "description": "Chrome shower set with hand shower on an adjustable slide rail and thermostatic mixer",
+    "includes": ["hand shower", "slide rail", "thermostatic shower mixer", "1.5 m hose"],
+    "finish": "chrome",
+    "style": "Modern",
+    "rooms": ["bathroom"],
+    "price": 1650.0,
+    "currency": "QAR",
+    "unit": "set",
+    "stock_units": 25
+  },
+  {
+    "sku": "SN003",
+    "name": "Nova Wall-Hung WC Set",
+    "category": "wc",
+    "description": "Rimless wall-hung toilet with concealed cistern, flush plate and soft-close seat",
+    "includes": ["wall-hung WC bowl", "concealed cistern", "flush plate", "soft-close seat"],
+    "finish": "gloss white",
+    "style": "Modern",
+    "rooms": ["bathroom"],
+    "price": 1450.0,
+    "currency": "QAR",
+    "unit": "set",
+    "stock_units": 30
+  }
+]

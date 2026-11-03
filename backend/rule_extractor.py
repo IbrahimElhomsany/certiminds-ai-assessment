@@ -8,6 +8,8 @@ It is deliberately simple keyword matching; the real LLM handles nuance.
 """
 import re
 
+from backend.catalog import usd_to_qar
+
 from backend.schemas import CustomerRequirements, StructuredAnalysis
 
 ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
@@ -48,9 +50,16 @@ def extract(message: str) -> StructuredAnalysis:
     m = re.search(r"(\d+(?:\.\d+)?)\s*(?:m2|m²|sqm|sq\.? ?m|square met|متر)", t)
     if m:
         req.area_m2 = float(m.group(1))
-    b = re.search(r"\$\s?(\d[\d,]*)|(\d[\d,]*)\s?(?:usd|dollars)|budget[^\d]{0,20}(\d[\d,]*)", t)
-    if b:
-        req.budget = float(next(g for g in b.groups() if g).replace(",", ""))
+    usd = re.search(r"\$\s?(\d[\d,]*)|(\d[\d,]*)\s?(?:usd|dollars?)\b", t)
+    qar = re.search(r"(?:qar|qr|ر\.ق)\s?(\d[\d,]*)|(\d[\d,]*)\s?(?:qar|qr|riyals?|ريال)", t)
+    if usd:          # prices are in QAR, so a dollar budget is converted at the fixed 3.64 peg
+        req.budget = usd_to_qar(float(next(g for g in usd.groups() if g).replace(",", "")))
+    elif qar:
+        req.budget = float(next(g for g in qar.groups() if g).replace(",", ""))
+    else:
+        b = re.search(r"budget[^\d]{0,20}(\d[\d,]*)", t)
+        if b:
+            req.budget = float(b.group(1).replace(",", ""))
 
     if _has(t, OUTDOOR):
         req.indoor_outdoor = "outdoor"
@@ -78,7 +87,8 @@ def extract(message: str) -> StructuredAnalysis:
         intent = "objection"
     elif _has(t, ["quote", "quotation", "invoice"]):
         intent = "quotation_request"
-    elif not _has(t, TILE_WORDS) and _has(t, ["hello", "hi ", "hey", "مرحبا"]):
+    elif not _has(t, TILE_WORDS) and (re.search(r"\b(hi|hello|hey|good (morning|afternoon|evening))\b", t)
+                                      or "مرحبا" in t or "السلام" in t):
         intent = "greeting"
     elif not _has(t, TILE_WORDS):
         intent = "off_topic"

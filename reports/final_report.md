@@ -14,11 +14,12 @@ Build an AI sales consultant for Ceramica Nova that is helpful and persuasive **
 3. **RAG** (`rag/pipeline.py`): one chunk per product/rule/section, hybrid BM25 + dense retrieval with Reciprocal Rank Fusion, metadata filters, citations, injection quarantine at ingestion, escaped `<document>` context.
 4. **Recommender** (`backend/recommender.py`): hard constraints, then soft scoring, then top 3 with reasons.
 5. **Sales agent** (`backend/agent.py`): Claude tool-use loop over 7 tools; multi-turn memory of requirements; deterministic workflow mode for offline use and as a fallback.
-6. **Guardrails** (`backend/guardrails.py`): input attack classification; output checks for ungrounded $ amounts, canary leakage and fake approval claims; ownership checks for sessions and quotes.
-7. **UI** (`frontend/index.html`): chat plus panels for understood requirements, recommendations, quote, guardrail flags and raw tool calls.
+6. **Guardrails** (`backend/guardrails.py`): input attack classification; output checks for ungrounded money amounts (QAR or $), canary leakage and fake approval claims; ownership checks for sessions and quotes.
+7. **UI** (`frontend/index.html`): the Nova AI page built from the reviewers' mockup: chat, tile visualiser, product and bathroom-set cards, project panel with budget bar, cart, PDF quotation (`backend/quote_pdf.py`), bill of materials and technical data. A technical view shows the understood requirements, guardrail flags and raw tool calls. Features that would need other systems (room upload, 3D/AR, experts, bookings, samples, brochures) are labelled DEMO.
+8. **Catalog changes after the first review:** prices shown in QAR (converted from the official USD catalog at 3.64), three bathroom sets sold per unit with demo prices, a wet-area rule (bathroom and shower floors need R11+), and proposed rewards and delivery rules (`backend/offers.py`).
 
 ## 3. Evaluation
-A 36-case suite covers correct and incorrect recommendations, missing information, hallucination, inventory, calculations, prompt injection, unavailable products, irrelevant questions, objections and Arabic. It scores nine metrics (requirement extraction, product correctness, rule compliance, groundedness, calculation correctness, inventory correctness, hallucination, security, usefulness) plus latency. Results for offline and Claude modes: `RESULTS.md`.
+A 38-case suite (36 original plus 2 bathroom-set cases) covers correct and incorrect recommendations, missing information, hallucination, inventory, calculations, prompt injection, unavailable products, irrelevant questions, objections and Arabic. It scores nine metrics (requirement extraction, product correctness, rule compliance, groundedness, calculation correctness, inventory correctness, hallucination, security, usefulness) plus latency. Results for offline and Claude modes: `RESULTS.md`.
 
 ## 4. Model adaptation
 Qwen2.5-0.5B-Instruct (4-bit) + LoRA with MLX on a MacBook Air M4, trained on 238 synthetic examples built from the catalog and rules; compared with the base model on 45 held-out examples with identical decoding. Method, hyperparameters, results and limitations: `training/README.md`, `reports/model_comparison.md`.
@@ -31,7 +32,8 @@ Eleven threats are analysed in `security/threat_model.md`. The central point: th
 - Regex-based input scanning and PII detection are incomplete.
 - The output guard verifies numbers, not every factual claim.
 - The offline workflow's evaluation score is optimistic because it was built alongside the published scenarios.
-- Synthetic LoRA data; small test sets; automatic metrics don't capture tone or persuasiveness.
+- Synthetic LoRA data; small test sets; automatic metrics don't capture tone or persuasiveness. The adapter was trained before the QAR change and the bathroom sets were added.
+- Rewards, delivery, cart and several mockup buttons are demonstrations, not connected systems.
 
 ## 7. Production roadmap
 1. Real authentication (OIDC/JWT) and PostgreSQL with row-level security; Redis for sessions, cache and rate limits.

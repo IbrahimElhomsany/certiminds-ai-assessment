@@ -40,3 +40,45 @@ def test_no_secrets_in_responses(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-SECRET-TEST")
     for path in ["/health", "/api/v1/metrics"]:
         assert "sk-ant" not in client.get(path).text
+
+
+def test_quote_pdf_download_only_for_the_owner():
+    from backend.store import save_quote
+    from backend.tools import QuoteItemRequest, generate_quote
+    q = generate_quote("USR-1001", [QuoteItemRequest(sku="CN002", area_m2=25)], discount_percent=20)
+    save_quote(q)
+    url = f"/api/v1/quotes/{q.quotation_id}/pdf"
+    r = client.get(url, headers={"X-User-Id": "USR-1001"})
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/pdf" and r.content.startswith(b"%PDF")
+    assert "attachment" in r.headers["content-disposition"]
+    assert client.get(url, headers={"X-User-Id": "USR-2002"}).status_code == 403
+    assert client.get("/api/v1/quotes/Q-NOPE/pdf", headers={"X-User-Id": "USR-1001"}).status_code == 404
+
+
+def test_pdf_button_creates_quote_instantly_without_chat():
+    body = {"items": [{"sku": "CN012", "area_m2": 24}, {"sku": "SN001", "quantity": 1}]}
+    r = client.post("/api/v1/quotes", json=body, headers={"X-User-Id": "USR-3003"})
+    assert r.status_code == 200
+    q = r.json()["quote"]
+    assert q["customer_id"] == "USR-3003" and q["discount_percent"] == 0 and len(q["products"]) == 2
+    assert r.json()["offers"]["proposed"] is True
+    pdf = client.get(f"/api/v1/quotes/{q['quotation_id']}/pdf", headers={"X-User-Id": "USR-3003"})
+    assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
+    # bad input is rejected, not guessed: a tile without an area, an empty list
+    assert client.post("/api/v1/quotes", json={"items": [{"sku": "CN012"}]}, headers={"X-User-Id": "USR-3003"}).status_code == 422
+    assert client.post("/api/v1/quotes", json={"items": []}, headers={"X-User-Id": "USR-3003"}).status_code == 422
+
+
+def test_catalog_endpoint_lists_tiles_and_bathroom_sets_in_qar():
+    body = client.get("/api/v1/catalog").json()
+    kinds = {p["kind"] for p in body["products"]}
+    assert body["currency"] == "QAR" and kinds == {"tile", "set"} and len(body["products"]) == 18
+    assert "stock_m2" not in str(body)                       # stock is only given out by the tools
+
+
+def test_offers_are_calculated_by_code():
+    from backend.offers import project_offers
+    o = project_offers(7650)
+    assert o["reward_points"] == 382 and o["reward_credit_qar"] == 38.2 and o["free_delivery"] and o["proposed"]
+    assert project_offers(499.99)["delivery_fee_qar"] == 50.0

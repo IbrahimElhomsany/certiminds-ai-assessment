@@ -8,7 +8,8 @@ from dotenv import load_dotenv
 from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 load_dotenv()   # reads .env into environment variables (the API key never appears in code)
 
@@ -20,7 +21,12 @@ from backend.providers import AnthropicProvider, FlakyProvider, MockProvider  # 
 from backend.ratelimit import RateLimiter                            # noqa: E402
 from backend.schemas import ChatRequest, GenerateRequest, StructuredAnalysis  # noqa: E402
 from backend.agent import SalesAgent                                 # noqa: E402
-from backend.store import AccessDenied, get_quote                    # noqa: E402
+from backend.store import AccessDenied, get_quote, save_quote        # noqa: E402
+from backend.tools import QuoteItemRequest, generate_quote           # noqa: E402
+from backend.offers import project_offers                            # noqa: E402
+from pydantic import BaseModel, Field                                # noqa: E402
+from backend.quote_pdf import build_quote_pdf                        # noqa: E402
+from backend.catalog import CATALOG, SANITARY                         # noqa: E402
 
 
 def use_claude() -> bool:
@@ -68,6 +74,28 @@ def ui():
     return FileResponse(Path(__file__).resolve().parent.parent / "frontend" / "index.html")
 
 
+ROOT = Path(__file__).resolve().parent.parent
+app.mount("/images", StaticFiles(directory=ROOT / "images", check_dir=False), name="images")
+
+
+@app.get("/api/v1/catalog")
+def catalog():
+    """Public product list for the showroom page: names, sizes, prices (QAR) and photos.
+    Stock levels are not included; they are checked by the tools when a customer asks."""
+    def photo(name: str):
+        return f"/images/{name}.jpg" if (ROOT / "images" / f"{name}.jpg").exists() else None
+    tiles = [{"sku": p.sku, "name": p.name, "kind": "tile", "material": p.material, "finish": p.finish,
+              "size_cm": f"{p.tile_width_cm}x{p.tile_length_cm}", "surfaces": p.surfaces, "locations": p.locations,
+              "slip_rating": p.slip_rating, "style": p.style, "price": p.price_per_m2, "unit": "m2",
+              "currency": p.currency, "image": photo(p.sku)} for p in CATALOG.values()]
+    names = {"basin": "BASIN", "shower": "SHOWER", "wc": "WC"}
+    sets = [{"sku": s.sku, "name": s.name, "kind": "set", "category": s.category, "finish": s.finish,
+             "includes": s.includes, "price": s.price, "unit": "set", "currency": s.currency,
+             "image": photo(names[s.category])} for s in SANITARY.values()]
+    return {"currency": "QAR", "products": tiles + sets,
+            "rooms": {"bathroom": photo("room_bathroom"), "kitchen": photo("room_kitchen")}}
+
+
 @app.post("/api/v1/chat")
 def chat(req: ChatRequest):
     """Capstone endpoint: the AI sales consultant. In production user_id comes from an
@@ -90,6 +118,32 @@ def read_quote(quotation_id: str, x_user_id: str = Header(...)):
     if q is None:
         raise HTTPException(status_code=404, detail="Quotation not found.")
     return q
+
+
+@app.get("/api/v1/quotes/{quotation_id}/pdf")
+def download_quote_pdf(quotation_id: str, x_user_id: str = Header(...)):
+    """Same ownership check as above, returned as a downloadable PDF."""
+    q = read_quote(quotation_id, x_user_id)
+    return Response(content=build_quote_pdf(q), media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="Quotation-{q.quotation_id}.pdf"'})
+
+
+class DirectQuoteRequest(BaseModel):
+    items: list[QuoteItemRequest] = Field(min_length=1, max_length=20)
+
+
+@app.post("/api/v1/quotes")
+def create_quote(req: DirectQuoteRequest, x_user_id: str = Header(...)):
+    """The "PDF quotation" button: builds the quote straight from the items on screen.
+    No AI call and no discount, so it is instant; every number comes from tools.generate_quote."""
+    if not rate_limiter.allow(x_user_id):
+        raise HTTPException(status_code=429, detail="Too many requests, please slow down.")
+    try:
+        q = generate_quote(x_user_id, req.items)
+    except (ValueError, KeyError) as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    save_quote(q)
+    return {"quote": q.model_dump(), "offers": project_offers(q.total)}
 
 
 @app.post("/api/v1/generate")

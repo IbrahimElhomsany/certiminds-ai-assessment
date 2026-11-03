@@ -23,7 +23,7 @@ INPUT_RULES = {
                             r"customer (list|data|database)"],
     "inventory_manipulation": [r"ignore (the )?inventory", r"everything is available", r"say .* available",
                                r"tell me .* available today"],
-    "price_manipulation": [r"for \$\s?\d+ per", r"\bfor free\b", r"\bis free\b", r"management approved",
+    "price_manipulation": [r"for (\$|qar|qr)\s?\d+ per", r"for \d+\s?(qar|qr|riyals?) per", r"\bfor free\b", r"\bis free\b", r"management approved",
                            r"manager approved", r"pretend .* (discount|approved)"],
     "admin_pricing": [r"admin(istrator)? pric", r"staff pric", r"internal pric", r"cost price",
                       r"admin(istrator)? credential"],
@@ -37,7 +37,9 @@ def inspect_input(message: str) -> list[str]:
     return [cat for cat, patterns in INPUT_RULES.items() if any(re.search(p, t) for p in patterns)]
 
 
-MONEY = re.compile(r"\$\s?(\d[\d,]*(?:\.\d+)?)")
+# An amount written as "QAR 1,234.56", "QR 50", "1,234 riyals" or "$1,234": all are checked.
+MONEY = re.compile(r"(?:\$|\bQAR|\bQR)\s?(\d[\d,]*(?:\.\d+)?)|(\d[\d,]*(?:\.\d+)?)\s?(?:QAR|QR|riyals?)\b",
+                   re.IGNORECASE)
 NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
 FORBIDDEN_OUTPUT = [r"management (has )?approved", r"manager (has )?approved", r"discount (is |has been )?approved",
                     r"\b(is|are) free\b", r"administrator password", r"admin credentials"]
@@ -80,10 +82,11 @@ def check_output(reply: str, allowed_numbers: set[float]) -> list[str]:
     if CANARY.lower() in reply.lower():
         violations.append("system_prompt_leak")
     grounded = _expand_grounded(allowed_numbers)
-    for amount in MONEY.findall(reply):
+    for groups in MONEY.findall(reply):
+        amount = groups[0] or groups[1]
         value = round(float(amount.replace(",", "")), 2)
         if not _is_grounded(value, amount, grounded):
-            violations.append(f"ungrounded_amount:${amount}")
+            violations.append(f"ungrounded_amount:{amount}")
     t = reply.lower()
     for p in FORBIDDEN_OUTPUT:
         if re.search(p, t):

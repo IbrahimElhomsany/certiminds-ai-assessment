@@ -23,7 +23,10 @@ class Session:
     history: list = field(default_factory=list)        # [{"role": "user"|"assistant", "content": str}]
     last_recommended: list = field(default_factory=list)
     quote_ids: list = field(default_factory=list)
+    selected_sku: str | None = None                      # product the customer picked, for "yes, quote it"
     grounded_numbers: set = field(default_factory=set)  # amounts from earlier tool results in this conversation
+    extras: dict = field(default_factory=dict)          # bathroom sets the customer added: {sku: quantity}
+    pending_sets: dict = field(default_factory=dict)    # sets we just offered, for "yes, add it"
 
 
 SESSIONS: dict[str, Session] = {}

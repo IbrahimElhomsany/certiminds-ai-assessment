@@ -58,9 +58,16 @@ def product_card(p: dict) -> str:
     return (f"{p['name']} ({p['sku']}) is a {p['material']} tile, size {p['tile_width_cm']}x{p['tile_length_cm']} cm, "
             f"application: {p['application']} ({'/'.join(p['surfaces'])}, {'/'.join(p['locations'])}"
             f"{', commercial' if p['commercial'] else ''}). Finish: {p['finish']}. Slip rating: {slip}. "
-            f"Style: {p['style']}. Price: ${p['price_per_m2']:.2f} per m2. Tiles per box: {p['tiles_per_box']}.")
+            f"Style: {p['style']}. Price: QAR {p['price_per_m2']:.2f} per m2. Tiles per box: {p['tiles_per_box']}.")
     # Stock is deliberately NOT put in the text index: it changes often and must come from
     # check_inventory() at answer time (E.13).
+
+
+def set_card(s: dict) -> str:
+    """Bathroom set (sold per set, not per m2). Stock is left out for the same reason as tiles."""
+    return (f"{s['name']} ({s['sku']}) is a bathroom {s['category']} set: {s['description']}. "
+            f"Includes: {', '.join(s['includes'])}. Finish: {s['finish']}. Style: {s['style']}. "
+            f"For: {', '.join(s['rooms'])}. Price: QAR {s['price']:.2f} per set.")
 
 
 def split_markdown(path: Path) -> list[Chunk]:
@@ -87,9 +94,15 @@ def split_markdown(path: Path) -> list[Chunk]:
 def load_documents() -> tuple[list[Chunk], list[dict]]:
     """Returns (clean chunks, quarantined items)."""
     chunks: list[Chunk] = []
-    for p in json.loads((DATA / "catalog.json").read_text()):
+    from backend.catalog import CATALOG          # prices already converted to QAR
+    for p in (prod.model_dump() for prod in CATALOG.values()):
         chunks.append(Chunk(id=p["sku"], text=product_card(p),
                             metadata={"type": "product", "sku": p["sku"], "source": "data/catalog.json",
+                                      "trust": "catalog"}))
+    from backend.catalog import SANITARY         # the 3 bathroom sets, so every product is searchable
+    for s in (st.model_dump() for st in SANITARY.values()):
+        chunks.append(Chunk(id=s["sku"], text=set_card(s),
+                            metadata={"type": "product", "sku": s["sku"], "source": "data/sanitary.json",
                                       "trust": "catalog"}))
     for path in sorted((DATA / "knowledge").glob("*.md")):
         chunks.extend(split_markdown(path))

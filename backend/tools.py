@@ -13,9 +13,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
-from backend.catalog import Product, get_product
+from backend.catalog import CURRENCY, SANITARY, Product, get_product, get_sanitary
 
-CURRENCY = "USD"
 MAX_DISCOUNT_WITHOUT_APPROVAL = Decimal("12")          # BR-07
 WASTAGE_BY_LAYOUT = {"simple": Decimal("10"), "diagonal": Decimal("15"), "complex": Decimal("15")}  # BR-05
 
@@ -140,20 +139,53 @@ def check_inventory(sku: str, required_area_m2: float) -> InventoryResult:
     )
 
 
+class SetStockResult(BaseModel):
+    """Stock check for bathroom products, which are counted in whole sets, not m2."""
+    sku: str
+    product_name: str
+    required_units: int
+    stock_units: int
+    status: StockStatus
+    shortfall_units: int
+    immediately_available: bool
+    price_per_set: float
+    currency: str = CURRENCY
+
+
+def check_set_stock(sku: str, quantity: int) -> SetStockResult:
+    if quantity < 1:
+        raise ValueError("quantity must be at least 1")
+    p = get_sanitary(sku)
+    if p.stock_units == 0:
+        status = StockStatus.OUT_OF_STOCK
+    elif p.stock_units < quantity:
+        status = StockStatus.PARTIALLY_AVAILABLE
+    else:
+        status = StockStatus.AVAILABLE
+    return SetStockResult(sku=p.sku, product_name=p.name, required_units=quantity, stock_units=p.stock_units,
+                          status=status, shortfall_units=max(0, quantity - p.stock_units),
+                          immediately_available=status == StockStatus.AVAILABLE, price_per_set=p.price)
+
+
 # ---------------------------------------------------------------- E.10 quotation
 
 class QuoteItemRequest(BaseModel):
     sku: str
-    area_m2: float = Field(gt=0)        # negative / zero quantities rejected (rule 2)
+    area_m2: Optional[float] = Field(default=None, gt=0)   # tiles: negative / zero rejected (rule 2)
+    quantity: Optional[int] = Field(default=None, ge=1)     # bathroom sets: whole units only
     layout: Literal["simple", "diagonal", "complex"] = "simple"
 
 
 class QuoteLine(BaseModel):
     sku: str
     product_name: str
-    quantity_boxes: int
-    quantity_m2: float
-    unit_price_per_m2: float
+    display_name: str = ""                      # what customers read, e.g. "Desert Sand Porcelain Tile"
+    unit: Literal["m2", "set"] = "m2"
+    quantity_boxes: Optional[int] = None        # tiles only
+    quantity_m2: Optional[float] = None         # tiles only
+    quantity_units: Optional[int] = None        # bathroom sets only
+    unit_price: float                           # QAR per m2 (tiles) or per set
+    unit_price_per_m2: Optional[float] = None   # tiles only (kept for older clients)
     line_subtotal: float
     stock_status: StockStatus
 
@@ -185,15 +217,32 @@ def generate_quote(customer_id: str, items: list[QuoteItemRequest],
 
     lines, subtotal = [], Decimal("0")
     for item in items:
+        if item.sku.strip().upper() in SANITARY:            # bathroom set: price x whole units
+            s = get_sanitary(item.sku)
+            if item.quantity is None:
+                raise ValueError(f"{s.name} is sold per set: give a quantity, not an area")
+            if s.currency != currency:
+                raise ValueError("Mixed currencies in one quotation are not allowed (rule 1)")
+            line_total = _money(Decimal(str(s.price)) * item.quantity)
+            subtotal += line_total
+            lines.append(QuoteLine(
+                sku=s.sku, product_name=s.name, display_name=s.name, unit="set", quantity_units=item.quantity,
+                unit_price=s.price, line_subtotal=float(line_total),
+                stock_status=check_set_stock(s.sku, item.quantity).status,
+            ))
+            continue
         p = get_product(item.sku)
+        if item.area_m2 is None:
+            raise ValueError(f"{p.name} is sold by area: give area_m2")
         if p.currency != currency:
             raise ValueError("Mixed currencies in one quotation are not allowed (rule 1)")
         qty = calculate_tile_quantity(p.sku, item.area_m2, item.layout)
         line_total = Decimal(str(qty.material_subtotal))
         subtotal += line_total
         lines.append(QuoteLine(
-            sku=p.sku, product_name=p.name, quantity_boxes=qty.box_count,
-            quantity_m2=qty.total_purchasable_area_m2, unit_price_per_m2=p.price_per_m2,
+            sku=p.sku, product_name=p.name, display_name=f"{p.name} {p.material.capitalize()} Tile",
+            quantity_boxes=qty.box_count,
+            quantity_m2=qty.total_purchasable_area_m2, unit_price=p.price_per_m2, unit_price_per_m2=p.price_per_m2,
             line_subtotal=float(line_total),
             stock_status=check_inventory(p.sku, qty.total_purchasable_area_m2).status,
         ))

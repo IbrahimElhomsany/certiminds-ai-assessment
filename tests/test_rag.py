@@ -33,6 +33,13 @@ def test_context_wraps_documents_and_escapes_tags():
     assert ctx.count("</document>") == 1 and "<system>" not in ctx
 
 
+def test_bathroom_sets_are_searchable_like_tiles():
+    ids = [r.chunk.id for r in INDEX.retrieve("do you have a basin for my bathroom", top_k=3, types=["product"])]
+    assert "SN001" in ids
+    card = next(c for c in INDEX.chunks if c.id == "SN002")
+    assert "QAR 1650.00 per set" in card.text and card.metadata["source"] == "data/sanitary.json"
+
+
 def test_stock_is_not_stored_in_the_index():
     # volatile data must come from check_inventory at answer time, not from retrieved text
     assert not any("stock" in c.text.lower() and c.metadata["type"] == "product" for c in INDEX.chunks)

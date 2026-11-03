@@ -4,11 +4,15 @@ Interactive OpenAPI docs are generated automatically: run the server and open **
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/` | Chat web UI |
+| GET | `/` | Nova AI web page |
+| GET | `/api/v1/catalog` | Public product list for the page: tiles and bathroom sets, QAR prices, photo paths (no stock levels) |
+| GET | `/images/{file}` | Product and room photos |
 | GET | `/health` | Status, configured providers, agent mode |
 | POST | `/api/v1/generate` | B1 gateway: structured analysis of one message |
 | POST | `/api/v1/chat` | Capstone sales consultant (multi-turn) |
 | GET | `/api/v1/quotes/{quotation_id}` | Read your own quotation (header `X-User-Id`) |
+| GET | `/api/v1/quotes/{quotation_id}/pdf` | Download your own quotation as a PDF (same ownership check) |
+| POST | `/api/v1/quotes` | "PDF quotation" button: create a quote directly from the items on screen (no AI, no discount) |
 | GET | `/api/v1/metrics` | B5 metrics snapshot |
 
 ## POST /api/v1/generate
@@ -52,6 +56,16 @@ Response fields: `session_id`, `reply`, `mode` (`agent` = Claude tool use, `work
 ## GET /api/v1/quotes/{quotation_id}
 Header `X-User-Id: USR-1001`. `200` with the quote if it belongs to that user, `403` if it belongs to someone else, `404` if unknown.
 In production the user comes from a verified JWT, not a header.
+
+## POST /api/v1/quotes
+Header `X-User-Id: USR-1001`. Body:
+```json
+{"items": [{"sku": "CN012", "area_m2": 24}, {"sku": "SN001", "quantity": 1}]}
+```
+Tiles need `area_m2`, bathroom sets need `quantity` (whole units). Returns `{"quote": {...}, "offers": {...}}`; `422` for invalid items (for example a tile without an area, or an empty list). Every number comes from `tools.generate_quote`.
+
+## GET /api/v1/quotes/{quotation_id}/pdf
+Same header and ownership check as above. Returns `application/pdf` as an attachment named `Quotation-<id>.pdf`.
 
 ## Example curl
 ```bash

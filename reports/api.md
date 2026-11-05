@@ -4,7 +4,7 @@ Interactive OpenAPI docs are generated automatically: run the server and open **
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/` | Nova AI web page |
+| GET | `/` | Ceramica Nova AI web page |
 | GET | `/api/v1/catalog` | Public product list for the page: tiles and bathroom sets, QAR prices, photo paths (no stock levels) |
 | GET | `/images/{file}` | Product and room photos |
 | GET | `/health` | Status, configured providers, agent mode |

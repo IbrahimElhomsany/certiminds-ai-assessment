@@ -4,16 +4,16 @@ CertiMinds Advanced Full-Stack AI Engineer assessment, by Ibrahim Elhomsany.
 
 An AI sales assistant for a tiles company that **understands customers with an LLM but never lets the LLM decide prices, stock, quantities or approvals**. Those come from deterministic, tested code. Knowledge comes from a RAG pipeline with citations, and attacks are stopped by guardrails in code, not just in the prompt.
 
-The customer sees **Nova AI**, a 3-column "design concierge" page (chat, tile visualiser, live project and quotation), styled after Nabina Ceramic's website. Prices are in **Qatari riyal (QAR)**, and the catalog includes three bathroom sets (basin, shower, WC) next to the tiles.
+The customer sees **Ceramica Nova AI**, a 3-column "design concierge" page (chat, tile visualiser, live project and quotation), styled after Nabina Ceramic's website. Prices are in **Qatari riyal (QAR)**, and the catalog includes three bathroom sets (basin, shower, WC) next to the tiles.
 
-### Changes after the first review (2026-11-03)
+### Latest changes (2026-11-03)
 Requested by the reviewers after the first demo; Mr Eulius was informed of the catalog and currency changes:
 - **Currency QAR.** The official `data/catalog.json` stays in USD; `backend/catalog.py` converts at load time at the fixed peg **1 USD = 3.64 QAR** (`USD_TO_QAR`). A budget given in dollars is converted too.
 - **Bathroom sets** (`data/sanitary.json`): Luna basin set QAR 1,250, Aria shower set QAR 1,650, Nova wall-hung WC set QAR 1,450. These are **demo prices chosen for this project**, not real Nabina prices. Sets are sold per unit, with their own stock check.
 - **Safety rule:** bathroom, shower and pool floors count as wet areas and need slip rating R11 or higher.
 - **New UI** (`frontend/index.html`) built from the reviewers' mockup: chat, room photo and tile close-up, product cards, project panel with budget bar, cart, **PDF quotation** (`backend/quote_pdf.py`), bill of materials (CSV), technical data and spec sheet.
 - **Rewards and delivery** (`backend/offers.py`) are **proposed rules**, not an existing programme: 1 point per QAR 20 (1 point = QAR 0.10), free delivery from QAR 500, otherwise QAR 50. The UI labels them "(proposed)".
-- **Demo-only buttons.** Some mockup features are on the page as clearly labelled **DEMO** buttons that only show "Demo only: ... isn't connected yet": Upload my room, 3D / AR, Ask an expert, attach and voice, Share, Book consultation, Request sample, Installation guide, Product brochure. They would need an image-AI model, staff, a booking system or real Nabina documents. Mr Eulius confirmed an AI room preview is not required, and that a demo must not be presented as a finished AI feature.
+- **Only working buttons.** Mockup features that would need an image-AI model, staff, a booking system or real company documents (upload my room, 3D / AR, ask an expert, attach and voice, share, book consultation, request sample, installation guide, brochure) are left out, so every button on the page works. Mr Eulius confirmed an AI room preview is not required.
 - **Product photos** in `images/` are free-licence photos (Pexels, Pixabay), one per product, cropped square. They are illustrations, not photos of the exact products.
 
 ## What's inside
@@ -61,7 +61,7 @@ Without an API key the app still runs in **offline workflow mode** (rule-based a
 ```bash
 uvicorn backend.main:app --reload
 ```
-- Nova AI page: http://127.0.0.1:8000
+- Ceramica Nova AI page: http://127.0.0.1:8000
 - API docs (OpenAPI): http://127.0.0.1:8000/docs
 - Metrics: http://127.0.0.1:8000/api/v1/metrics
 - Reliability demo: `SIMULATE_FLAKY=1 uvicorn backend.main:app` (random timeouts / 429 / 500 / bad JSON)

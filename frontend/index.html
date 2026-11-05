@@ -28,10 +28,7 @@
   .brand .sep { width:1px; height:36px; background:var(--line); }
   .brand .product b { display:block; font-size:16px; letter-spacing:.04em; line-height:1.1; }
   .brand .product small { display:block; font-size:11px; letter-spacing:.16em; color:var(--gold); }
-  nav.main { display:flex; gap:26px; margin-left:auto; font-weight:500; }
-  nav.main .on { color:var(--gold); }
-  .hright { display:flex; align-items:center; gap:14px; }
-  .lang { border:1px solid var(--line); border-radius:99px; padding:4px 12px; font-size:13px; }
+  .hright { display:flex; align-items:center; gap:14px; margin-left:auto; }
   .iconbtn { position:relative; width:38px; height:38px; border-radius:50%; border:1px solid var(--line); background:#fff; display:grid; place-items:center; }
   .badge { position:absolute; top:-4px; right:-4px; min-width:18px; height:18px; border-radius:9px; background:var(--gold); color:#fff; font-size:11px; font-weight:600; display:grid; place-items:center; padding:0 4px; }
   .badge[hidden] { display:none; }
@@ -46,7 +43,7 @@
   .steps li.now { background:var(--green); color:#fff; } .steps li.now .dot { border-color:#fff; background:var(--gold); }
 
   /* ---------- 3 columns */
-  .grid { display:grid; grid-template-columns:minmax(320px, 27%) minmax(0, 1fr) minmax(330px, 28%); gap:16px; padding:12px 20px 20px; align-items:start; }
+  .grid { display:grid; grid-template-columns:minmax(340px, 31%) minmax(0, 1fr) minmax(300px, 24%); gap:16px; padding:12px 20px 20px; align-items:start; }
   .grid > * { min-width:0; }
   .panel { background:var(--card); border:1px solid var(--line); border-radius:18px; }
 
@@ -196,20 +193,15 @@
     .chat, .proj { position:static; height:auto; min-height:0; }
     .mid, .proj { overflow-y:auto; scrollbar-width:thin; }
   }
-  /* extra buttons from the mockup. "demo" ones only show a message; the others work */
-  em.demo { font-style:normal; font-size:9px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--gold); background:var(--gold-soft, #eaf0fc); border-radius:99px; padding:0 5px; margin-left:4px; }
-  .tab em.demo { margin-left:2px; }
-  .tab.demo-tab { color:var(--muted); }
+  /* extra buttons from the mockup */
   .tabs { flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; } .tab { padding:7px 11px; font-size:13px; white-space:nowrap; flex:none; }
   form .tool { width:30px; height:44px; border:0; background:none; color:var(--muted); display:grid; place-items:center; padding:0; }
   form .tool .ico { width:18px; height:18px; }
   .mini.icon { padding:5px 8px; }
-  .more { display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; margin-top:10px; }
+  .more { display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-top:10px; }
   .more button { border:1px solid var(--line); background:#fff; border-radius:12px; padding:7px 4px; font-size:11px; line-height:1.25; display:flex; flex-direction:column; align-items:center; gap:3px; text-align:center; }
   .more button .ico { width:17px; height:17px; }
-  .book { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:6px; }
-  .book button { border:1px solid var(--line); background:#fff; border-radius:12px; padding:8px 10px; font-size:12px; display:flex; gap:8px; align-items:center; text-align:left; line-height:1.3; }
-  .more button:hover, .book button:hover, .docs button:hover { border-color:var(--ink); }
+  .more button:hover, .docs button:hover { border-color:var(--ink); }
   footer.docs { flex:none; display:flex; align-items:center; gap:8px; padding:0 20px 12px; overflow-x:auto; }
   footer.docs > b { display:flex; gap:8px; align-items:center; font-size:13.5px; color:var(--ink); white-space:nowrap; padding-right:10px; border-right:1px solid var(--line); }
   footer.docs button { flex:1; border:1px solid var(--line); background:#fff; border-radius:12px; padding:7px 12px; display:flex; gap:8px; align-items:center; justify-content:center; font-size:12px; white-space:nowrap; }
@@ -224,17 +216,16 @@
   .modal .mfoot button.dark { background:var(--ink); color:#fff; border-color:var(--ink); }
   @media print {                       /* Print: only the project summary */
     body { height:auto !important; overflow:visible !important; display:block !important; }
-    header.top, .steps, .chat, .mid, footer.docs, .cta, .more, .book, .switch, .tech-panel, .hint, .drawer, .toast, .modal { display:none !important; }
+    header.top, .steps, .chat, .mid, footer.docs, .cta, .more, .switch, .tech-panel, .hint, .drawer, .toast, .modal { display:none !important; }
     .grid { display:block !important; padding:0 !important; } .proj { border:0 !important; overflow:visible !important; }
   }
 
   @media (max-width: 1180px) {
     .grid { grid-template-columns:minmax(300px, 40%) minmax(0, 1fr); }
     .proj { grid-column:1 / -1; position:static; }
-    nav.main { display:none; }
   }
   @media (max-width: 760px) {
-    header.top { padding:10px 16px; gap:12px; } .brand .sep, .brand .product, .lang { display:none; }
+    header.top { padding:10px 16px; gap:12px; } .brand .sep, .brand .product { display:none; }
     .grid { grid-template-columns:1fr; padding:10px 16px 20px; }
     .chat { height:78vh; min-height:0; position:static; }
     .steps { justify-content:flex-start; } .steps ol { overflow-x:auto; max-width:100%; } .steps li { padding:6px 10px; }
@@ -251,12 +242,9 @@
     <span class="sep"></span>
     <span class="product"><b>NOVA AI</b><small>DESIGN CONCIERGE</small></span>
   </a>
-  <nav class="main"><span>Explore ⌄</span><span class="on">Design Studio ✦</span><span>My Projects</span><span>Support</span></nav>
   <div class="hright">
-    <span class="lang">EN | عربي</span>
     <b style="font-size:13px">QAR</b>
     <button class="iconbtn" type="button" id="cartBtn" aria-label="Cart"><svg class="ico" viewBox="0 0 24 24"><path d="M3 4h2l2.4 11.2a2 2 0 002 1.6h7.8a2 2 0 002-1.6L21 8H6.2"/><circle cx="10" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/></svg><span class="badge" id="cartCount" hidden>0</span></button>
-    <button class="iconbtn" type="button" aria-label="Account"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg></button>
   </div>
 </header>
 
@@ -283,14 +271,11 @@
         <button class="act" type="button" data-say="Add a complete bathroom set to my project."><svg class="ico" viewBox="0 0 24 24"><path d="M4 12h16v3a5 5 0 01-5 5H9a5 5 0 01-5-5z"/><path d="M6 12V5a2 2 0 014 0"/></svg>Complete bathroom set</button>
         <button class="act" type="button" data-act="stock"><svg class="ico" viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4-9-4zM3 7v10l9 4 9-4V7M12 11v10"/></svg>Check availability</button>
         <button class="act" type="button" data-act="similar"><svg class="ico" viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>Explore similar styles</button>
-        <button class="act" type="button" data-demo="Ask an expert (live chat or call-back)"><svg class="ico" viewBox="0 0 24 24"><path d="M4 14v-2a8 8 0 0116 0v2M4 14h3v5H4zM17 14h3v5h-3z"/></svg>Ask an expert<em class="demo">demo</em></button>
       </div>
       <div class="tests" id="tests"></div>
     </div>
     <form id="f">
-      <button class="tool" type="button" data-demo="Attach a file or photo" aria-label="Attach (demo)"><svg class="ico" viewBox="0 0 24 24"><path d="M20 11l-8.5 8.5a5 5 0 01-7-7L13 4a3.5 3.5 0 015 5l-8.5 8.5a2 2 0 01-3-3L14 7"/></svg></button>
       <input id="q" placeholder="Type your message…" autocomplete="off" maxlength="2000" aria-label="Message">
-      <button class="tool" type="button" data-demo="Voice message" aria-label="Voice (demo)"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3a3 3 0 013 3v6a3 3 0 01-6 0V6a3 3 0 013-3zM5 11a7 7 0 0014 0M12 18v3"/></svg></button>
       <button class="send" id="send" aria-label="Send"><svg class="ico" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2-6z"/></svg></button>
     </form>
   </section>
@@ -300,8 +285,6 @@
     <div class="tabs">
       <button class="tab on" type="button" data-tab="room"><svg class="ico" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 01-1 1H4a1 1 0 01-1-1z"/></svg>Room inspiration</button>
       <button class="tab" type="button" data-tab="texture"><svg class="ico" viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg>Tile close-up</button>
-      <button class="tab demo-tab" type="button" data-demo="Upload my room (needs an image-AI model)"><svg class="ico" viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4zM12 11v5M9.5 13.5L12 11l2.5 2.5"/></svg>Upload my room<em class="demo">demo</em></button>
-      <button class="tab demo-tab" type="button" data-demo="3D / AR view"><svg class="ico" viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4-9-4zM3 7v10l9 4 9-4V7M12 11v10"/></svg>3D / AR<em class="demo">demo</em></button>
     </div>
     <div class="stage" id="stage"></div>
     <div class="bar2">
@@ -343,11 +326,6 @@
       <button type="button" id="printBtn"><svg class="ico" viewBox="0 0 24 24"><path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M6 14h12v7H6z"/></svg>Print</button>
       <button type="button" id="roomImg"><svg class="ico" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9h.01"/></svg>Download room image</button>
       <button type="button" id="specBtn"><svg class="ico" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h7"/></svg>Download spec sheet</button>
-      <button type="button" data-demo="Share project"><svg class="ico" viewBox="0 0 24 24"><path d="M18 8a3 3 0 10-3-3l-6 3.5a3 3 0 100 5l6 3.5a3 3 0 103-3l-6-3.5"/></svg>Share project<em class="demo">demo</em></button>
-    </div>
-    <div class="book">
-      <button type="button" data-demo="Book a design consultation"><svg class="ico" viewBox="0 0 24 24"><path d="M4 6h16v14H4zM4 10h16M8 3v4M16 3v4"/></svg><span>Book design consultation<em class="demo">demo</em><br><small style="color:var(--muted)">Showroom / virtual</small></span></button>
-      <button type="button" data-demo="Request a sample"><svg class="ico" viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg><span>Request sample<em class="demo">demo</em><br><small style="color:var(--muted)">Tile / material</small></span></button>
     </div>
 
     <div class="switch" id="tswitch" role="switch" aria-checked="false" tabindex="0"><i></i> How it works (technical view)</div>
@@ -364,10 +342,7 @@
   <b><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5zM3 13l9 5 9-5"/></svg>Documents &amp; Exports</b>
   <button type="button" id="docPdf"><svg class="ico" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM12 11v6m0 0l-3-3m3 3l3-3"/></svg>Quotation PDF</button>
   <button type="button" id="docBom"><svg class="ico" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>BOM (bill of materials)</button>
-  <button type="button" data-demo="Installation guide"><svg class="ico" viewBox="0 0 24 24"><path d="M14 6a4 4 0 005 5l-9 9a2 2 0 01-3-3l9-9a4 4 0 01-2-2z"/></svg>Installation guide<em class="demo">demo</em></button>
   <button type="button" id="docTech"><svg class="ico" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h7"/></svg>Technical data</button>
-  <button type="button" data-demo="Product brochure"><svg class="ico" viewBox="0 0 24 24"><path d="M4 5a2 2 0 012-2h5v17H6a2 2 0 00-2 2zM20 5a2 2 0 00-2-2h-5v17h5a2 2 0 012 2z"/></svg>Product brochure<em class="demo">demo</em></button>
-  <button type="button" data-demo="Share link"><svg class="ico" viewBox="0 0 24 24"><path d="M10 14a4 4 0 006 0l3-3a4 4 0 00-6-6l-1 1M14 10a4 4 0 00-6 0l-3 3a4 4 0 006 6l1-1"/></svg>Share link<em class="demo">demo</em></button>
 </footer>
 
 <div class="modal" id="specModal" role="dialog" aria-modal="true" aria-labelledby="specTitle">
@@ -382,7 +357,7 @@
   <div class="dfoot">
     <div class="sum" style="font-weight:600;font-size:15px"><span>Total</span><span id="cartTotal">QAR 0.00</span></div>
     <button class="checkout" type="button" disabled>Checkout</button>
-    <div class="hint">Online payment isn't connected in this demo. A showroom advisor confirms the order.</div>
+    <div class="hint">Online payment isn't connected yet. A showroom advisor confirms the order.</div>
   </div>
 </div>
 <div class="toast" id="toast" role="status"></div>
@@ -635,7 +610,7 @@ async function downloadPdf() {
   finally { btn.disabled = !S.quote; }
 }
 
-// ---------------------------------------------------------------- documents, specs and demo buttons
+// ---------------------------------------------------------------- documents and specs
 function saveFile(name, text, type = "text/csv") {
   const url = URL.createObjectURL(new Blob([text], { type }));
   const a = Object.assign(document.createElement("a"), { href: url, download: name });
@@ -731,7 +706,6 @@ $("specClose").onclick = () => $("specModal").classList.remove("open");
 $("specModal").onclick = e => { if (e.target.id === "specModal") $("specModal").classList.remove("open"); };
 $("printBtn").onclick = () => window.print();
 $("roomImg").onclick = downloadRoomImage;
-document.querySelectorAll("[data-demo]").forEach(b => b.onclick = () => toast(`Demo only: "${b.dataset.demo}" isn't connected yet.`));
 document.querySelector('[data-act="similar"]').onclick = () => {
   const p = S.by[S.selected];
   send(p ? `Show me tiles in a similar style to ${p.name}.` : "Show me some popular styles.");

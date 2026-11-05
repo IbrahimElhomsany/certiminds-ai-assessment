@@ -148,5 +148,5 @@ Command: `python -m evaluation.save_sample_conversation --mode claude --model cl
 - QAR prices are converted from the official USD catalog at a fixed rate (3.64). Bathroom-set prices are demo values chosen for this project.
 - Rewards points and delivery fees are proposed rules shown as "(proposed)"; there is no real loyalty or delivery system behind them.
 - The cart and checkout are a front-end demo: no payment, the cart lives only in the open page.
-- Several mockup buttons (Upload my room, 3D / AR, Ask an expert, Share, Book consultation, Request sample, Installation guide, Product brochure, attach and voice) are labelled **DEMO** and only show a message. A real room preview would need an image model; it was left out on purpose to focus on the required features.
+- Some mockup features (upload my room, 3D / AR, ask an expert, share, book consultation, request sample, installation guide, brochure, attach and voice) are not built, and are not shown on the page. A real room preview would need an image model; it was left out on purpose to focus on the required features.
 - Product photos are free-licence illustrations, not photos of the exact catalog products.

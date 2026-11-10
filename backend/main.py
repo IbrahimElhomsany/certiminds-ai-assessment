@@ -89,6 +89,13 @@ def ui():
     return FileResponse(Path(__file__).resolve().parent.parent / "frontend" / "index.html")
 
 
+@app.get("/admin")
+def admin_ui():
+    """Nova Studio, the staff admin. Not linked from the public shop; every API call needs a staff login."""
+    return FileResponse(Path(__file__).resolve().parent.parent / "frontend" / "admin.html",
+                        headers={"X-Robots-Tag": "noindex"})
+
+
 ROOT = Path(__file__).resolve().parent.parent
 app.mount("/images", StaticFiles(directory=ROOT / "images", check_dir=False), name="images")
 

@@ -1,0 +1,776 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Nova Studio | Ceramica Nova admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0d0f14; --panel:#151821; --panel2:#1b1f2a; --line:#262b38; --text:#e6e8ee; --muted:#8b92a5;
+          --accent:#6c8cff; --accent-soft:rgba(108,140,255,.14); --ok:#3ecf8e; --ok-soft:rgba(62,207,142,.13);
+          --warn:#f0b44c; --warn-soft:rgba(240,180,76,.13); --bad:#ff6b6b; --bad-soft:rgba(255,107,107,.13);
+          --profit:#3ecf8e; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; background:var(--bg); color:var(--text); font:13.5px/1.5 "Poppins", -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color:inherit; text-decoration:none; }
+  button, input, select, textarea { font:inherit; color:inherit; }
+  button { cursor:pointer; }
+  .ico { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+  .muted { color:var(--muted); } .small { font-size:12px; } .right { text-align:right; } .nowrap { white-space:nowrap; }
+  .num { font-variant-numeric:tabular-nums; }
+  h1 { font-size:20px; margin:0; font-weight:600; } h2 { font-size:14.5px; margin:0; font-weight:600; }
+  h3 { font-size:13px; margin:0 0 6px; font-weight:600; }
+
+  .btn { display:inline-flex; align-items:center; gap:7px; border:1px solid var(--accent); background:var(--accent);
+         color:#fff; border-radius:9px; padding:8px 14px; font-weight:500; font-size:13px; }
+  .btn.ghost { background:transparent; color:var(--text); border-color:var(--line); }
+  .btn.ghost:hover { border-color:var(--muted); }
+  .btn.danger { background:transparent; color:var(--bad); border-color:rgba(255,107,107,.4); }
+  .btn.ok { background:var(--ok); border-color:var(--ok); color:#06281a; }
+  .btn.sm { padding:5px 10px; font-size:12px; border-radius:7px; }
+  .btn:disabled { opacity:.45; cursor:default; }
+  input, select, textarea { background:var(--panel2); border:1px solid var(--line); border-radius:9px; padding:8px 11px; outline:none; }
+  input:focus, select:focus, textarea:focus { border-color:var(--accent); }
+  label.f { display:block; font-size:12px; color:var(--muted); margin:10px 0 4px; }
+  label.f + input, label.f + select, label.f + textarea { width:100%; }
+
+  .tag { display:inline-block; white-space:nowrap; font-size:11px; font-weight:600; padding:2px 8px; border-radius:6px;
+         background:var(--panel2); color:var(--muted); }
+  .tag.ok, .tag.won, .tag.delivered, .tag.accepted, .tag.approved, .tag.auto_approved { background:var(--ok-soft); color:var(--ok); }
+  .tag.low, .tag.pending, .tag.negotiation, .tag.draft { background:var(--warn-soft); color:var(--warn); }
+  .tag.out, .tag.critical, .tag.lost, .tag.rejected, .tag.cancelled, .tag.expired { background:var(--bad-soft); color:var(--bad); }
+  .tag.quote_sent, .tag.sent, .tag.confirmed, .tag.qualified { background:var(--accent-soft); color:var(--accent); }
+  .tag.demo { background:var(--warn-soft); color:var(--warn); }
+
+  /* layout */
+  .app { display:grid; grid-template-columns:232px 1fr; min-height:100vh; }
+  aside { background:var(--panel); border-right:1px solid var(--line); padding:18px 14px; position:sticky; top:0; height:100vh;
+          display:flex; flex-direction:column; gap:4px; }
+  .brand { display:flex; gap:10px; align-items:center; padding:2px 8px 18px; }
+  .brand .logo { width:34px; height:34px; border-radius:10px; background:linear-gradient(135deg,#6c8cff,#a46cff);
+                 display:grid; place-items:center; font-weight:700; }
+  .brand b { display:block; font-size:15px; } .brand small { color:var(--muted); font-size:11px; }
+  nav a { display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:9px; color:var(--muted); font-weight:500; }
+  nav a:hover { background:var(--panel2); color:var(--text); }
+  nav a.on { background:var(--accent-soft); color:var(--text); }
+  nav a .count { margin-left:auto; background:var(--warn); color:#2b1d00; font-size:10.5px; font-weight:700; border-radius:9px; padding:0 7px; }
+  .soon { margin-top:14px; padding:10px; font-size:11.5px; color:var(--muted); border:1px dashed var(--line); border-radius:10px; }
+  .me { margin-top:auto; padding:10px; border-top:1px solid var(--line); font-size:12px; }
+  .me b { display:block; font-size:13px; }
+  main { padding:22px 28px 60px; min-width:0; }
+  .top { display:flex; align-items:center; gap:14px; margin-bottom:18px; flex-wrap:wrap; }
+  .top .grow { flex:1; }
+  .seg { display:inline-flex; background:var(--panel); border:1px solid var(--line); border-radius:9px; padding:3px; }
+  .seg button { background:none; border:0; padding:5px 12px; border-radius:7px; color:var(--muted); font-size:12.5px; }
+  .seg button.on { background:var(--panel2); color:var(--text); }
+  .menu-btn { display:none; }
+
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px 18px; min-width:0; }
+  .card .head { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+  .card .head .grow { flex:1; }
+  .grid { display:grid; gap:14px; }
+  .kpis { grid-template-columns:repeat(5, 1fr); }
+  .kpi .label { color:var(--muted); font-size:12px; display:flex; gap:6px; align-items:center; }
+  .kpi .value { font-size:22px; font-weight:600; margin:4px 0 2px; }
+  .delta { font-size:12px; font-weight:500; } .delta.up { color:var(--ok); } .delta.down { color:var(--bad); }
+  .info { width:15px; height:15px; border-radius:50%; border:1px solid var(--muted); font-size:10px; display:inline-grid;
+          place-items:center; cursor:help; color:var(--muted); }
+  .row2 { grid-template-columns:2fr 1fr; } .row3 { grid-template-columns:1fr 1fr 1fr; } .row2e { grid-template-columns:1fr 1fr; }
+
+  .copilot { grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); }
+  .cc { background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:13px 14px; display:flex; flex-direction:column; gap:6px; }
+  .cc b { font-size:13px; } .cc .why { font-size:11.5px; color:var(--muted); border-top:1px dashed var(--line); padding-top:6px; margin-top:auto; }
+  .cc .btn { align-self:flex-start; }
+  .rulebadge { font-size:10.5px; color:var(--muted); border:1px solid var(--line); border-radius:6px; padding:1px 7px; }
+
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; font-weight:500; color:var(--muted); font-size:11.5px; padding:8px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  td { padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:middle; }
+  tr.click { cursor:pointer; } tr.click:hover td { background:var(--panel2); }
+  .tablewrap { overflow-x:auto; }
+  .thumb { width:34px; height:34px; border-radius:7px; object-fit:cover; background:var(--panel2); flex:none; }
+  .pcell { display:flex; gap:10px; align-items:center; }
+
+  .funnel .bar { display:flex; align-items:center; gap:10px; margin:7px 0; }
+  .funnel .bar span:first-child { width:96px; color:var(--muted); font-size:12px; }
+  .funnel .track { flex:1; background:var(--panel2); border-radius:6px; height:22px; position:relative; overflow:hidden; }
+  .funnel .fill { position:absolute; inset:0 auto 0 0; background:linear-gradient(90deg,#6c8cff,#8f7bff); border-radius:6px; }
+  .funnel .n { width:40px; text-align:right; font-weight:600; }
+  .proj { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .proj div { background:var(--panel2); border-radius:10px; padding:10px 12px; }
+  .proj b { display:block; font-size:20px; }
+  .list .it { display:flex; gap:10px; align-items:center; padding:8px 0; border-bottom:1px solid var(--line); }
+  .list .it:last-child { border-bottom:0; } .list .it .grow { flex:1; min-width:0; }
+  .ellipsis { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .meter { height:6px; border-radius:4px; background:var(--panel2); overflow:hidden; margin-top:4px; }
+  .meter i { display:block; height:100%; }
+
+  .chart svg { width:100%; height:240px; display:block; }
+  .legend { display:flex; gap:16px; font-size:12px; color:var(--muted); }
+  .legend i { display:inline-block; width:10px; height:3px; border-radius:2px; margin-right:6px; vertical-align:middle; }
+  .tip { position:absolute; pointer-events:none; background:#0b0d12; border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:12px; display:none; z-index:5; }
+
+  .filters { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { background:var(--panel); border:1px solid var(--line); border-radius:20px; padding:5px 12px; font-size:12px; color:var(--muted); }
+  .chip.on { border-color:var(--accent); color:var(--text); background:var(--accent-soft); }
+  .pager { display:flex; gap:8px; align-items:center; justify-content:flex-end; margin-top:10px; font-size:12px; color:var(--muted); }
+  .back { color:var(--muted); font-size:12.5px; display:inline-flex; gap:6px; align-items:center; margin-bottom:10px; }
+  .kv { display:grid; grid-template-columns:110px 1fr; gap:4px 10px; font-size:12.5px; }
+  .kv span:nth-child(odd) { color:var(--muted); }
+  .timeline .t { display:grid; grid-template-columns:14px 1fr; gap:10px; padding:6px 0; }
+  .timeline .dot { width:9px; height:9px; border-radius:50%; background:var(--accent); margin-top:6px; }
+  .timeline .dot.order { background:var(--ok); } .timeline .dot.discount { background:var(--warn); }
+  .timeline .dot.stage_change { background:#a46cff; } .timeline .dot.call, .timeline .dot.note { background:var(--muted); }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; }
+  .notice { background:var(--accent-soft); border:1px solid rgba(108,140,255,.35); border-radius:10px; padding:9px 12px; font-size:12.5px; }
+  .notice.warn { background:var(--warn-soft); border-color:rgba(240,180,76,.35); }
+  .notice.bad { background:var(--bad-soft); border-color:rgba(255,107,107,.35); }
+  .empty { color:var(--muted); padding:18px 0; text-align:center; font-size:12.5px; }
+
+  /* login */
+  .login { min-height:100vh; display:grid; place-items:center; padding:20px; }
+  .login .card { width:100%; max-width:400px; padding:28px; }
+  .demo-users { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:14px; }
+  .demo-users button { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:7px; font-size:11.5px; text-align:left; }
+  .demo-users button b { display:block; font-size:12px; }
+
+  /* dialog + toast */
+  dialog { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:14px; padding:20px; width:min(440px, 92vw); }
+  dialog::backdrop { background:rgba(0,0,0,.55); }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#0b0d12; border:1px solid var(--line);
+           padding:10px 16px; border-radius:10px; font-size:13px; z-index:50; display:none; max-width:90vw; }
+  .toast.bad { border-color:var(--bad); color:var(--bad); } .toast.ok { border-color:var(--ok); }
+
+  @media (max-width:1180px) { .kpis { grid-template-columns:repeat(3, 1fr); } .row3 { grid-template-columns:1fr 1fr; } }
+  @media (max-width:900px) {
+    .app { grid-template-columns:1fr; }
+    aside { position:fixed; z-index:30; left:0; width:240px; transform:translateX(-100%); transition:transform .2s; }
+    aside.open { transform:none; }
+    .menu-btn { display:inline-flex; }
+    main { padding:16px; }
+    .kpis { grid-template-columns:1fr 1fr; } .row2, .row3, .row2e { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<dialog id="dlg"><form method="dialog" id="dlgForm"></form></dialog>
+<div class="toast" id="toast"></div>
+
+<script>
+/* Nova Studio admin. One page, hash routes (#/dashboard, #/leads/12 ...).
+   Every number comes from /api/admin; the server checks roles on every call, the screen only hides
+   buttons a role can't use. Token is kept for this browser tab only (sessionStorage). */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const qar = (n, d = 0) => "QAR " + Number(n || 0).toLocaleString("en-US", {minimumFractionDigits:d, maximumFractionDigits:d});
+const num = (n, d = 0) => Number(n || 0).toLocaleString("en-US", {maximumFractionDigits:d});
+const date = s => s ? new Date(s).toLocaleDateString("en-GB", {day:"numeric", month:"short"}) : "";
+const dateTime = s => s ? new Date(s).toLocaleString("en-GB", {day:"numeric", month:"short", hour:"2-digit", minute:"2-digit"}) : "";
+const label = s => String(s || "").replace(/_/g, " ").replace(/^./, c => c.toUpperCase());
+const IMG_BLANK = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'/%3E";
+const ICONS = {
+  dashboard:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+  leads:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.8c1.6.8 2.6 2.5 3 5.2"/>',
+  quotes:'<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 12h7M9 16h7"/>',
+  orders:'<path d="M3 7l9-4 9 4-9 4z"/><path d="M3 7v10l9 4 9-4V7M12 11v10"/>',
+  inventory:'<rect x="3" y="4" width="18" height="6" rx="1.5"/><path d="M5 10v10h14V10M10 14h4"/>',
+  approvals:'<path d="M12 3l7 3v6c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/>',
+  audit:'<path d="M4 6h16M4 12h10M4 18h7"/><circle cx="18" cy="16" r="3"/><path d="M20.2 18.2L22 20"/>',
+  team:'<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-3.6 3.8-5.5 7-5.5s6 1.9 7 5.5"/>',
+  menu:'<path d="M4 7h16M4 12h16M4 17h16"/>', back:'<path d="M15 18l-6-6 6-6"/>', out:'<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
+};
+const icon = n => `<svg class="ico" viewBox="0 0 24 24">${ICONS[n] || ""}</svg>`;
+
+let S = { token: null, me: null, can: new Set(), days: 30 };
+try { S.token = sessionStorage.getItem("nova_admin_token"); S.days = +sessionStorage.getItem("nova_admin_days") || 30; } catch (e) {}
+
+async function api(path, opts = {}) {
+  const r = await fetch("/api/admin" + path, {method: opts.method || "GET",
+    headers: {"Content-Type": "application/json", ...(S.token ? {Authorization: "Bearer " + S.token} : {})},
+    body: opts.body ? JSON.stringify(opts.body) : undefined});
+  if (r.status === 401 && path !== "/login") { logout(); throw new Error("Please log in again."); }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const d = data.detail;
+    throw new Error(Array.isArray(d) ? d.map(x => x.msg).join(", ") : (d || "Something went wrong."));
+  }
+  return data;
+}
+
+function toast(msg, kind = "ok") {
+  const t = $("#toast"); t.textContent = msg; t.className = "toast " + kind; t.style.display = "block";
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = "none", 3800);
+}
+
+/* A small form dialog. fields: [{name, label, type, options, value, required, hint}] -> resolves with values or null */
+function ask(title, fields, okText = "Save", note = "") {
+  return new Promise(resolve => {
+    const f = $("#dlgForm");
+    f.innerHTML = `<h2>${esc(title)}</h2>${note ? `<p class="muted small" style="margin:6px 0 0">${note}</p>` : ""}` +
+      fields.map(x => `<label class="f" for="fx_${x.name}">${esc(x.label)}</label>` + (
+        x.type === "select" ? `<select id="fx_${x.name}" name="${x.name}" ${x.required ? "required" : ""}>${x.options.map(o =>
+          `<option value="${esc(o[0])}" ${String(o[0]) === String(x.value ?? "") ? "selected" : ""}>${esc(o[1])}</option>`).join("")}</select>`
+        : x.type === "textarea" ? `<textarea id="fx_${x.name}" name="${x.name}" rows="3" maxlength="${x.max || 300}" ${x.required ? "required" : ""}>${esc(x.value || "")}</textarea>`
+        : x.type === "checkbox" ? `<label class="small"><input type="checkbox" id="fx_${x.name}" name="${x.name}"> ${esc(x.hint || "")}</label>`
+        : `<input id="fx_${x.name}" name="${x.name}" type="${x.type || "text"}" step="any" value="${esc(x.value ?? "")}" ${x.required ? "required" : ""} ${x.min != null ? `min="${x.min}"` : ""} ${x.max != null ? `max="${x.max}"` : ""}>`)
+        + (x.hint && x.type !== "checkbox" ? `<div class="muted small" style="margin-top:3px">${esc(x.hint)}</div>` : "")).join("") +
+      `<div class="actions" style="justify-content:flex-end;margin-top:18px">
+         <button class="btn ghost" value="cancel" formnovalidate>Cancel</button><button class="btn" value="ok">${esc(okText)}</button></div>`;
+    const d = $("#dlg");
+    d.onclose = () => {
+      if (d.returnValue !== "ok") return resolve(null);
+      const out = {};
+      fields.forEach(x => { const el = $("#fx_" + x.name); out[x.name] = x.type === "checkbox" ? el.checked : el.value; });
+      resolve(out);
+    };
+    d.returnValue = ""; d.showModal();
+  });
+}
+
+async function act(fn, okMsg) {
+  try { const r = await fn(); if (okMsg) toast(okMsg); route(); return r; }
+  catch (e) { toast(e.message, "bad"); }
+}
+
+/* ------------------------------------------------------------------ login */
+const DEMO = [["owner","Owner","Everything, incl. prices"],["manager","Sara Haddad","Sales manager, approvals"],
+              ["omar","Omar Khalil","Salesperson"],["warehouse","Rajesh Nair","Warehouse"],["viewer","Viewer","Read-only reports"]];
+function loginView(msg = "") {
+  $("#root").innerHTML = `<div class="login"><div class="card">
+    <div class="brand" style="padding:0 0 16px"><div class="logo">N</div><div><b>Nova Studio</b><small>Ceramica Nova staff</small></div></div>
+    <h1 style="font-size:18px">Staff login</h1>
+    <p class="muted small" style="margin:4px 0 6px">Customers use the shop; this area is for the showroom team.</p>
+    ${msg ? `<div class="notice bad" style="margin:10px 0">${esc(msg)}</div>` : ""}
+    <form id="lf">
+      <label class="f" for="em">Email</label><input id="em" type="email" autocomplete="username" required>
+      <label class="f" for="pw">Password</label><input id="pw" type="password" autocomplete="current-password" required>
+      <button class="btn" style="width:100%;justify-content:center;margin-top:16px">Log in</button>
+    </form>
+    <div class="notice warn small" style="margin-top:16px"><b>Demo company.</b> All customers, leads and sales are generated demo data.
+      Password for every demo account: <b>NovaDemo2026!</b></div>
+    <div class="demo-users">${DEMO.map(d => `<button type="button" data-u="${d[0]}"><b>${esc(d[1])}</b><span class="muted">${esc(d[2])}</span></button>`).join("")}</div>
+  </div></div>`;
+  document.querySelectorAll("[data-u]").forEach(b => b.onclick = () => { $("#em").value = b.dataset.u + "@ceramicanova.demo"; $("#pw").focus(); });
+  $("#lf").onsubmit = async e => {
+    e.preventDefault();
+    try {
+      const r = await api("/login", {method: "POST", body: {email: $("#em").value, password: $("#pw").value}});
+      S.token = r.token; try { sessionStorage.setItem("nova_admin_token", r.token); } catch (e) {}
+      await boot();
+    } catch (err) { loginView(err.message); }
+  };
+}
+function logout() { S.token = null; S.me = null; try { sessionStorage.removeItem("nova_admin_token"); } catch (e) {} loginView(); }
+
+/* ------------------------------------------------------------------ shell */
+function modules() {
+  const c = p => S.can.has(p);
+  return [
+    ["dashboard", "Dashboard", c("dashboard.view")],
+    ["leads", "Leads & CRM", c("leads.view_all") || c("leads.view_own")],
+    ["quotes", "Quotations", c("quotes.view_all") || c("quotes.view_own")],
+    ["orders", "Orders", c("orders.view_all") || c("orders.view_own")],
+    ["inventory", "Inventory", c("inventory.view")],
+    ["approvals", "Approvals", c("discounts.approve")],
+    ["audit", "Audit log", c("audit.view")],
+    ["team", "Team", c("users.manage")],
+  ].filter(m => m[2]);
+}
+function shell(active, inner) {
+  const u = S.me.user;
+  $("#root").innerHTML = `<div class="app">
+    <aside id="side">
+      <div class="brand"><div class="logo">N</div><div><b>Nova Studio</b><small>${esc(S.me.company.name)}</small></div></div>
+      <nav>${modules().map(m => `<a href="#/${m[0]}" class="${m[0] === active ? "on" : ""}">${icon(m[0])}${m[1]}${
+        m[0] === "approvals" && S.pending ? `<span class="count">${S.pending}</span>` : ""}</a>`).join("")}</nav>
+      <div class="soon"><b>Coming next (step 5)</b><br>Ask your data (Claude, read-only) and follow-up drafts. Not active yet.</div>
+      <div class="me"><b>${esc(u.name)}</b><span class="muted">${esc(label(u.role))}${u.branch ? " · " + esc(u.branch) : ""}</span>
+        <div style="margin-top:8px"><button class="btn ghost sm" id="lo">${icon("out")} Log out</button></div></div>
+    </aside>
+    <main><div id="view">${inner}</div></main></div>`;
+  $("#lo").onclick = logout;
+}
+function topbar(title, sub = "", right = "") {
+  return `<div class="top"><button class="btn ghost sm menu-btn" onclick="document.getElementById('side').classList.toggle('open')">${icon("menu")}</button>
+    <div class="grow"><h1>${title}</h1>${sub ? `<div class="muted small">${sub}</div>` : ""}</div>${right}
+    ${S.me.company.is_demo ? `<span class="tag demo" title="Generated demo data, not a real company's figures">Demo data</span>` : ""}</div>`;
+}
+const loading = () => `<div class="empty">Loading…</div>`;
+const pct = (v, unit = "%") => v == null ? `<span class="delta muted">new</span>` :
+  `<span class="delta ${v >= 0 ? "up" : "down"}">${v >= 0 ? "▲" : "▼"} ${Math.abs(v).toFixed(1)}${unit}</span>`;
+
+/* ------------------------------------------------------------------ dashboard */
+async function dashboardView() {
+  shell("dashboard", topbar("Dashboard", "", `<div class="seg" id="per">${[7, 30, 90].map(d =>
+    `<button data-d="${d}" class="${d === S.days ? "on" : ""}">${d} days</button>`).join("")}</div>`) + loading());
+  document.querySelectorAll("#per button").forEach(b => b.onclick = () => {
+    S.days = +b.dataset.d; try { sessionStorage.setItem("nova_admin_days", S.days); } catch (e) {} dashboardView(); });
+  const d = await api(`/dashboard?days=${S.days}`);
+  const k = d.kpis;
+  const scope = d.scope === "company" ? "Whole company" : "Your leads only";
+  const kpi = (lbl, v, ch, tip, unit) => `<div class="card kpi"><div class="label">${lbl}<span class="info" title="${esc(tip)}">i</span></div>
+      <div class="value num">${v}</div>${pct(ch, unit)} <span class="muted small">vs previous ${d.period.days} days</span></div>`;
+  const html = topbar(`Good ${new Date().getHours() < 12 ? "morning" : "afternoon"}, ${esc(S.me.user.name.split(" ")[0])}`,
+      `${scope} · last ${d.period.days} days (${date(d.period.start)} to ${date(d.period.end)}) · QAR`,
+      document.querySelector(".top .seg")?.outerHTML || "") +
+    `<div class="grid kpis">
+      ${kpi("Revenue", qar(k.revenue), k.change.revenue, "Orders confirmed or delivered in the period. Pending online orders count once staff confirm them.")}
+      ${kpi("Gross profit", qar(k.gross_profit), k.change.gross_profit, "Order totals minus the cost price of the goods. Margin " + k.margin_pct + "%.")}
+      ${kpi("Orders", num(k.orders), k.change.orders, "Confirmed or delivered orders in the period.")}
+      ${kpi("New leads", num(k.new_leads), k.change.new_leads, "Leads created in the period, from every source (AI chat, shop, walk-in, phone, referral).")}
+      ${kpi("Conversion", k.conversion_pct + "%", k.change.conversion_pp, "Orders divided by new leads in the period. Change shown in percentage points.", " pts")}
+    </div>
+    <div class="card" style="margin-top:14px"><div class="head"><h2>Nova Copilot</h2><span class="rulebadge">Suggested by simple rules on your data, not AI</span></div>
+      ${d.copilot.length ? `<div class="grid copilot">${d.copilot.map(c => `<div class="cc"><b>${esc(c.title)}</b><span class="small">${esc(c.detail)}</span>
+        <span class="why">Why: ${esc(c.why)}</span><a class="btn sm" href="${cardLink(c.action)}">${esc(c.action.label)}</a></div>`).join("")}</div>`
+        : `<div class="empty">Nothing needs attention right now.</div>`}</div>
+    <div class="grid row2" style="margin-top:14px">
+      <div class="card chart" style="position:relative"><div class="head"><h2 class="grow">Sales performance</h2>
+        <div class="legend"><span><i style="background:var(--accent)"></i>Revenue</span><span><i style="background:var(--profit)"></i>Gross profit</span></div></div>
+        ${chartSvg(d.sales)}<div class="tip" id="tip"></div></div>
+      <div class="card"><div class="head"><h2 class="grow">Project snapshot</h2><span class="muted small">${num(d.projects.active)} active</span></div>
+        <div class="proj">${d.projects.groups.map(g => `<div><span class="muted small">${esc(g.label)}</span><b class="num">${num(g.count)}</b></div>`).join("")}</div>
+        <p class="muted small" style="margin:10px 0 0">In design = new or qualified leads. Quoted = quotation sent or negotiating. Order in progress = pending or confirmed, not yet delivered.</p></div>
+    </div>
+    <div class="grid row3" style="margin-top:14px">
+      <div class="card"><div class="head"><h2 class="grow">Pipeline</h2><span class="muted small">Open value ${qar(d.pipeline.open_value)}</span></div>
+        <div class="funnel">${d.pipeline.funnel.map(s => `<div class="bar"><span>${label(s.stage)}</span><div class="track"><div class="fill" style="width:${
+          d.pipeline.funnel[0].count ? s.count / d.pipeline.funnel[0].count * 100 : 0}%"></div></div><span class="n num">${num(s.count)}</span></div>`).join("")}</div>
+        <p class="muted small" style="margin:8px 0 0">Leads created in the period and how far they got. ${num(d.pipeline.lost)} marked lost.</p></div>
+      <div class="card"><div class="head"><h2 class="grow">Top-selling products</h2></div><div class="list">
+        ${d.top_products.map(p => `<div class="it"><img class="thumb" src="${esc(p.image || IMG_BLANK)}" onerror="this.src='${IMG_BLANK}'" alt="">
+          <div class="grow"><div class="ellipsis">${esc(p.name)}</div><span class="muted small">${num(p.quantity)} ${p.unit === "m2" ? "m²" : "sets"}</span></div>
+          <div class="right"><div class="num">${qar(p.revenue)}</div>${pct(p.change_pct)}</div></div>`).join("") || `<div class="empty">No sales in this period.</div>`}</div></div>
+      <div class="card"><div class="head"><h2 class="grow">Inventory alerts</h2><a class="muted small" href="#/inventory">All stock</a></div><div class="list">
+        ${d.inventory_alerts.map(s => `<a class="it" href="#/inventory/${esc(s.sku)}"><img class="thumb" src="${esc(s.image || IMG_BLANK)}" onerror="this.src='${IMG_BLANK}'" alt="">
+          <div class="grow"><div class="ellipsis">${esc(s.name)}</div><span class="muted small">${num(s.stock)} ${s.unit === "m2" ? "m²" : "sets"} · ${
+            s.days_of_stock != null ? "~" + num(s.days_of_stock) + " days left" : "no recent sales"}</span></div>
+          <span class="tag ${s.status}">${label(s.status)}</span></a>`).join("")}</div></div>
+    </div>
+    <div class="grid row2e" style="margin-top:14px">
+      <div class="card"><div class="head"><h2 class="grow">Quotations waiting for a reply</h2><a class="muted small" href="#/leads?stalled=1">See all</a></div>
+        ${d.follow_ups.length ? `<div class="tablewrap"><table><tr><th>Quote</th><th>Customer</th><th>Salesperson</th><th class="right">Total</th><th class="right">Waiting</th></tr>
+        ${d.follow_ups.map(f => `<tr class="click" onclick="location.hash='#/leads/${f.lead_id}'"><td>${esc(f.quote)}</td><td>${esc(f.customer)}</td>
+          <td class="muted">${esc(f.owner || "")}</td><td class="right num">${qar(f.total)}</td><td class="right">${f.days_waiting} d</td></tr>`).join("")}</table></div>`
+        : `<div class="empty">Every sent quotation has had a follow-up in the last 3 days.</div>`}</div>
+      <div class="card"><div class="head"><h2 class="grow">Recent activity</h2></div><div class="timeline">
+        ${d.activity.map(a => `<a class="t" href="#/leads/${a.lead_id}"><span class="dot ${esc(a.type)}"></span><div><div class="small">${esc(a.text)}</div>
+          <span class="muted small">${esc(a.lead)} · ${esc(a.customer)} · ${dateTime(a.at)}</span></div></a>`).join("")}</div></div>
+    </div>`;
+  $("#view").innerHTML = html;
+  document.querySelectorAll("#per button").forEach(b => b.onclick = () => {
+    S.days = +b.dataset.d; try { sessionStorage.setItem("nova_admin_days", S.days); } catch (e) {} dashboardView(); });
+  bindChart(d.sales);
+}
+function cardLink(a) {
+  if (a.view === "leads" && a.filter === "stalled") return "#/leads?stalled=1";
+  if (a.view === "orders" && a.filter) return "#/orders?status=" + a.filter;
+  if (a.view === "inventory" && a.sku) return "#/inventory/" + a.sku;
+  return "#/" + a.view;
+}
+
+/* Revenue + gross profit, one point per day, inline SVG. */
+const CH = {w: 760, h: 240, l: 56, r: 12, t: 12, b: 26};
+function chartSvg(rows) {
+  if (!rows.length) return `<div class="empty">No data</div>`;
+  const max = Math.max(1, ...rows.map(r => r.revenue));
+  const step = niceStep(max / 4), top = Math.ceil(max / step) * step;
+  const x = i => CH.l + (rows.length === 1 ? 0 : i * (CH.w - CH.l - CH.r) / (rows.length - 1));
+  const y = v => CH.t + (1 - v / top) * (CH.h - CH.t - CH.b);
+  const line = key => rows.map((r, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(r[key]).toFixed(1)}`).join("");
+  let grid = "";
+  for (let v = 0; v <= top; v += step)
+    grid += `<line x1="${CH.l}" x2="${CH.w - CH.r}" y1="${y(v)}" y2="${y(v)}" stroke="#262b38"/><text x="${CH.l - 8}" y="${y(v) + 4}" fill="#8b92a5" font-size="11" text-anchor="end">${v >= 1000 ? (v / 1000) + "k" : v}</text>`;
+  const every = Math.ceil(rows.length / 8);
+  const xl = rows.map((r, i) => i % every === 0 ? `<text x="${x(i)}" y="${CH.h - 6}" fill="#8b92a5" font-size="11" text-anchor="middle">${date(r.date)}</text>` : "").join("");
+  return `<svg id="chart" viewBox="0 0 ${CH.w} ${CH.h}" preserveAspectRatio="none" role="img" aria-label="Daily revenue and gross profit">
+    <defs><linearGradient id="ga" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6c8cff" stop-opacity=".28"/><stop offset="1" stop-color="#6c8cff" stop-opacity="0"/></linearGradient></defs>
+    ${grid}${xl}<path d="${line("revenue")}L${x(rows.length - 1)},${y(0)}L${x(0)},${y(0)}Z" fill="url(#ga)"/>
+    <path d="${line("revenue")}" fill="none" stroke="#6c8cff" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    <path d="${line("gross_profit")}" fill="none" stroke="#3ecf8e" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    <line id="hair" y1="${CH.t}" y2="${CH.h - CH.b}" stroke="#8b92a5" stroke-dasharray="3 3" visibility="hidden"/></svg>`;
+}
+function niceStep(raw) { const p = Math.pow(10, Math.floor(Math.log10(raw || 1))); const m = raw / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; }
+function bindChart(rows) {
+  const svg = $("#chart"); if (!svg) return;
+  const tip = $("#tip"), hair = $("#hair");
+  svg.onmousemove = e => {
+    const b = svg.getBoundingClientRect(), vx = (e.clientX - b.left) / b.width * CH.w;
+    const i = Math.max(0, Math.min(rows.length - 1, Math.round((vx - CH.l) / ((CH.w - CH.l - CH.r) / Math.max(1, rows.length - 1)))));
+    const px = CH.l + i * (CH.w - CH.l - CH.r) / Math.max(1, rows.length - 1);
+    hair.setAttribute("x1", px); hair.setAttribute("x2", px); hair.setAttribute("visibility", "visible");
+    const r = rows[i];
+    tip.innerHTML = `<b>${new Date(r.date).toLocaleDateString("en-GB", {weekday:"short", day:"numeric", month:"short"})}</b><br>Revenue ${qar(r.revenue)}<br>Gross profit ${qar(r.gross_profit)}`;
+    tip.style.display = "block";
+    const left = px / CH.w * b.width + svg.offsetLeft;
+    tip.style.left = Math.min(left + 12, svg.offsetLeft + b.width - 170) + "px"; tip.style.top = (svg.offsetTop + 10) + "px";
+  };
+  svg.onmouseleave = () => { tip.style.display = "none"; hair.setAttribute("visibility", "hidden"); };
+}
+
+/* ------------------------------------------------------------------ leads */
+const STAGES = ["new", "qualified", "quote_sent", "negotiation", "won", "lost"];
+const LOST = ["price", "stock", "competitor", "timing", "no_response"];
+const SOURCES = {showroom_chat: "Ceramica Nova AI chat", shop: "Online shop", walk_in: "Walk-in", phone: "Phone", referral: "Referral"};
+async function leadsView(p) {
+  shell("leads", topbar("Leads & CRM", S.can.has("leads.view_all") ? "All salespeople" : "Your leads") + loading());
+  const page = +(p.page || 0), qs = new URLSearchParams({offset: page * 25, limit: 25});
+  ["stage", "q", "source", "owner_id"].forEach(k => p[k] && qs.set(k, p[k]));
+  if (p.stalled) qs.set("stalled", "true");
+  const [r, staff] = await Promise.all([api("/leads/search?" + qs), S.can.has("leads.view_all") ? api("/staff") : []]);
+  const link = ch => "#/leads?" + new URLSearchParams(Object.fromEntries(Object.entries({...p, page: "", ...ch}).filter(([, v]) => v)));
+  const allCount = Object.values(r.stage_counts).reduce((a, b) => a + b, 0);
+  $("#view").innerHTML = topbar("Leads & CRM", S.can.has("leads.view_all") ? "All salespeople" : "Your leads") + `
+    <div class="filters"><div class="chips">
+      <a class="chip ${!p.stage && !p.stalled ? "on" : ""}" href="${link({stage: "", stalled: ""})}">All ${num(allCount)}</a>
+      ${STAGES.map(s => `<a class="chip ${p.stage === s ? "on" : ""}" href="${link({stage: s, stalled: ""})}">${label(s)} ${num(r.stage_counts[s] || 0)}</a>`).join("")}
+      <a class="chip ${p.stalled ? "on" : ""}" href="${link({stalled: p.stalled ? "" : "1", stage: ""})}" title="Quotation sent 3+ days ago, nothing logged since">Waiting for follow-up</a></div>
+      <span style="flex:1"></span>
+      <select id="src"><option value="">All sources</option>${Object.entries(SOURCES).map(([k, v]) => `<option value="${k}" ${p.source === k ? "selected" : ""}>${v}</option>`).join("")}</select>
+      ${staff.length ? `<select id="own"><option value="">All salespeople</option>${staff.map(u => `<option value="${u.id}" ${+p.owner_id === u.id ? "selected" : ""}>${esc(u.name)}</option>`).join("")}</select>` : ""}
+      <form id="sf"><input id="sq" placeholder="Search name, phone, L-number" value="${esc(p.q || "")}"></form></div>
+    <div class="card"><div class="tablewrap"><table><tr><th>Lead</th><th>Customer</th><th>Project</th><th>Source</th>${staff.length ? "<th>Salesperson</th>" : ""}<th>Stage</th><th class="right">In stage</th><th class="right">Created</th></tr>
+      ${r.items.map(l => `<tr class="click" onclick="location.hash='#/leads/${l.id}'"><td class="nowrap">${esc(l.number)}</td>
+        <td><div>${esc(l.customer)}</div><span class="muted small">${esc(l.phone || "")}</span></td>
+        <td class="small">${esc(label(l.room || ""))}${l.area_m2 ? ", " + num(l.area_m2) + " m²" : ""}${l.budget ? `<br><span class="muted">budget ${qar(l.budget)}</span>` : ""}</td>
+        <td class="small">${esc(SOURCES[l.source] || l.source)}</td>${staff.length ? `<td class="small">${esc(l.owner || "Unassigned")}</td>` : ""}
+        <td><span class="tag ${l.stage}">${label(l.stage)}</span></td><td class="right small">${l.days_in_stage} d</td><td class="right small">${date(l.created_at)}</td></tr>`).join("")}
+      </table>${r.items.length ? "" : `<div class="empty">No leads match.</div>`}</div>
+      <div class="pager">${r.total ? `${page * 25 + 1}–${Math.min(r.total, page * 25 + 25)} of ${num(r.total)}` : ""}
+        <a class="btn ghost sm" ${page ? `href="${link({page: page - 1 || ""})}"` : "style='opacity:.4;pointer-events:none'"}>Previous</a>
+        <a class="btn ghost sm" ${(page + 1) * 25 < r.total ? `href="${link({page: page + 1})}"` : "style='opacity:.4;pointer-events:none'"}>Next</a></div></div>`;
+  $("#src").onchange = e => location.hash = link({source: e.target.value});
+  if ($("#own")) $("#own").onchange = e => location.hash = link({owner_id: e.target.value});
+  $("#sf").onsubmit = e => { e.preventDefault(); location.hash = link({q: $("#sq").value.trim()}); };
+}
+
+async function leadView(id) {
+  shell("leads", loading());
+  const d = await api("/leads/" + id), l = d.lead, c = d.customer;
+  const staff = d.can.assign ? await api("/staff") : [];
+  $("#view").innerHTML = `<a class="back" href="#/leads">${icon("back")} Leads</a>` +
+    topbar(`${esc(l.number)} · ${esc(c.name)}`, `${esc(SOURCES[l.source] || l.source)} · created ${dateTime(l.created_at)} · ${esc(l.owner || "Unassigned")}`,
+      `<span class="tag ${l.stage}">${label(l.stage)}${l.lost_reason ? " · " + label(l.lost_reason) : ""}</span>`) + `
+    <div class="grid row2">
+      <div class="grid" style="align-content:start">
+        <div class="card"><div class="head"><h2 class="grow">Project</h2>
+          ${d.can.edit ? `<div class="actions"><button class="btn ghost sm" id="bStage">Change stage</button><button class="btn ghost sm" id="bNote">Add note or call</button>
+          ${d.can.assign ? `<button class="btn ghost sm" id="bAssign">Assign</button>` : ""}</div>` : ""}</div>
+          <p style="margin:0 0 10px">${esc(l.summary || "No summary yet.")}</p>
+          <div class="kv"><span>Room</span><span>${esc(label(l.room || "-"))}</span><span>Area</span><span>${l.area_m2 ? num(l.area_m2) + " m²" : "-"}</span>
+            <span>Budget</span><span>${l.budget ? qar(l.budget) : "-"}</span><span>In this stage</span><span>${l.days_in_stage} days</span></div>
+          ${d.chat ? `<div class="notice small" style="margin-top:12px">Started in a Ceramica Nova AI chat: ${d.chat.messages} messages, last on ${dateTime(d.chat.last_message_at)}.</div>` : ""}</div>
+        <div class="card"><div class="head"><h2 class="grow">Quotations</h2></div>
+          ${d.quotes.length ? `<div class="tablewrap"><table><tr><th>Quote</th><th>Status</th><th class="right">Discount</th><th class="right">Total</th><th class="right">Margin</th><th></th></tr>
+          ${d.quotes.map(q => `<tr class="click" onclick="location.hash='#/quotes/${q.id}'"><td>${esc(q.number)}<br><span class="muted small">${label(q.channel)} · ${date(q.created_at)}</span></td>
+            <td><span class="tag ${q.status}">${label(q.status)}</span>${q.pending_discount ? ` <span class="tag pending">${q.pending_discount}% waiting</span>` : ""}</td>
+            <td class="right">${q.discount_pct ? q.discount_pct + "%" : "-"}</td><td class="right num">${qar(q.total, 2)}</td><td class="right">${q.margin_pct}%</td>
+            <td class="right small">${q.order ? esc(q.order) : ""}</td></tr>`).join("")}</table></div>` : `<div class="empty">No quotation yet.</div>`}</div>
+        ${d.orders.length ? `<div class="card"><div class="head"><h2 class="grow">Orders</h2></div><div class="tablewrap"><table>
+          ${d.orders.map(o => `<tr class="click" onclick="location.hash='#/orders/${o.id}'"><td>${esc(o.number)}</td><td><span class="tag ${o.status}">${label(o.status)}</span></td>
+            <td class="right num">${qar(o.total, 2)}</td><td class="right small">${date(o.created_at)}</td></tr>`).join("")}</table></div></div>` : ""}
+      </div>
+      <div class="grid" style="align-content:start">
+        <div class="card"><div class="head"><h2>Customer</h2></div><div class="kv">
+          <span>Name</span><span>${esc(c.name)}</span><span>Phone</span><span>${c.phone ? `<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>` : "-"}</span>
+          <span>Email</span><span class="ellipsis">${esc(c.email || "-")}</span><span>Type</span><span>${esc(label(c.type))}</span><span>Area</span><span>${esc(c.area || "-")}</span></div></div>
+        <div class="card"><div class="head"><h2>Timeline</h2></div><div class="timeline">
+          ${d.timeline.map(t => `<div class="t"><span class="dot ${esc(t.type)}"></span><div><div class="small">${esc(t.text)}</div>
+            <span class="muted small">${esc(t.by)} · ${dateTime(t.at)}</span></div></div>`).join("")}</div></div>
+      </div></div>`;
+  if ($("#bStage")) $("#bStage").onclick = async () => {
+    const v = await ask("Change stage", [
+      {name: "stage", label: "New stage", type: "select", value: l.stage, options: STAGES.filter(s => s !== "won").map(s => [s, label(s)])},
+      {name: "lost_reason", label: "If lost, why?", type: "select", options: [["", "-"], ...LOST.map(s => [s, label(s)])]},
+      {name: "comment", label: "Comment (optional)", type: "textarea"}], "Save",
+      "Won is set automatically when an order is confirmed.");
+    if (v) act(() => api(`/leads/${id}/stage`, {method: "POST", body: {stage: v.stage, lost_reason: v.lost_reason || null, comment: v.comment}}), "Stage updated");
+  };
+  if ($("#bNote")) $("#bNote").onclick = async () => {
+    const v = await ask("Add to the timeline", [{name: "kind", label: "Type", type: "select", options: [["note", "Note"], ["call", "Phone call"]]},
+      {name: "text", label: "What happened?", type: "textarea", required: true, max: 1000}]);
+    if (v) act(() => api(`/leads/${id}/notes`, {method: "POST", body: v}), "Added");
+  };
+  if ($("#bAssign")) $("#bAssign").onclick = async () => {
+    const v = await ask("Assign lead", [{name: "owner_id", label: "Salesperson", type: "select", value: l.owner_id,
+      options: staff.map(u => [u.id, `${u.name} (${label(u.role)})`])}], "Assign");
+    if (v) act(() => api(`/leads/${id}/assign`, {method: "POST", body: {owner_id: +v.owner_id}}), "Lead assigned");
+  };
+}
+
+/* ------------------------------------------------------------------ quotations */
+const QSTAT = ["draft", "sent", "accepted", "rejected", "expired"];
+async function quotesView(p) {
+  shell("quotes", topbar("Quotations") + loading());
+  const page = +(p.page || 0), qs = new URLSearchParams({offset: page * 25, limit: 25});
+  if (p.status) qs.set("status", p.status); if (p.q) qs.set("q", p.q);
+  const r = await api("/quotes?" + qs);
+  const link = ch => "#/quotes?" + new URLSearchParams(Object.fromEntries(Object.entries({...p, page: "", ...ch}).filter(([, v]) => v)));
+  $("#view").innerHTML = topbar("Quotations", "From the showroom, the online shop and Ceramica Nova AI chats") + `
+    <div class="filters"><div class="chips"><a class="chip ${!p.status ? "on" : ""}" href="${link({status: ""})}">All</a>
+      ${QSTAT.map(s => `<a class="chip ${p.status === s ? "on" : ""}" href="${link({status: s})}">${label(s)}</a>`).join("")}</div>
+      <span style="flex:1"></span><form id="sf"><input id="sq" placeholder="Search Q-number or customer" value="${esc(p.q || "")}"></form></div>
+    <div class="card"><div class="tablewrap"><table><tr><th>Quote</th><th>Customer</th><th>Channel</th><th>Salesperson</th><th>Status</th><th class="right">Discount</th><th class="right">Total</th><th class="right">Margin</th><th class="right">Date</th></tr>
+      ${r.items.map(q => `<tr class="click" onclick="location.hash='#/quotes/${q.id}'"><td>${esc(q.number)}</td><td>${esc(q.customer)}</td>
+        <td class="small">${q.channel === "chat" ? "AI chat" : label(q.channel)}</td><td class="small">${esc(q.owner || "")}</td>
+        <td><span class="tag ${q.status}">${label(q.status)}</span>${q.pending_discount ? ` <span class="tag pending">discount waiting</span>` : ""}</td>
+        <td class="right">${q.discount_pct ? q.discount_pct + "%" : "-"}</td><td class="right num">${qar(q.total, 2)}</td>
+        <td class="right ${q.margin_pct < 25 ? "delta down" : ""}">${q.margin_pct}%</td><td class="right small">${date(q.created_at)}</td></tr>`).join("")}</table>
+      ${r.items.length ? "" : `<div class="empty">No quotations match.</div>`}</div>
+      <div class="pager">${r.total ? `${page * 25 + 1}–${Math.min(r.total, page * 25 + 25)} of ${num(r.total)}` : ""}
+        <a class="btn ghost sm" ${page ? `href="${link({page: page - 1 || ""})}"` : "style='opacity:.4;pointer-events:none'"}>Previous</a>
+        <a class="btn ghost sm" ${(page + 1) * 25 < r.total ? `href="${link({page: page + 1})}"` : "style='opacity:.4;pointer-events:none'"}>Next</a></div></div>`;
+  $("#sf").onsubmit = e => { e.preventDefault(); location.hash = link({q: $("#sq").value.trim()}); };
+}
+
+async function quoteView(id) {
+  shell("quotes", loading());
+  const q = await api("/quotes/" + id);
+  const open = ["draft", "sent"].includes(q.status);
+  const canDisc = open && S.can.has("quotes.edit") && !q.pending_discount;
+  const canOrder = q.status === "sent" && !q.order && !q.pending_discount && S.can.has("orders.create");
+  $("#view").innerHTML = `<a class="back" href="${q.lead_id ? "#/leads/" + q.lead_id : "#/quotes"}">${icon("back")} ${q.lead ? esc(q.lead) : "Quotations"}</a>` +
+    topbar(`Quotation ${esc(q.number)}`, `${esc(q.customer)} · ${q.channel === "chat" ? "Ceramica Nova AI chat" : label(q.channel)} · ${dateTime(q.created_at)}${q.valid_until ? " · valid until " + date(q.valid_until) : ""}`,
+      `<span class="tag ${q.status}">${label(q.status)}</span>`) + `
+    <div class="grid row2"><div class="card"><div class="head"><h2 class="grow">Items</h2>
+        <div class="actions">${canDisc ? `<button class="btn ghost sm" id="bDisc">Give a discount</button>` : ""}
+        ${canOrder ? `<button class="btn sm" id="bOrder">Customer accepted: make order</button>` : ""}</div></div>
+      <div class="tablewrap"><table><tr><th>Product</th><th class="right">Quantity</th><th class="right">Unit price</th><th class="right">Line total</th><th>Shade</th></tr>
+        ${q.lines.map(l => `<tr><td>${esc(l.name)}<br><span class="muted small">${esc(l.sku)}</span></td><td class="right">${num(l.quantity, 2)} ${l.unit === "m2" ? "m²" : "sets"}${l.boxes ? `<br><span class="muted small">${l.boxes} boxes</span>` : ""}</td>
+          <td class="right num">${qar(l.unit_price, 2)}</td><td class="right num">${qar(l.line_total, 2)}</td>
+          <td>${l.one_batch ? `<span class="tag ok">one batch</span>` : `<span class="tag low" title="No single batch has enough. Shades may differ.">split batches</span>`}</td></tr>`).join("")}
+        <tr><td colspan="3" class="right muted">Subtotal</td><td class="right num">${qar(q.subtotal, 2)}</td><td></td></tr>
+        ${q.discount_pct ? `<tr><td colspan="3" class="right muted">Discount ${q.discount_pct}%</td><td class="right num">− ${qar(q.subtotal - q.total, 2)}</td><td></td></tr>` : ""}
+        <tr><td colspan="3" class="right"><b>Total</b></td><td class="right num"><b>${qar(q.total, 2)}</b></td><td></td></tr></table></div>
+      ${q.order ? `<div class="notice small" style="margin-top:12px">Order ${esc(q.order)} was made from this quotation.</div>` : ""}
+      ${q.pending_discount ? `<div class="notice warn small" style="margin-top:12px">A ${q.pending_discount}% discount is waiting for a manager. The order can be made once it is decided.</div>` : ""}</div>
+      <div class="grid" style="align-content:start"><div class="card"><div class="head"><h2>Margin guardrail</h2></div>
+        <div class="kv"><span>Gross margin</span><span class="${q.margin_pct < q.min_margin_pct ? "delta down" : "delta up"}">${q.margin_pct}%</span>
+          <span>Company minimum</span><span>${q.min_margin_pct}%</span>${q.cost_total != null ? `<span>Cost of goods</span><span>${qar(q.cost_total, 2)}</span>` : ""}
+          <span>Your limit</span><span>${q.your_discount_limit_pct}% without approval</span></div>
+        <p class="muted small" style="margin:10px 0 0">A discount is applied straight away only if it is within your limit and keeps the margin at or above the minimum. Otherwise it goes to a manager.</p></div>
+        <div class="card"><div class="head"><h2>Discount history</h2></div>
+          ${q.discounts.length ? q.discounts.map(x => `<div class="list"><div class="it"><div class="grow"><b>${x.percent}%</b> <span class="tag ${x.status}">${label(x.status)}</span>
+            <div class="muted small">${esc(x.requested_by)}${x.decided_by ? " → " + esc(x.decided_by) : ""} · margin after ${x.margin_after_pct}%</div>
+            ${x.reason ? `<div class="small">${esc(x.reason)}</div>` : ""}</div></div></div>`).join("") : `<div class="empty">No discounts.</div>`}</div></div></div>`;
+  if ($("#bDisc")) $("#bDisc").onclick = async () => {
+    const v = await ask("Give a discount", [{name: "percent", label: "Discount %", type: "number", min: 0.5, max: 40, required: true},
+      {name: "reason", label: "Reason (shown to the approver)", type: "textarea"}], "Apply",
+      `Subtotal ${qar(q.subtotal, 2)}. Your limit is ${q.your_discount_limit_pct}%, minimum margin ${q.min_margin_pct}%.`);
+    if (!v) return;
+    const r = await act(() => api(`/quotes/${id}/discount`, {method: "POST", body: {percent: +v.percent, reason: v.reason}}));
+    if (r) toast(r.status === "auto_approved" ? `Applied. Margin now ${r.margin_after_pct}%.` : "Sent to a manager for approval.");
+  };
+  if ($("#bOrder")) $("#bOrder").onclick = async () => {
+    if (!await ask("Make the order now?", [], "Make order", "Stock is taken now, each line from ONE batch so the shade matches. If no single batch is big enough, nothing is changed.")) return;
+    const r = await act(() => api(`/quotes/${id}/order`, {method: "POST"}));
+    if (r) location.hash = "#/orders/" + r.id;
+  };
+}
+
+/* ------------------------------------------------------------------ orders */
+const OSTAT = ["pending", "confirmed", "delivered", "cancelled"];
+async function ordersView(p) {
+  shell("orders", topbar("Orders") + loading());
+  const page = +(p.page || 0), qs = new URLSearchParams({offset: page * 25, limit: 25});
+  if (p.status) qs.set("status", p.status); if (p.q) qs.set("q", p.q);
+  const r = await api("/orders?" + qs);
+  const link = ch => "#/orders?" + new URLSearchParams(Object.fromEntries(Object.entries({...p, page: "", ...ch}).filter(([, v]) => v)));
+  $("#view").innerHTML = topbar("Orders", "Online orders wait as pending until a salesperson confirms them") + `
+    <div class="filters"><div class="chips"><a class="chip ${!p.status ? "on" : ""}" href="${link({status: ""})}">All</a>
+      ${OSTAT.map(s => `<a class="chip ${p.status === s ? "on" : ""}" href="${link({status: s})}">${label(s)} ${num(r.status_counts[s] || 0)}</a>`).join("")}</div>
+      <span style="flex:1"></span><form id="sf"><input id="sq" placeholder="Search O-number or customer" value="${esc(p.q || "")}"></form></div>
+    <div class="card"><div class="tablewrap"><table><tr><th>Order</th><th>Customer</th><th>Delivery area</th><th>From</th><th>Status</th><th class="right">Total</th><th class="right">Placed</th></tr>
+      ${r.items.map(o => `<tr class="click" onclick="location.hash='#/orders/${o.id}'"><td>${esc(o.number)}</td><td>${esc(o.customer)}<br><span class="muted small">${esc(o.phone || "")}</span></td>
+        <td class="small">${esc(o.area || "")}</td><td class="small">${o.channel === "chat" ? "AI chat" : label(o.channel)}</td>
+        <td><span class="tag ${o.status}">${label(o.status)}</span></td><td class="right num">${qar(o.total, 2)}</td><td class="right small">${date(o.created_at)}</td></tr>`).join("")}</table>
+      ${r.items.length ? "" : `<div class="empty">No orders match.</div>`}</div>
+      <div class="pager">${r.total ? `${page * 25 + 1}–${Math.min(r.total, page * 25 + 25)} of ${num(r.total)}` : ""}
+        <a class="btn ghost sm" ${page ? `href="${link({page: page - 1 || ""})}"` : "style='opacity:.4;pointer-events:none'"}>Previous</a>
+        <a class="btn ghost sm" ${(page + 1) * 25 < r.total ? `href="${link({page: page + 1})}"` : "style='opacity:.4;pointer-events:none'"}>Next</a></div></div>`;
+  $("#sf").onsubmit = e => { e.preventDefault(); location.hash = link({q: $("#sq").value.trim()}); };
+}
+
+async function orderView(id) {
+  shell("orders", loading());
+  const o = await api("/orders/" + id);
+  const blocked = o.status === "pending" && o.lines.some(l => !l.one_batch_ok);
+  $("#view").innerHTML = `<a class="back" href="${o.lead_id && S.can.has("leads.view_own") ? "#/leads/" + o.lead_id : "#/orders"}">${icon("back")} ${o.lead && S.can.has("leads.view_own") ? esc(o.lead) : "Orders"}</a>` +
+    topbar(`Order ${esc(o.number)}`, `${esc(o.customer)} · ${esc(o.phone || "")} · ${esc(o.area || "")} · placed ${dateTime(o.created_at)}`,
+      `<span class="tag ${o.status}">${label(o.status)}</span>`) + `
+    <div class="card"><div class="head"><h2 class="grow">Items and batches</h2><div class="actions">
+      ${o.can.confirm ? `<button class="btn ok sm" id="bConf" ${blocked ? "disabled title='No single batch covers every line'" : ""}>Confirm order</button>` : ""}
+      ${o.can.deliver ? `<button class="btn sm" id="bDel">Mark delivered</button>` : ""}
+      ${o.can.cancel ? `<button class="btn danger sm" id="bCan">Cancel</button>` : ""}</div></div>
+      ${o.status === "pending" ? `<div class="notice ${blocked ? "bad" : ""} small" style="margin-bottom:12px">${blocked
+        ? "At least one line can't be supplied from a single batch. Receive a new batch or change the quantity before confirming, so the customer gets one shade."
+        : "Call the customer to confirm delivery and payment, then confirm. Stock is taken from the batch shown on each line."}</div>` : ""}
+      <div class="tablewrap"><table><tr><th>Product</th><th class="right">Quantity</th><th class="right">Line total</th><th>${o.status === "pending" ? "Batch to use" : "Batch"}</th><th>Shade</th></tr>
+        ${o.lines.map(l => `<tr><td>${esc(l.name)}<br><span class="muted small">${esc(l.sku)}</span></td><td class="right">${num(l.quantity, 2)} ${l.unit === "m2" ? "m²" : "sets"}</td>
+          <td class="right num">${qar(l.line_total, 2)}</td>
+          <td>${l.batch ? esc(l.batch) + (o.status === "pending" ? `<br><span class="muted small">${num(l.batch_left, 2)} left in batch</span>` : "") : `<span class="tag out">no single batch</span>`}</td>
+          <td>${esc(l.shade || "-")}</td></tr>`).join("")}
+        <tr><td colspan="2" class="right"><b>Total</b></td><td class="right num"><b>${qar(o.total, 2)}</b></td><td colspan="2"></td></tr></table></div>
+      ${o.delivered_at ? `<p class="muted small">Delivered ${dateTime(o.delivered_at)}</p>` : ""}</div>`;
+  if ($("#bConf")) $("#bConf").onclick = () => act(() => api(`/orders/${id}/confirm`, {method: "POST"}), "Order confirmed, stock taken");
+  if ($("#bDel")) $("#bDel").onclick = () => act(() => api(`/orders/${id}/deliver`, {method: "POST"}), "Marked delivered");
+  if ($("#bCan")) $("#bCan").onclick = async () => {
+    const v = await ask("Cancel order", [{name: "reason", label: "Why?", type: "textarea", required: true}], "Cancel order",
+      o.status === "confirmed" ? "The stock goes back into the same batches." : "");
+    if (v) act(() => api(`/orders/${id}/cancel`, {method: "POST", body: v}), "Order cancelled");
+  };
+}
+
+/* ------------------------------------------------------------------ inventory */
+async function inventoryView(p) {
+  shell("inventory", topbar("Inventory") + loading());
+  const r = await api("/inventory");
+  const show = r.items.filter(s => !p.status || s.status === p.status);
+  const counts = r.items.reduce((a, s) => (a[s.status] = (a[s.status] || 0) + 1, a), {});
+  $("#view").innerHTML = topbar("Inventory", "Stock by batch. Days left = stock ÷ average sold per day over the last 30 days") + `
+    <div class="filters"><div class="chips"><a class="chip ${!p.status ? "on" : ""}" href="#/inventory">All ${r.items.length}</a>
+      ${["out", "critical", "low", "ok"].map(s => `<a class="chip ${p.status === s ? "on" : ""}" href="#/inventory?status=${s}">${label(s)} ${counts[s] || 0}</a>`).join("")}</div></div>
+    <div class="card"><div class="tablewrap"><table><tr><th>Product</th><th class="right">Price</th><th class="right">In stock</th><th class="right">Largest batch</th><th class="right">Batches</th><th class="right">Sold / day</th><th class="right">Days left</th><th>Status</th></tr>
+      ${show.map(s => `<tr class="click" onclick="location.hash='#/inventory/${s.sku}'"><td><div class="pcell"><img class="thumb" src="${esc(s.image || IMG_BLANK)}" onerror="this.src='${IMG_BLANK}'" alt="">
+        <div>${esc(s.name)}<br><span class="muted small">${esc(s.sku)}</span></div></div></td>
+        <td class="right num">${qar(s.price, 2)}<span class="muted small">/${s.unit === "m2" ? "m²" : "set"}</span></td>
+        <td class="right num">${num(s.stock, 1)} ${s.unit === "m2" ? "m²" : ""}</td><td class="right num">${num(s.largest_batch, 1)}</td>
+        <td class="right">${s.batches}</td><td class="right">${num(s.sold_per_day, 1)}</td>
+        <td class="right">${s.days_of_stock != null ? num(s.days_of_stock) : "-"}</td><td><span class="tag ${s.status}">${label(s.status)}</span></td></tr>`).join("")}</table></div></div>`;
+}
+
+async function productView(sku) {
+  shell("inventory", loading());
+  const [p, inv] = await Promise.all([api("/inventory/" + encodeURIComponent(sku)), api("/inventory")]);
+  const u = p.unit === "m2" ? "m²" : "sets", lv = p.level || {};
+  $("#view").innerHTML = `<a class="back" href="#/inventory">${icon("back")} Inventory</a>` +
+    topbar(esc(p.name), `${esc(p.sku)} · ${qar(p.price, 2)} per ${p.unit === "m2" ? "m²" : "set"}${p.cost_price != null ? " · cost " + qar(p.cost_price, 2) : ""}`,
+      `<div class="actions">${inv.can.receive ? `<button class="btn sm" id="bRec">Receive new batch</button>` : ""}
+       ${inv.can.price ? `<button class="btn ghost sm" id="bPrice">Change price</button>` : ""}</div>`) + `
+    <div class="grid kpis">
+      <div class="card kpi"><div class="label">In stock</div><div class="value">${num(lv.stock, 1)} ${u}</div></div>
+      <div class="card kpi"><div class="label">Largest single batch<span class="info" title="The most one customer can get in one shade">i</span></div><div class="value">${num(lv.largest_batch, 1)} ${u}</div></div>
+      <div class="card kpi"><div class="label">Sold per day</div><div class="value">${num(lv.sold_per_day, 1)}</div><span class="muted small">last 30 days</span></div>
+      <div class="card kpi"><div class="label">Days left</div><div class="value">${lv.days_of_stock != null ? num(lv.days_of_stock) : "-"}</div><span class="tag ${lv.status}">${label(lv.status)}</span></div>
+      <div class="card kpi"><div class="label">Reorder point</div><div class="value">${num(lv.reorder_point)} ${u}</div></div></div>
+    <div class="grid row2e" style="margin-top:14px">
+      <div class="card"><div class="head"><h2>Batches</h2></div><div class="tablewrap"><table><tr><th>Batch</th><th>Shade</th><th class="right">Received</th><th class="right">Left</th><th class="right">Date</th></tr>
+        ${p.batches.map(b => `<tr><td>${esc(b.code)}</td><td>${esc(b.shade || "-")}</td><td class="right">${num(b.received, 1)}</td>
+          <td class="right"><b>${num(b.left, 1)}</b><div class="meter"><i style="width:${b.received ? b.left / b.received * 100 : 0}%;background:var(--accent)"></i></div></td>
+          <td class="right small">${date(b.received_at)}</td></tr>`).join("")}</table></div>
+        <p class="muted small" style="margin:10px 0 0">Tiles from different production runs can differ in shade, so each order line is supplied from one batch.</p></div>
+      <div class="card"><div class="head"><h2>Stock movements</h2></div><div class="tablewrap"><table><tr><th>Date</th><th>What</th><th>Batch</th><th class="right">Qty</th></tr>
+        ${p.movements.map(m => `<tr><td class="small">${dateTime(m.at)}</td><td class="small">${label(m.reason)} <span class="muted">${esc(m.reference || "")}</span>${m.by ? `<br><span class="muted">${esc(m.by)}</span>` : ""}</td>
+          <td class="small">${esc(m.batch || "")}</td><td class="right num ${m.qty < 0 ? "delta down" : "delta up"}">${m.qty > 0 ? "+" : ""}${num(m.qty, 2)}</td></tr>`).join("")}</table></div></div></div>`;
+  if ($("#bRec")) $("#bRec").onclick = async () => {
+    const v = await ask(`Receive ${p.name}`, [{name: "qty", label: `Quantity (${u})`, type: "number", min: 0.01, required: true},
+      {name: "shade", label: "Shade (optional)", hint: "As printed on the boxes, e.g. Warm A2"}, {name: "code", label: "Batch code (optional)", hint: "Left empty, one is made for you"}], "Receive");
+    if (v) act(() => api(`/inventory/${encodeURIComponent(sku)}/receive`, {method: "POST", body: {qty: +v.qty, shade: v.shade || null, code: v.code || null}}), "Batch received");
+  };
+  if ($("#bPrice")) $("#bPrice").onclick = async () => {
+    const v = await ask("Change price", [{name: "price", label: "Selling price (QAR)", type: "number", value: p.price, min: 0.01, required: true},
+      {name: "cost_price", label: "Cost price (QAR)", type: "number", value: p.cost_price, min: 0.01, required: true}], "Save",
+      "The shop and Ceramica Nova AI use the new price straight away. Quotations already sent keep their price. The change is kept in the audit log.");
+    if (v) act(() => api(`/products/${encodeURIComponent(sku)}/price`, {method: "POST", body: {price: +v.price, cost_price: +v.cost_price}}), "Price updated");
+  };
+}
+
+/* ------------------------------------------------------------------ approvals */
+async function approvalsView() {
+  shell("approvals", topbar("Approvals") + loading());
+  const r = await api("/approvals");
+  S.pending = r.pending.length;
+  shell("approvals", topbar("Discount approvals", `Minimum gross margin ${r.min_margin_pct}%. Below it, only the owner can approve, with a reason.`) + `
+    ${r.pending.length ? `<div class="grid copilot">${r.pending.map(a => { const low = a.margin_after_pct < r.min_margin_pct; return `
+      <div class="cc"><div style="display:flex;gap:8px;align-items:center"><b style="font-size:18px">${a.percent}%</b><span class="muted small">on</span>
+        <a href="#/quotes/${a.quote_id}"><b>${esc(a.quote)}</b></a><span style="flex:1"></span><span class="tag ${low ? "out" : "ok"}">margin ${a.margin_after_pct}%</span></div>
+        <span class="small">${esc(a.customer)}${a.lead ? ` · <a class="muted" href="#/leads/${a.lead_id}">${esc(a.lead)}</a>` : ""}</span>
+        <span class="small">${qar(a.subtotal, 2)} → <b>${qar(a.total_after, 2)}</b></span>
+        <span class="why">Asked by ${esc(a.requested_by)} · ${dateTime(a.created_at)}${a.reason ? "<br>" + esc(a.reason) : ""}</span>
+        <div class="actions"><button class="btn ok sm" data-ok="${a.id}" data-low="${low ? 1 : ""}" ${low && !r.is_owner ? "disabled title='Below the minimum margin: only the owner can approve'" : ""}>Approve</button>
+          <button class="btn danger sm" data-no="${a.id}">Reject</button></div></div>`; }).join("")}</div>`
+      : `<div class="card"><div class="empty">No discounts waiting. Discounts within a salesperson's limit and the minimum margin are applied automatically.</div></div>`}
+    <div class="card" style="margin-top:14px"><div class="head"><h2>Last 30 days</h2></div><div class="tablewrap"><table>
+      <tr><th>Quote</th><th class="right">Discount</th><th class="right">Margin after</th><th>Decision</th><th>Asked by</th><th>Decided by</th><th>Reason</th><th class="right">When</th></tr>
+      ${r.history.map(h => `<tr class="click" onclick="location.hash='#/quotes/${h.quote_id}'"><td>${esc(h.quote)}</td><td class="right">${h.percent}%</td><td class="right">${h.margin_after_pct}%</td>
+        <td><span class="tag ${h.status}">${label(h.status)}</span></td><td class="small">${esc(h.requested_by)}</td><td class="small">${esc(h.decided_by || (h.status === "auto_approved" ? "Automatic" : ""))}</td>
+        <td class="small muted">${esc(h.reason || "")}</td><td class="right small">${date(h.at)}</td></tr>`).join("")}</table></div></div>`);
+  document.querySelectorAll("[data-ok]").forEach(b => b.onclick = async () => {
+    let body = {decision: "approve"};
+    if (b.dataset.low) {
+      const v = await ask("Approve below the minimum margin?", [{name: "reason", label: "Reason (kept in the audit log)", type: "textarea", required: true},
+        {name: "override", type: "checkbox", label: "Override", hint: "I accept the lower margin on this quotation"}], "Approve");
+      if (!v) return; body = {...body, ...v};
+    }
+    act(() => api(`/approvals/${b.dataset.ok}`, {method: "POST", body}), "Approved and applied to the quotation");
+  });
+  document.querySelectorAll("[data-no]").forEach(b => b.onclick = async () => {
+    const v = await ask("Reject discount", [{name: "reason", label: "Reason for the salesperson", type: "textarea", required: true}], "Reject");
+    if (v) act(() => api(`/approvals/${b.dataset.no}`, {method: "POST", body: {decision: "reject", reason: v.reason}}), "Rejected");
+  });
+}
+
+/* ------------------------------------------------------------------ audit + team */
+async function auditView() {
+  shell("audit", topbar("Audit log") + loading());
+  const rows = await api("/audit?limit=200");
+  $("#view").innerHTML = topbar("Audit log", "Logins, discount decisions, price changes, stock and order actions. Read-only.") + `
+    <div class="card"><div class="tablewrap"><table><tr><th>When</th><th>Who</th><th>Action</th><th>Record</th><th>Details</th></tr>
+      ${rows.map(a => `<tr><td class="small nowrap">${dateTime(a.at)}</td><td class="small">${esc(a.user || (a.action.startsWith("shop") ? "Shop customer" : "System"))}</td>
+        <td><span class="tag">${esc(a.action)}</span></td><td class="small">${esc(a.entity || "")} ${esc(a.entity_id || "")}</td>
+        <td class="small muted">${esc(a.after ? Object.entries(a.after).map(([k, v]) => k + ": " + (typeof v === "object" ? JSON.stringify(v) : v)).join(", ") : "")}</td></tr>`).join("")}</table></div></div>`;
+}
+async function teamView() {
+  shell("team", topbar("Team") + loading());
+  const rows = await api("/users");
+  $("#view").innerHTML = topbar("Team", "Staff accounts and their discount limits") + `
+    <div class="card"><div class="tablewrap"><table><tr><th>Name</th><th>Email</th><th>Role</th><th class="right">Discount limit</th></tr>
+      ${rows.map(u => `<tr><td>${esc(u.name)}</td><td class="small">${esc(u.email)}</td><td><span class="tag">${label(u.role)}</span></td><td class="right">${u.discount_limit_pct}%</td></tr>`).join("")}</table></div></div>`;
+}
+
+/* ------------------------------------------------------------------ router */
+async function route() {
+  if (!S.me) return;
+  const [path, query] = (location.hash.slice(2) || "").split("?");
+  const parts = path.split("/"), p = Object.fromEntries(new URLSearchParams(query || ""));
+  const home = S.can.has("dashboard.view") ? "dashboard" : "inventory";
+  const allowed = new Set(modules().map(m => m[0]));
+  const view = allowed.has(parts[0]) ? parts[0] : null;
+  if (!view) { location.replace("#/" + home); return; }
+  try {
+    if (view === "dashboard") await dashboardView();
+    else if (view === "leads") await (parts[1] ? leadView(+parts[1]) : leadsView(p));
+    else if (view === "quotes") await (parts[1] ? quoteView(+parts[1]) : quotesView(p));
+    else if (view === "orders") await (parts[1] ? orderView(+parts[1]) : ordersView(p));
+    else if (view === "inventory") await (parts[1] ? productView(decodeURIComponent(parts[1])) : inventoryView(p));
+    else if (view === "approvals") await approvalsView();
+    else if (view === "audit") await auditView();
+    else if (view === "team") await teamView();
+    window.scrollTo(0, 0);
+  } catch (e) {
+    if (!S.token) return;
+    const v = $("#view") || $("#root");
+    v.innerHTML = topbar("Couldn't load this page") + `<div class="notice bad">${esc(e.message)}</div>`;
+  }
+}
+
+async function boot() {
+  if (!S.token) return loginView();
+  try {
+    S.me = await api("/me");
+    S.can = new Set(S.me.permissions);
+    S.pending = 0;
+    if (S.can.has("discounts.approve")) api("/approvals").then(r => { S.pending = r.pending.length;
+      const a = document.querySelector('nav a[href="#/approvals"]'); if (a && S.pending && !a.querySelector(".count")) a.insertAdjacentHTML("beforeend", `<span class="count">${S.pending}</span>`); }).catch(() => {});
+    route();
+  } catch (e) { loginView(); }
+}
+window.addEventListener("hashchange", route);
+boot();
+</script>
+</body>
+</html>

@@ -55,7 +55,24 @@ Quotations under the same number the customer sees; discounts above the limit or
 for a manager. Visitors can ask for a call back, and the chat's Checkout continues the same lead in the shop.
 If the database is unavailable the assistant keeps working exactly as before.
 
-All seeded data is demo data, and the company is flagged `is_demo` so the admin will show a "Demo data" badge.
+**Step 4 (done): Nova Studio admin at `/admin`** (`frontend/admin.html`, logic in `backend/crm/`, routes in
+`backend/admin_api.py`). Not linked from the shop. Log in with any demo account above; the menu shows only what
+the role may use, and the server checks the role again on every call.
+- Dashboard (7/30/90 days): revenue, gross profit, orders, new leads, conversion, each against the previous
+  period; daily sales chart; project snapshot; pipeline funnel; top products; stock alerts with days left;
+  quotations waiting for a reply; recent activity. Salespeople see their own figures only.
+- "Nova Copilot" cards are simple rules on the data (each card says why it appeared). They are not AI.
+- Leads: filters, search, "waiting for follow-up", detail with timeline, stage change (lost needs a reason;
+  won only comes from a confirmed order), notes and calls, assign (managers).
+- Quotations and orders: discounts with the **margin guardrail** (applied at once only within the person's limit
+  and above the 25% minimum margin; otherwise a manager approves; below the minimum only the owner, with a
+  written reason). Orders are confirmed only if **each line fits in one batch** (one shade); stock is taken
+  from that batch, returned to it on cancellation; warehouse marks delivery.
+- Inventory: stock per batch, sold per day, days left, movements; warehouse receives new batches; the owner
+  changes prices (audited, and the shop and Ceramica Nova AI use the new price at once).
+- Approvals, audit log and team pages for the roles that have them.
+
+All seeded data is demo data, and the company is flagged `is_demo` so the admin shows a "Demo data" badge.
 
 ## What's inside
 

@@ -555,6 +555,9 @@ async function quoteView(id) {
   const open = ["draft", "sent"].includes(q.status);
   const canDisc = open && S.can.has("quotes.edit") && !q.pending_discount;
   const canOrder = q.status === "sent" && !q.order && !q.pending_discount && S.can.has("orders.create");
+  const pend = q.discounts.find(x => x.status === "pending");
+  const pendLow = pend && pend.margin_after_pct < q.min_margin_pct;
+  const canDecide = pend && S.can.has("discounts.approve");
   $("#view").innerHTML = `<a class="back" href="${q.lead_id ? "#/leads/" + q.lead_id : "#/quotes"}">${icon("back")} ${q.lead ? esc(q.lead) : "Quotations"}</a>` +
     topbar(`Quotation ${esc(q.number)}`, `${esc(q.customer)} · ${q.channel === "chat" ? "Ceramica Nova AI chat" : label(q.channel)} · ${dateTime(q.created_at)}${q.valid_until ? " · valid until " + date(q.valid_until) : ""}`,
       `<span class="tag ${q.status}">${label(q.status)}</span>`) + `
@@ -569,7 +572,11 @@ async function quoteView(id) {
         ${q.discount_pct ? `<tr><td colspan="3" class="right muted">Discount ${q.discount_pct}%</td><td class="right num">− ${qar(q.subtotal - q.total, 2)}</td><td></td></tr>` : ""}
         <tr><td colspan="3" class="right"><b>Total</b></td><td class="right num"><b>${qar(q.total, 2)}</b></td><td></td></tr></table></div>
       ${q.order ? `<div class="notice small" style="margin-top:12px">Order ${esc(q.order)} was made from this quotation.</div>` : ""}
-      ${q.pending_discount ? `<div class="notice warn small" style="margin-top:12px">A ${q.pending_discount}% discount is waiting for a manager. The order can be made once it is decided.</div>` : ""}</div>
+      ${pend ? `<div class="notice warn small" style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <span style="flex:1;min-width:220px">A <b>${pend.percent}%</b> discount asked by ${esc(pend.requested_by)} is waiting for approval. It leaves a
+          <b>${pend.margin_after_pct}%</b> margin${pendLow ? `, below the ${q.min_margin_pct}% minimum` : ""}. ${canDecide ? "" : "The order can be made once a manager decides."}</span>
+        ${canDecide ? `<button class="btn ok sm" data-ok="${pend.id}" data-low="${pendLow ? 1 : ""}" ${pendLow && S.me.user.role !== "owner" ? "disabled title='Below the minimum margin: only the owner can approve'" : ""}>Approve</button>
+          <button class="btn danger sm" data-no="${pend.id}">Reject</button>` : ""}</div>` : ""}</div>
       <div class="grid" style="align-content:start"><div class="card"><div class="head"><h2>Margin guardrail</h2></div>
         <div class="kv"><span>Gross margin</span><span class="${q.margin_pct < q.min_margin_pct ? "delta down" : "delta up"}">${q.margin_pct}%</span>
           <span>Company minimum</span><span>${q.min_margin_pct}%</span>${q.cost_total != null ? `<span>Cost of goods</span><span>${qar(q.cost_total, 2)}</span>` : ""}
@@ -579,6 +586,7 @@ async function quoteView(id) {
           ${q.discounts.length ? q.discounts.map(x => `<div class="list"><div class="it"><div class="grow"><b>${x.percent}%</b> <span class="tag ${x.status}">${label(x.status)}</span>
             <div class="muted small">${esc(x.requested_by)}${x.decided_by ? " → " + esc(x.decided_by) : ""} · margin after ${x.margin_after_pct}%</div>
             ${x.reason ? `<div class="small">${esc(x.reason)}</div>` : ""}</div></div></div>`).join("") : `<div class="empty">No discounts.</div>`}</div></div></div>`;
+  bindDecisions();
   if ($("#bDisc")) $("#bDisc").onclick = async () => {
     const v = await ask("Give a discount", [{name: "percent", label: "Discount %", type: "number", min: 0.5, max: 40, required: true},
       {name: "reason", label: "Reason (shown to the approver)", type: "textarea"}], "Apply",
@@ -721,6 +729,12 @@ async function approvalsView() {
       ${r.history.map(h => `<tr class="click" onclick="location.hash='#/quotes/${h.quote_id}'"><td>${esc(h.quote)}</td><td class="right">${h.percent}%</td><td class="right">${h.margin_after_pct}%</td>
         <td><span class="tag ${h.status}">${label(h.status)}</span></td><td class="small">${esc(h.requested_by)}</td><td class="small">${esc(h.decided_by || (h.status === "auto_approved" ? "Automatic" : ""))}</td>
         <td class="small muted">${esc(h.reason || "")}</td><td class="right small">${date(h.at)}</td></tr>`).join("")}</table></div></div>`);
+  bindDecisions();
+}
+
+/* Approve / reject buttons (Approvals page and the quotation page). data-ok / data-no = request id. */
+function bindDecisions() {
+  const done = () => r => { if (r !== undefined) S.pending = Math.max(0, (S.pending || 1) - 1); return r; };
   document.querySelectorAll("[data-ok]").forEach(b => b.onclick = async () => {
     let body = {decision: "approve"};
     if (b.dataset.low) {
@@ -728,11 +742,11 @@ async function approvalsView() {
         {name: "override", type: "checkbox", label: "Override", hint: "I accept the lower margin on this quotation"}], "Approve");
       if (!v) return; body = {...body, ...v};
     }
-    act(() => api(`/approvals/${b.dataset.ok}`, {method: "POST", body}), "Approved and applied to the quotation");
+    act(() => api(`/approvals/${b.dataset.ok}`, {method: "POST", body}).then(done()), "Approved and applied to the quotation");
   });
   document.querySelectorAll("[data-no]").forEach(b => b.onclick = async () => {
     const v = await ask("Reject discount", [{name: "reason", label: "Reason for the salesperson", type: "textarea", required: true}], "Reject");
-    if (v) act(() => api(`/approvals/${b.dataset.no}`, {method: "POST", body: {decision: "reject", reason: v.reason}}), "Rejected");
+    if (v) act(() => api(`/approvals/${b.dataset.no}`, {method: "POST", body: {decision: "reject", reason: v.reason}}).then(done()), "Rejected");
   });
 }
 

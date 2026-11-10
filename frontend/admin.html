@@ -66,7 +66,6 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
   nav a:hover { background:var(--panel2); color:var(--text); }
   nav a.on { background:var(--nav-on); color:var(--ink); font-weight:600; }
   nav a .count { margin-left:auto; background:var(--warn); color:#fff; font-size:10.5px; font-weight:700; border-radius:9px; padding:0 7px; }
-  .soon { margin-top:14px; padding:10px; font-size:11.5px; color:var(--muted); border:1px dashed var(--line); border-radius:10px; }
   .me { margin-top:auto; padding:10px; border-top:1px solid var(--line); font-size:12px; }
   .me b { display:block; font-size:13px; }
   main { padding:22px 28px 60px; min-width:0; }
@@ -137,8 +136,16 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
   .timeline .t { display:grid; grid-template-columns:14px 1fr; gap:10px; padding:6px 0; }
   .timeline .dot { width:9px; height:9px; border-radius:50%; background:var(--accent); margin-top:6px; }
   .timeline .dot.order { background:var(--ok); } .timeline .dot.discount { background:var(--warn); }
-  .timeline .dot.stage_change { background:#8b5cf6; } .timeline .dot.call, .timeline .dot.note { background:var(--muted); }
+  .timeline .dot.stage_change { background:#8b5cf6; } .timeline .dot.follow_up { background:var(--ok); } .timeline .dot.call, .timeline .dot.note { background:var(--muted); }
   .actions { display:flex; gap:8px; flex-wrap:wrap; }
+  .ai-tag { display:inline-flex; gap:5px; align-items:center; font-size:11px; font-weight:600; padding:2px 8px; border-radius:6px;
+            background:var(--accent-soft); color:var(--accent); white-space:nowrap; }
+  .ai-tag.off { background:var(--panel2); color:var(--muted); }
+  .askbox { display:flex; gap:8px; } .askbox input { flex:1; padding:11px 14px; }
+  .answer { white-space:pre-wrap; line-height:1.6; }
+  details.data { margin-top:10px; font-size:12px; } details.data summary { cursor:pointer; color:var(--muted); }
+  details.data table { margin-top:6px; } details.data td, details.data th { padding:5px 8px; font-size:11.5px; }
+  textarea.draft { width:100%; min-height:190px; line-height:1.55; }
   .notice { background:var(--accent-soft); border:1px solid var(--accent); border-radius:10px; padding:9px 12px; font-size:12.5px; }
   .notice.warn { background:var(--warn-soft); border-color:var(--warn); }
   .notice.bad { background:var(--bad-soft); border-color:var(--bad); }
@@ -196,6 +203,8 @@ const ICONS = {
   audit:'<path d="M4 6h16M4 12h10M4 18h7"/><circle cx="18" cy="16" r="3"/><path d="M20.2 18.2L22 20"/>',
   team:'<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-3.6 3.8-5.5 7-5.5s6 1.9 7 5.5"/>',
   moon:'<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>', sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  ask:'<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.3 2.4c-.5.2-.8.6-.8 1.1v.5M12 16h.01"/>',
+  followups:'<path d="M4 5h16v11H8l-4 4z"/><path d="M8 9h8M8 12h5"/>',
   menu:'<path d="M4 7h16M4 12h16M4 17h16"/>', back:'<path d="M15 18l-6-6 6-6"/>', out:'<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
 };
 const icon = n => `<svg class="ico" viewBox="0 0 24 24">${ICONS[n] || ""}</svg>`;
@@ -298,7 +307,9 @@ function modules() {
     ["quotes", "Quotations", c("quotes.view_all") || c("quotes.view_own")],
     ["orders", "Orders", c("orders.view_all") || c("orders.view_own")],
     ["inventory", "Inventory", c("inventory.view")],
+    ["followups", "Follow-ups", c("quotes.edit")],
     ["approvals", "Approvals", c("discounts.approve")],
+    ["ask", "Ask your data", c("dashboard.view")],
     ["audit", "Audit log", c("audit.view")],
     ["team", "Team", c("users.manage")],
   ].filter(m => m[2]);
@@ -310,7 +321,6 @@ function shell(active, inner) {
       <div class="brand"><div class="logo">N</div><div><b>Nova Studio</b><small>${esc(S.me.company.name)}</small></div></div>
       <nav>${modules().map(m => `<a href="#/${m[0]}" class="${m[0] === active ? "on" : ""}">${icon(m[0])}${m[1]}${
         m[0] === "approvals" && S.pending ? `<span class="count">${S.pending}</span>` : ""}</a>`).join("")}</nav>
-      <div class="soon"><b>Coming next (step 5)</b><br>Ask your data (Claude, read-only) and follow-up drafts. Not active yet.</div>
       <div class="me"><b>${esc(u.name)}</b><span class="muted">${esc(label(u.role))}${u.branch ? " · " + esc(u.branch) : ""}</span>
         <div style="margin-top:8px"><button class="btn ghost sm" id="lo">${icon("out")} Log out</button></div></div>
     </aside>
@@ -390,6 +400,7 @@ async function dashboardView() {
   bindChart(d.sales);
 }
 function cardLink(a) {
+  if (a.view === "followups") return S.can.has("quotes.edit") ? "#/followups" : "#/leads?stalled=1";
   if (a.view === "leads" && a.filter === "stalled") return "#/leads?stalled=1";
   if (a.view === "orders" && a.filter) return "#/orders?status=" + a.filter;
   if (a.view === "inventory" && a.sku) return "#/inventory/" + a.sku;
@@ -757,6 +768,97 @@ function bindDecisions() {
   });
 }
 
+
+/* ------------------------------------------------------------------ Ask your data (feature 11) */
+const TOOL_NAMES = {get_kpis: "Key figures", sales_breakdown: "Sales breakdown", leads_breakdown: "Leads breakdown",
+  top_products: "Top products", stock: "Stock levels", waiting_quotes: "Quotations waiting", pipeline: "Pipeline"};
+S.asks = [];
+function dataTable(out) {
+  const list = Object.values(out).find(v => Array.isArray(v) && v.length && typeof v[0] === "object");
+  const scal = Object.entries(out).filter(([, v]) => v !== null && typeof v !== "object");
+  const cell = v => typeof v === "number" ? num(v, 2) : esc(v ?? "-");
+  return (scal.length ? `<div class="kv" style="margin:6px 0">${scal.map(([k, v]) => `<span>${esc(label(k))}</span><span>${cell(v)}</span>`).join("")}</div>` : "")
+    + (out.change ? `<div class="kv" style="margin:6px 0">${Object.entries(out.change).map(([k, v]) => `<span>Change: ${esc(label(k))}</span><span>${v == null ? "-" : v + (k.endsWith("pp") ? " pts" : "%")}</span>`).join("")}</div>` : "")
+    + (list ? `<div class="tablewrap"><table><tr>${Object.keys(list[0]).map(k => `<th>${esc(label(k))}</th>`).join("")}</tr>
+        ${list.map(r => `<tr>${Object.values(r).map(v => `<td>${typeof v === "object" && v ? esc(JSON.stringify(v)) : cell(v)}</td>`).join("")}</tr>`).join("")}</table></div>` : "");
+}
+function askResult(r) {
+  const tag = r.mode === "claude" ? `<span class="ai-tag">AI answer · Claude · read-only</span>`
+    : `<span class="ai-tag off">${r.mode === "checked_fallback" ? "Figures only (AI answer hidden)" : "Offline mode · no AI"}</span>`;
+  return `<div class="card" style="margin-top:14px"><div class="head"><h2 class="grow">${esc(r.question)}</h2>${tag}</div>
+    ${r.answer ? `<div class="answer">${esc(r.answer)}</div>` : ""}
+    ${r.note ? `<div class="notice ${r.mode === "claude" ? "" : "warn"} small" style="margin-top:8px">${esc(r.note)}</div>` : ""}
+    ${r.calls.length ? `<details class="data" ${r.answer ? "" : "open"}><summary>Data used (${r.calls.map(c => TOOL_NAMES[c.tool] || c.tool).join(", ")})</summary>
+      ${r.calls.map(c => `<div style="margin-top:8px"><b>${esc(TOOL_NAMES[c.tool] || c.tool)}</b> <span class="muted">${esc(Object.entries(c.input).map(([k, v]) => label(k) + ": " + v).join(", "))}</span>${dataTable(c.output)}</div>`).join("")}</details>` : ""}
+    <div class="muted small" style="margin-top:8px">${r.scope === "company" ? "Whole company" : "Your leads only"} · demo data${r.usage ? ` · ${num(r.usage.input_tokens + r.usage.output_tokens)} tokens, about $${r.usage.cost_usd.toFixed(3)}` : ""}</div></div>`;
+}
+async function askView() {
+  shell("ask", topbar("Ask your data") + loading());
+  const info = await api("/ask");
+  $("#view").innerHTML = topbar("Ask your data", info.scope === "company" ? "Questions about the whole company's data" : "Questions about your own leads and sales",
+      info.ai_available ? `<span class="ai-tag">AI · Claude · read-only</span>` : `<span class="ai-tag off">Offline mode · no AI key</span>`) + `
+    <div class="card"><form class="askbox" id="af"><input id="aq" maxlength="300" placeholder="e.g. Which salesperson sold the most in the last 30 days?" autocomplete="off">
+      <button class="btn" id="ab">Ask</button></form>
+      <div class="chips" style="margin-top:10px">${info.suggestions.map(q => `<button type="button" class="chip" data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>
+      <p class="muted small" style="margin:10px 0 0">${info.ai_available
+        ? "Claude reads the figures through fixed, read-only lookups (it never sees the database and can't change anything). Every number in its answer is checked against the data; open “Data used” to see where it came from."
+        : "No Anthropic API key is set, so this page uses simple keyword matching and shows the figures directly. Add ANTHROPIC_API_KEY to .env to get written answers from Claude."}</p></div>
+    <div id="answers">${S.asks.map(askResult).join("")}</div>`;
+  const go = async q => {
+    if (!q.trim()) return;
+    $("#ab").disabled = true; $("#ab").textContent = "Thinking…";
+    try { const r = await api("/ask", {method: "POST", body: {question: q}}); S.asks.unshift(r); S.asks = S.asks.slice(0, 10);
+          $("#answers").innerHTML = S.asks.map(askResult).join(""); $("#aq").value = ""; }
+    catch (e) { toast(e.message, "bad"); }
+    $("#ab").disabled = false; $("#ab").textContent = "Ask";
+  };
+  $("#af").onsubmit = e => { e.preventDefault(); go($("#aq").value); };
+  document.querySelectorAll("[data-q]").forEach(b => b.onclick = () => { $("#aq").value = b.dataset.q; go(b.dataset.q); });
+}
+
+/* ------------------------------------------------------------------ Follow-up drafts (feature 3) */
+async function followupsView() {
+  shell("followups", topbar("Follow-ups") + loading());
+  const r = await api("/followups");
+  $("#view").innerHTML = topbar("Follow-ups", "Quotations sent more than 3 days ago with nothing logged since",
+      r.ai_available ? `<span class="ai-tag">Drafts by Claude · you send</span>` : `<span class="ai-tag off">Template drafts · no AI key</span>`) + `
+    <div class="notice small" style="margin-bottom:14px">Nova Studio writes a draft; nothing is sent automatically. Read and edit it, send it yourself
+      on WhatsApp or email, then press <b>Mark as sent</b> so it's logged on the lead. Drafts never offer discounts or new prices.</div>
+    <div id="editor"></div>
+    <div class="card">${r.items.length ? `<div class="tablewrap"><table><tr><th>Quotation</th><th>Customer</th>${S.can.has("leads.view_all") ? "<th>Salesperson</th>" : ""}<th class="right">Total</th><th class="right">Waiting</th><th></th></tr>
+      ${r.items.map(w => `<tr><td><a class="lnk" href="#/quotes/${w.quote_id}">${esc(w.quote)}</a></td><td><a href="#/leads/${w.lead_id}">${esc(w.customer)}</a></td>
+        ${S.can.has("leads.view_all") ? `<td class="small">${esc(w.owner || "")}</td>` : ""}<td class="right num">${qar(w.total)}</td><td class="right">${w.days_waiting} days</td>
+        <td class="right nowrap"><button class="btn ghost sm" data-d="${w.quote_id}" data-ch="whatsapp">WhatsApp draft</button>
+          <button class="btn ghost sm" data-d="${w.quote_id}" data-ch="email">Email draft</button></td></tr>`).join("")}</table></div>`
+      : `<div class="empty">Nothing waiting. Every sent quotation has had a follow-up in the last 3 days.</div>`}</div>`;
+  document.querySelectorAll("[data-d]").forEach(b => b.onclick = async () => {
+    const old = b.textContent; b.disabled = true; b.textContent = "Writing…";
+    try { showDraft(await api(`/followups/${b.dataset.d}/draft`, {method: "POST", body: {channel: b.dataset.ch}})); }
+    catch (e) { toast(e.message, "bad"); }
+    b.disabled = false; b.textContent = old;
+  });
+}
+function showDraft(d) {
+  const wa = d.channel === "whatsapp", tag = d.mode === "claude" ? `<span class="ai-tag">AI draft · Claude · check before sending</span>` : `<span class="ai-tag off">Standard template</span>`;
+  $("#editor").innerHTML = `<div class="card" style="margin-bottom:14px"><div class="head"><h2 class="grow">${wa ? "WhatsApp" : "Email"} to ${esc(d.customer)} · ${esc(d.quote)}</h2>${tag}</div>
+    ${d.note ? `<div class="notice warn small" style="margin-bottom:10px">${esc(d.note)}</div>` : ""}
+    <textarea class="draft" id="dt">${esc(d.text)}</textarea>
+    <div class="actions" style="margin-top:10px">
+      ${wa ? (d.whatsapp_number ? `<a class="btn ghost sm" id="open" target="_blank" rel="noopener">Open in WhatsApp</a>` : `<span class="muted small">No phone number on file.</span>`)
+           : (d.email ? `<a class="btn ghost sm" id="open">Open in email app</a>` : `<span class="muted small">No email on file.</span>`)}
+      <button class="btn ghost sm" id="copy">Copy text</button><span style="flex:1"></span>
+      <button class="btn ghost sm" id="close">Close</button><button class="btn sm" id="sent">Mark as sent</button></div></div>`;
+  const link = () => { const t = $("#dt").value;
+    if (wa) return `https://wa.me/${d.whatsapp_number}?text=${encodeURIComponent(t)}`;
+    const m = t.match(/^Subject:\s*(.*)\n+/); return `mailto:${d.email}?subject=${encodeURIComponent(m ? m[1] : "Your quotation " + d.quote)}&body=${encodeURIComponent(m ? t.slice(m[0].length) : t)}`; };
+  if ($("#open")) { $("#open").href = link(); $("#dt").oninput = () => $("#open").href = link(); }
+  $("#copy").onclick = () => { navigator.clipboard?.writeText($("#dt").value).then(() => toast("Copied"), () => toast("Couldn't copy", "bad")); };
+  $("#close").onclick = () => $("#editor").innerHTML = "";
+  $("#sent").onclick = () => act(() => api(`/followups/${d.quote_id}/sent`, {method: "POST", body: {channel: d.channel, text: $("#dt").value}}),
+                                 "Logged on the lead's timeline");
+  $("#editor").scrollIntoView({behavior: "smooth", block: "start"});
+}
+
 /* ------------------------------------------------------------------ audit + team */
 async function auditView() {
   shell("audit", topbar("Audit log") + loading());
@@ -778,7 +880,7 @@ async function teamView() {
 /* ------------------------------------------------------------------ router */
 /* Back = where you actually came from inside the admin (keeps list filters and page);
    opened directly from a link or bookmark, Back goes to that section's list. */
-const SECTION = {dashboard: "Dashboard", leads: "Leads", quotes: "Quotations", orders: "Orders", inventory: "Inventory",
+const SECTION = {ask: "Ask your data", followups: "Follow-ups", dashboard: "Dashboard", leads: "Leads", quotes: "Quotations", orders: "Orders", inventory: "Inventory",
                  approvals: "Approvals", audit: "Audit log", team: "Team"};
 function titleOf(hash) {
   if (S.titles[hash]) return S.titles[hash];
@@ -814,6 +916,8 @@ async function route() {
     else if (view === "orders") await (parts[1] ? orderView(+parts[1]) : ordersView(p));
     else if (view === "inventory") await (parts[1] ? productView(decodeURIComponent(parts[1])) : inventoryView(p));
     else if (view === "approvals") await approvalsView();
+    else if (view === "ask") await askView();
+    else if (view === "followups") await followupsView();
     else if (view === "audit") await auditView();
     else if (view === "team") await teamView();
     window.scrollTo(0, 0);

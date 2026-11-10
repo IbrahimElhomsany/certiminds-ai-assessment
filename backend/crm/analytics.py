@@ -244,7 +244,7 @@ def copilot_cards(db: Session, user: User, start: datetime, end: datetime, stall
         cards.append({"kind": "follow_up", "title": f"{len(stalled)} quotation{'s' if len(stalled) > 1 else ''} waiting for a reply",
                       "detail": f"QAR {total:,.0f} in total. The largest is {stalled[0]['quote']} for {stalled[0]['customer']}.",
                       "why": f"Sent more than {STALLED_DAYS} days ago with no activity on the lead since.",
-                      "action": {"label": "Follow up", "view": "leads", "filter": "stalled"}})
+                      "action": {"label": "Draft follow-ups", "view": "followups"}})
     if approvals and has_permission(user, "discounts.approve"):
         ok = [a for a in approvals if a["margin_after_pct"] >= float(user_min_margin(db, user))]
         a = (ok or approvals)[0]

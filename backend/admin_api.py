@@ -540,3 +540,76 @@ def decide(request_id: int, req: DecisionRequest, user: User = Depends(require("
         raise HTTPException(status_code=404, detail="Request not found.")
     d = run(ops.decide_discount, db, user, d, req.decision == "approve", req.reason, req.override)
     return {"status": d.status, "margin_after_pct": money(d.margin_after_pct), "quote": quote_row(db, db.get(Quote, d.quote_id))}
+
+
+# ================================================================== step 5: AI features (feature 11 + feature 3)
+import os  # noqa: E402
+
+from backend.crm import ask as ask_data  # noqa: E402
+from backend.crm import followups  # noqa: E402
+
+ai_limiter = RateLimiter(max_requests=12, window_seconds=60)   # per user: keeps API costs predictable
+_ai_client = None
+
+
+def ai_client():
+    """Anthropic client when a key is configured, else None (the features then run in offline/template mode)."""
+    global _ai_client
+    if not os.getenv("ANTHROPIC_API_KEY") or os.getenv("LLM_PROVIDER", "anthropic") != "anthropic":
+        return None
+    if _ai_client is None:
+        import anthropic
+        _ai_client = anthropic.Anthropic(max_retries=1, timeout=45)
+    return _ai_client
+
+
+def ai_allowed(user: User) -> None:
+    if not ai_limiter.allow(f"{user.tenant_id}:{user.id}"):
+        raise HTTPException(status_code=429, detail="Too many AI requests. Please wait a minute.")
+
+
+@router.get("/ask")
+def ask_info(user: User = Depends(require("dashboard.view"))):
+    return {"ai_available": ai_client() is not None, "suggestions": ask_data.SUGGESTIONS,
+            "scope": "company" if analytics.own_leads(user) is None else "my leads"}
+
+
+class AskRequest(BaseModel):
+    question: str = Field(min_length=2, max_length=ask_data.MAX_QUESTION)
+
+
+@router.post("/ask")
+def ask(req: AskRequest, user: User = Depends(require("dashboard.view")), db: Session = Depends(get_db)):
+    ai_allowed(user)
+    try:
+        return ask_data.ask(db, user, req.question, client=ai_client())
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
+@router.get("/followups")
+def followups_list(user: User = Depends(require("quotes.edit")), db: Session = Depends(get_db)):
+    return {"ai_available": ai_client() is not None, "items": followups.waiting(db, user)}
+
+
+class DraftRequest(BaseModel):
+    channel: Literal["whatsapp", "email"] = "whatsapp"
+
+
+@router.post("/followups/{quote_id}/draft")
+def followup_draft(quote_id: int, req: DraftRequest, user: User = Depends(require("quotes.edit")),
+                   db: Session = Depends(get_db)):
+    ai_allowed(user)
+    return run(followups.draft, db, user, get_quote(db, user, quote_id), req.channel, ai_client())
+
+
+class SentRequest(BaseModel):
+    channel: Literal["whatsapp", "email"] = "whatsapp"
+    text: str = Field(min_length=10, max_length=2000)
+
+
+@router.post("/followups/{quote_id}/sent")
+def followup_sent(quote_id: int, req: SentRequest, user: User = Depends(require("quotes.edit")),
+                  db: Session = Depends(get_db)):
+    run(followups.mark_sent, db, user, get_quote(db, user, quote_id), req.text, req.channel)
+    return {"ok": True}

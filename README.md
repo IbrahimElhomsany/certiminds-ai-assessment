@@ -72,6 +72,19 @@ the role may use, and the server checks the role again on every call.
   changes prices (audited, and the shop and Ceramica Nova AI use the new price at once).
 - Approvals, audit log and team pages for the roles that have them.
 
+**Step 5 (done): AI in the admin**, clearly labelled as AI.
+- **Ask your data** (`backend/crm/ask.py`): staff ask questions in plain English. Claude can only call seven
+  fixed, read-only lookups (key figures, sales or leads breakdowns, top products, stock, pipeline, quotations
+  waiting); it never sees the database or writes SQL, and salespeople only get their own figures. Every number
+  in the answer is checked against what the lookups returned; if one doesn't match, the answer is hidden and
+  the figures are shown instead. "Data used" shows the source. Without an API key it runs in offline mode
+  (keyword matching, figures only).
+- **Follow-up drafts** (`backend/crm/followups.py`): for each quotation waiting more than 3 days, Claude drafts a
+  WhatsApp or email message. Nothing is sent automatically: the salesperson edits it, sends it (WhatsApp / email
+  link) and marks it sent, which logs it on the lead. Drafts that mention a discount or an amount that isn't on
+  the quotation are replaced by a standard template; the template is also used when there is no API key.
+- Limits: 12 AI requests per user per minute; each question is recorded in the audit log.
+
 All seeded data is demo data, and the company is flagged `is_demo` so the admin shows a "Demo data" badge.
 
 ## What's inside

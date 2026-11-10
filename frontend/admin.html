@@ -130,6 +130,7 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
   .chip { background:var(--panel); border:1px solid var(--line); border-radius:20px; padding:5px 12px; font-size:12px; color:var(--muted); }
   .chip.on { border-color:var(--accent); color:var(--text); background:var(--accent-soft); }
   .pager { display:flex; gap:8px; align-items:center; justify-content:flex-end; margin-top:10px; font-size:12px; color:var(--muted); }
+  .lnk { color:var(--accent); } .lnk:hover { text-decoration:underline; }
   .back { color:var(--muted); font-size:12.5px; display:inline-flex; gap:6px; align-items:center; margin-bottom:10px; }
   .kv { display:grid; grid-template-columns:110px 1fr; gap:4px 10px; font-size:12.5px; }
   .kv span:nth-child(odd) { color:var(--muted); }
@@ -199,7 +200,7 @@ const ICONS = {
 };
 const icon = n => `<svg class="ico" viewBox="0 0 24 24">${ICONS[n] || ""}</svg>`;
 
-let S = { token: null, me: null, can: new Set(), days: 30 };
+let S = { token: null, me: null, can: new Set(), days: 30, trail: [], titles: {} };
 try { S.token = sessionStorage.getItem("nova_admin_token"); S.days = +sessionStorage.getItem("nova_admin_days") || 30; } catch (e) {}
 
 async function api(path, opts = {}) {
@@ -474,7 +475,8 @@ async function leadView(id) {
   shell("leads", loading());
   const d = await api("/leads/" + id), l = d.lead, c = d.customer;
   const staff = d.can.assign ? await api("/staff") : [];
-  $("#view").innerHTML = `<a class="back" href="#/leads">${icon("back")} Leads</a>` +
+  S.titles[location.hash] = "Lead " + l.number;
+  $("#view").innerHTML = backLink("#/leads") +
     topbar(`${esc(l.number)} · ${esc(c.name)}`, `${esc(SOURCES[l.source] || l.source)} · created ${dateTime(l.created_at)} · ${esc(l.owner || "Unassigned")}`,
       `<span class="tag ${l.stage}">${label(l.stage)}${l.lost_reason ? " · " + label(l.lost_reason) : ""}</span>`) + `
     <div class="grid row2">
@@ -557,9 +559,10 @@ async function quoteView(id) {
   const canOrder = q.status === "sent" && !q.order && !q.pending_discount && S.can.has("orders.create");
   const pend = q.discounts.find(x => x.status === "pending");
   const pendLow = pend && pend.margin_after_pct < q.min_margin_pct;
-  const canDecide = pend && S.can.has("discounts.approve");
-  $("#view").innerHTML = `<a class="back" href="${q.lead_id ? "#/leads/" + q.lead_id : "#/quotes"}">${icon("back")} ${q.lead ? esc(q.lead) : "Quotations"}</a>` +
-    topbar(`Quotation ${esc(q.number)}`, `${esc(q.customer)} · ${q.channel === "chat" ? "Ceramica Nova AI chat" : label(q.channel)} · ${dateTime(q.created_at)}${q.valid_until ? " · valid until " + date(q.valid_until) : ""}`,
+  const canDecide = pend && open && S.can.has("discounts.approve");
+  S.titles[location.hash] = "Quotation " + q.number;
+  $("#view").innerHTML = backLink("#/quotes") +
+    topbar(`Quotation ${esc(q.number)}`, `${q.lead_id && canLeads() ? `<a class="lnk" href="#/leads/${q.lead_id}">${esc(q.customer)} · lead ${esc(q.lead)}</a>` : esc(q.customer)} · ${q.channel === "chat" ? "Ceramica Nova AI chat" : label(q.channel)} · ${dateTime(q.created_at)}${q.valid_until ? " · valid until " + date(q.valid_until) : ""}`,
       `<span class="tag ${q.status}">${label(q.status)}</span>`) + `
     <div class="grid row2"><div class="card"><div class="head"><h2 class="grow">Items</h2>
         <div class="actions">${canDisc ? `<button class="btn ghost sm" id="bDisc">Give a discount</button>` : ""}
@@ -574,7 +577,7 @@ async function quoteView(id) {
       ${q.order ? `<div class="notice small" style="margin-top:12px">Order ${esc(q.order)} was made from this quotation.</div>` : ""}
       ${pend ? `<div class="notice warn small" style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <span style="flex:1;min-width:220px">A <b>${pend.percent}%</b> discount asked by ${esc(pend.requested_by)} is waiting for approval. It leaves a
-          <b>${pend.margin_after_pct}%</b> margin${pendLow ? `, below the ${q.min_margin_pct}% minimum` : ""}. ${canDecide ? "" : "The order can be made once a manager decides."}</span>
+          <b>${pend.margin_after_pct}%</b> margin.<br><b>Why it's waiting:</b> ${esc(pend.why)}${canDecide ? "" : " The order can be made once it is decided."}</span>
         ${canDecide ? `<button class="btn ok sm" data-ok="${pend.id}" data-low="${pendLow ? 1 : ""}" ${pendLow && S.me.user.role !== "owner" ? "disabled title='Below the minimum margin: only the owner can approve'" : ""}>Approve</button>
           <button class="btn danger sm" data-no="${pend.id}">Reject</button>` : ""}</div>` : ""}</div>
       <div class="grid" style="align-content:start"><div class="card"><div class="head"><h2>Margin guardrail</h2></div>
@@ -629,8 +632,10 @@ async function orderView(id) {
   shell("orders", loading());
   const o = await api("/orders/" + id);
   const blocked = o.status === "pending" && o.lines.some(l => !l.one_batch_ok);
-  $("#view").innerHTML = `<a class="back" href="${o.lead_id && S.can.has("leads.view_own") ? "#/leads/" + o.lead_id : "#/orders"}">${icon("back")} ${o.lead && S.can.has("leads.view_own") ? esc(o.lead) : "Orders"}</a>` +
-    topbar(`Order ${esc(o.number)}`, `${esc(o.customer)} · ${esc(o.phone || "")} · ${esc(o.area || "")} · placed ${dateTime(o.created_at)}`,
+  S.titles[location.hash] = "Order " + o.number;
+  $("#view").innerHTML = backLink("#/orders") +
+    topbar(`Order ${esc(o.number)}`, `${o.lead_id && canLeads() ? `<a class="lnk" href="#/leads/${o.lead_id}">${esc(o.customer)} · lead ${esc(o.lead)}</a>` : esc(o.customer)}${
+      o.quote_id && canQuotes() ? ` · <a class="lnk" href="#/quotes/${o.quote_id}">quotation ${esc(o.quote)}</a>` : ""} · ${esc(o.phone || "")} · ${esc(o.area || "")} · placed ${dateTime(o.created_at)}`,
       `<span class="tag ${o.status}">${label(o.status)}</span>`) + `
     <div class="card"><div class="head"><h2 class="grow">Items and batches</h2><div class="actions">
       ${o.can.confirm ? `<button class="btn ok sm" id="bConf" ${blocked ? "disabled title='No single batch covers every line'" : ""}>Confirm order</button>` : ""}
@@ -677,7 +682,8 @@ async function productView(sku) {
   shell("inventory", loading());
   const [p, inv] = await Promise.all([api("/inventory/" + encodeURIComponent(sku)), api("/inventory")]);
   const u = p.unit === "m2" ? "m²" : "sets", lv = p.level || {};
-  $("#view").innerHTML = `<a class="back" href="#/inventory">${icon("back")} Inventory</a>` +
+  S.titles[location.hash] = p.name;
+  $("#view").innerHTML = backLink("#/inventory") +
     topbar(esc(p.name), `${esc(p.sku)} · ${qar(p.price, 2)} per ${p.unit === "m2" ? "m²" : "set"}${p.cost_price != null ? " · cost " + qar(p.cost_price, 2) : ""}`,
       `<div class="actions">${inv.can.receive ? `<button class="btn sm" id="bRec">Receive new batch</button>` : ""}
        ${inv.can.price ? `<button class="btn ghost sm" id="bPrice">Change price</button>` : ""}</div>`) + `
@@ -720,7 +726,8 @@ async function approvalsView() {
         <a href="#/quotes/${a.quote_id}"><b>${esc(a.quote)}</b></a><span style="flex:1"></span><span class="tag ${low ? "out" : "ok"}">margin ${a.margin_after_pct}%</span></div>
         <span class="small">${esc(a.customer)}${a.lead ? ` · <a class="muted" href="#/leads/${a.lead_id}">${esc(a.lead)}</a>` : ""}</span>
         <span class="small">${qar(a.subtotal, 2)} → <b>${qar(a.total_after, 2)}</b></span>
-        <span class="why">Asked by ${esc(a.requested_by)} · ${dateTime(a.created_at)}${a.reason ? "<br>" + esc(a.reason) : ""}</span>
+        <span class="small"><b>Why it's waiting:</b> ${esc(a.why)}</span>
+        <span class="why">Asked by ${esc(a.requested_by)} · ${dateTime(a.created_at)}${a.reason && !a.reason.includes("Needs approval") ? "<br>Note: " + esc(a.reason) : ""}</span>
         <div class="actions"><button class="btn ok sm" data-ok="${a.id}" data-low="${low ? 1 : ""}" ${low && !r.is_owner ? "disabled title='Below the minimum margin: only the owner can approve'" : ""}>Approve</button>
           <button class="btn danger sm" data-no="${a.id}">Reject</button></div></div>`; }).join("")}</div>`
       : `<div class="card"><div class="empty">No discounts waiting. Discounts within a salesperson's limit and the minimum margin are applied automatically.</div></div>`}
@@ -769,6 +776,26 @@ async function teamView() {
 }
 
 /* ------------------------------------------------------------------ router */
+/* Back = where you actually came from inside the admin (keeps list filters and page);
+   opened directly from a link or bookmark, Back goes to that section's list. */
+const SECTION = {dashboard: "Dashboard", leads: "Leads", quotes: "Quotations", orders: "Orders", inventory: "Inventory",
+                 approvals: "Approvals", audit: "Audit log", team: "Team"};
+function titleOf(hash) {
+  if (S.titles[hash]) return S.titles[hash];
+  const sec = hash.slice(2).split(/[/?]/)[0];
+  return SECTION[sec] || "Back";
+}
+function backLink(fallback) {
+  const prev = S.trail[S.trail.length - 2];
+  return `<a class="back" href="${prev || fallback}" onclick="return goBack('${fallback}')">${icon("back")} ${esc(titleOf(prev || fallback))}</a>`;
+}
+function goBack(fallback) {
+  if (S.trail.length > 1) history.back(); else location.hash = fallback;
+  return false;
+}
+const canLeads = () => S.can.has("leads.view_all") || S.can.has("leads.view_own");
+const canQuotes = () => S.can.has("quotes.view_all") || S.can.has("quotes.view_own");
+
 async function route() {
   if (!S.me) return;
   const [path, query] = (location.hash.slice(2) || "").split("?");
@@ -777,6 +804,9 @@ async function route() {
   const allowed = new Set(modules().map(m => m[0]));
   const view = allowed.has(parts[0]) ? parts[0] : null;
   if (!view) { location.replace("#/" + home); return; }
+  const h = location.hash;
+  if (S.trail[S.trail.length - 2] === h) S.trail.pop();
+  else if (S.trail[S.trail.length - 1] !== h) S.trail.push(h);
   try {
     if (view === "dashboard") await dashboardView();
     else if (view === "leads") await (parts[1] ? leadView(+parts[1]) : leadsView(p));

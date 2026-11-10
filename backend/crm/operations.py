@@ -97,6 +97,10 @@ def change_stage(db: Session, user: User, lead: Lead, stage: str, lost_reason: O
     if stage == "lost":
         for q in db.scalars(select(Quote).where(Quote.lead_id == lead.id, Quote.status.in_(("draft", "sent")))):
             q.status = "rejected"
+            for d in db.scalars(select(DiscountRequest).where(DiscountRequest.quote_id == q.id,
+                                                              DiscountRequest.status == "pending")):
+                d.status, d.decided_by, d.decided_at = "rejected", user.id, local_now()
+                d.reason = "Closed: the lead was marked lost"
     audit(db, lead.tenant_id, "lead.stage", user.id, "lead", lead.number, before=before,
           after={"stage": stage, "lost_reason": lead.lost_reason})
     db.commit()
@@ -137,6 +141,24 @@ def margin_after(quote: Quote, percent: Decimal) -> tuple[Decimal, Decimal]:
     return total, margin
 
 
+def why_waiting(db: Session, req: DiscountRequest) -> str:
+    """Plain-language reason a discount needs a manager, worked out from the current numbers."""
+    quote = db.get(Quote, req.quote_id)
+    tenant = db.get(Tenant, req.tenant_id)
+    _, margin = margin_after(quote, req.percent)
+    who = db.get(User, req.requested_by) if req.requested_by else None
+    why = []
+    if who is None:
+        why.append("Asked for in the Ceramica Nova AI chat, so a manager checks it")
+    elif req.percent > who.discount_limit_pct:
+        why.append(f"Over {who.name.split()[0]}'s {float(who.discount_limit_pct):g}% limit")
+    if margin < tenant.min_margin_pct:
+        why.append(f"margin {margin}% is below the {float(tenant.min_margin_pct):g}% minimum, so only the owner can approve")
+    elif who is not None and req.percent > who.discount_limit_pct:
+        why.append(f"margin stays above {float(tenant.min_margin_pct):g}%, so a manager can approve")
+    return "; ".join(why) + "." if why else "Waiting for a manager."
+
+
 def apply_discount(quote: Quote, percent: Decimal) -> None:
     total, _ = margin_after(quote, percent)
     quote.discount_pct, quote.discount_amount, quote.total = q2(percent), quote.subtotal - total, total
@@ -145,7 +167,7 @@ def apply_discount(quote: Quote, percent: Decimal) -> None:
 def request_discount(db: Session, user: User, quote: Quote, percent: float, reason: Optional[str] = None) -> DiscountRequest:
     percent = q2(percent)
     if percent <= 0 or percent > MAX_DISCOUNT_PCT:
-        raise OpError(422, f"Discount must be between 0 and {MAX_DISCOUNT_PCT:g}%.")
+        raise OpError(422, f"Discount must be between 0 and {float(MAX_DISCOUNT_PCT):g}%.")
     if quote.status not in ("draft", "sent"):
         raise OpError(409, f"Quotation {quote.number} is {quote.status}; only open quotations can be discounted.")
     if db.scalar(select(DiscountRequest).where(DiscountRequest.quote_id == quote.id, DiscountRequest.status == "pending")):
@@ -159,18 +181,18 @@ def request_discount(db: Session, user: User, quote: Quote, percent: float, reas
     lead = lead_of_quote(db, quote)
     if within_limit and margin_ok:
         req.status, req.decided_by, req.decided_at = "auto_approved", None, req.created_at
-        req.reason = f"Within {user.name}'s {user.discount_limit_pct:g}% limit and the {tenant.min_margin_pct:g}% minimum margin"
+        req.reason = f"Within {user.name}'s {float(user.discount_limit_pct):g}% limit and the {float(tenant.min_margin_pct):g}% minimum margin"
         apply_discount(quote, percent)
-        text = f"{percent:g}% discount applied to {quote.number} (new total QAR {quote.total:,.2f}, margin {margin}%)"
+        text = f"{float(percent):g}% discount applied to {quote.number} (new total QAR {quote.total:,.2f}, margin {margin}%)"
     else:
         why = []
         if not within_limit:
-            why.append(f"above {user.name}'s {user.discount_limit_pct:g}% limit")
+            why.append(f"above {user.name}'s {float(user.discount_limit_pct):g}% limit")
         if not margin_ok:
-            why.append(f"margin {margin}% is below the {tenant.min_margin_pct:g}% minimum")
+            why.append(f"margin {margin}% is below the {float(tenant.min_margin_pct):g}% minimum")
         req.status = "pending"
         req.reason = (reason.strip()[:120] + ". " if reason and reason.strip() else "") + "Needs approval: " + " and ".join(why)
-        text = f"{percent:g}% discount on {quote.number} sent for approval ({' and '.join(why)})"
+        text = f"{float(percent):g}% discount on {quote.number} sent for approval ({' and '.join(why)})"
     db.add(req)
     db.flush()
     if lead:
@@ -196,7 +218,7 @@ def decide_discount(db: Session, user: User, req: DiscountRequest, approve: bool
             raise OpError(409, f"Quotation {quote.number} is {quote.status}; it can't be discounted any more.")
         if margin < tenant.min_margin_pct:
             if user.role != "owner":
-                raise OpError(409, f"Margin after this discount is {margin}%, below the {tenant.min_margin_pct:g}% "
+                raise OpError(409, f"Margin after this discount is {margin}%, below the {float(tenant.min_margin_pct):g}% "
                                    "minimum. Only the owner can approve it, with a reason.")
             if not override or len(reason) < 5:
                 raise OpError(422, "Below the minimum margin: tick override and write the reason.")
@@ -212,7 +234,7 @@ def decide_discount(db: Session, user: User, req: DiscountRequest, approve: bool
     lead = lead_of_quote(db, quote)
     if lead:
         note(db, user, lead, "discount",
-             f"{req.percent:g}% discount on {quote.number} {req.status} by {user.name}"
+             f"{float(req.percent):g}% discount on {quote.number} {req.status} by {user.name}"
              + (f" (new total QAR {quote.total:,.2f})" if approve else f": {reason}"))
     audit(db, req.tenant_id, "discount.approve" if approve else "discount.reject", user.id, "quote", quote.number,
           after={"percent": float(req.percent), "margin_after_pct": float(margin), "reason": req.reason,
@@ -237,7 +259,7 @@ def confirm_order(db: Session, user: User, order: Order) -> Order:
         batch = pick_batch(product, line.quantity, line.batch_id)
         if batch is None:
             biggest = max((b.qty_left for b in product.batches), default=Decimal(0))
-            short.append(f"{product.name}: needs {line.quantity:g}, largest batch has {biggest:g}")
+            short.append(f"{product.name}: needs {float(line.quantity):g}, largest batch has {float(biggest):g}")
         picks.append((line, product, batch))
     if short:
         raise OpError(409, "No single batch covers: " + "; ".join(short)

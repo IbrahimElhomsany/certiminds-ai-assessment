@@ -334,7 +334,8 @@ def quote_detail(quote_id: int, user: User = Depends(current_user), db: Session 
             "min_margin_pct": money(tenant.min_margin_pct), "your_discount_limit_pct": money(user.discount_limit_pct),
             "discounts": [{"id": d.id, "percent": money(d.percent), "margin_after_pct": money(d.margin_after_pct),
                            "status": d.status, "requested_by": who.get(d.requested_by, "Ceramica Nova AI chat"),
-                           "decided_by": who.get(d.decided_by), "reason": d.reason, "created_at": d.created_at}
+                           "decided_by": who.get(d.decided_by), "reason": d.reason, "created_at": d.created_at,
+                           "why": ops.why_waiting(db, d) if d.status == "pending" else None}
                           for d in reqs]}
 
 

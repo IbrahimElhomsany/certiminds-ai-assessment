@@ -16,6 +16,7 @@ from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.orm import Session
 
 from backend.auth import has_permission
+from backend.crm.operations import why_waiting
 from backend.db.database import local_now
 from backend.db.models import (Activity, Batch, Customer, DiscountRequest, Lead, Order, OrderLine, Product, Quote,
                                StockMovement, User)
@@ -219,7 +220,7 @@ def pending_discounts(db: Session, user: User) -> list[dict]:
                     "lead_id": lead.id if lead else None, "customer": db.get(Customer, q.customer_id).name,
                     "percent": f(d.percent), "margin_after_pct": f(d.margin_after_pct), "subtotal": f(q.subtotal),
                     "total_after": f(q.subtotal * (1 - d.percent / 100)), "requested_by": who,
-                    "created_at": d.created_at, "reason": d.reason})
+                    "created_at": d.created_at, "reason": d.reason, "why": why_waiting(db, d)})
     return out
 
 

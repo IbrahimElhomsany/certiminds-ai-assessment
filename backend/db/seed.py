@@ -273,6 +273,8 @@ def seed_tenant(db: Session, slug: str = "ceramica-nova", name: str = "Ceramica 
                     quote.discount_amount = subtotal - total_after
                     quote.total = total_after
             move("quote_sent", t, f"Quotation {quote.number} sent (QAR {quote.total:,.2f})", "quote_sent")
+            if disc and req.status == "pending":
+                continue                      # customer is waiting for the manager's answer: no outcome yet
 
             # ---- outcome
             t = later(t, rng.uniform(1, 5) * pace)

@@ -286,3 +286,13 @@ def test_other_company_cannot_touch_our_records():
 def test_admin_page_is_served():
     r = client.get("/admin")
     assert r.status_code == 200 and "Nova Studio" in r.text
+
+
+def test_waiting_discount_says_why():
+    qid = open_quote("yusuf@ceramicanova.demo")
+    client.post(f"/api/admin/quotes/{qid}/discount", json={"percent": 7}, headers=H("yusuf"))
+    q = client.get(f"/api/admin/quotes/{qid}", headers=H("manager")).json()
+    why = next(d["why"] for d in q["discounts"] if d["status"] == "pending")
+    assert why.startswith("Over Yusuf's 5% limit") and "a manager can approve" in why
+    pending = client.get("/api/admin/approvals", headers=H("manager")).json()["pending"]
+    assert all(p["why"] for p in pending)

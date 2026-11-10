@@ -16,6 +16,34 @@ Requested by the reviewers after the first demo; Mr Eulius was informed of the c
 - **Only working buttons.** Mockup features that would need an image-AI model, staff, a booking system or real company documents (upload my room, 3D / AR, ask an expert, attach and voice, share, book consultation, request sample, installation guide, brochure) are left out, so every button on the page works. Mr Eulius confirmed an AI room preview is not required.
 - **Product photos** in `images/` are free-licence photos (Pexels, Pixabay), one per product, cropped square. They are illustrations, not photos of the exact products.
 
+## Nova Studio admin (in progress on the `nova-studio` branch)
+
+The assessment app is growing into a full retail system: a public shop, Ceramica Nova AI, and
+**Nova Studio**, a staff admin at `/admin`. Plan: see the project plan doc.
+
+**Step 1 (done): foundation.** A database replaces the JSON files for the admin (`backend/db/`),
+with companies (tenants), staff, customers, leads, products, production batches, quotes, orders,
+discount requests, stock movements and an audit log. Staff log in with one of five roles; permissions
+are checked in the backend (`backend/auth.py`, `backend/admin_api.py`).
+
+```bash
+pip install -r requirements.txt
+python -m backend.db.seed          # 90 days of DEMO data for Ceramica Nova (data/nova_studio.db)
+uvicorn backend.main:app --reload  # then try the /api/admin routes at http://127.0.0.1:8000/docs
+```
+
+Demo logins (company `ceramica-nova`, password `NovaDemo2026!` unless `DEMO_PASSWORD` is set):
+
+| Role | Email |
+| --- | --- |
+| Owner | owner@ceramicanova.demo |
+| Sales Manager | manager@ceramicanova.demo |
+| Salesperson | omar@ / lina@ / yusuf@ceramicanova.demo |
+| Warehouse | warehouse@ceramicanova.demo |
+| Viewer | viewer@ceramicanova.demo |
+
+All seeded data is demo data, and the company is flagged `is_demo` so the admin will show a "Demo data" badge.
+
 ## What's inside
 
 | Assessment part | Where |

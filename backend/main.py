@@ -27,6 +27,8 @@ from backend.offers import project_offers                            # noqa: E40
 from pydantic import BaseModel, Field                                # noqa: E402
 from backend.quote_pdf import build_quote_pdf                        # noqa: E402
 from backend.catalog import CATALOG, SANITARY                         # noqa: E402
+from backend.admin_api import router as admin_router                 # noqa: E402
+from backend.db.database import init_db                               # noqa: E402
 
 
 def use_claude() -> bool:
@@ -45,7 +47,9 @@ def build_providers():
     return providers
 
 
-app = FastAPI(title="Ceramica Nova AI Sales API", version="1.0")
+app = FastAPI(title="Ceramica Nova AI Sales API + Nova Studio admin", version="1.1")
+init_db()                      # creates missing tables; demo data comes from `python -m backend.db.seed`
+app.include_router(admin_router)
 gateway = LLMGateway(build_providers(), timeout_s=float(os.getenv("LLM_TIMEOUT_S", "30")),
                      cache=TTLCache(ttl_seconds=3600), prompt_version=PROMPT_VERSION)
 agent_client = None

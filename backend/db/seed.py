@@ -93,7 +93,8 @@ def seed_products(db: Session, tenant: Tenant, rng: random.Random) -> dict[str, 
             reorder_point=Decimal(150), image=f"/images/{p.sku}.jpg",
             attributes={"material": p.material, "finish": p.finish, "size_cm": f"{p.tile_width_cm}x{p.tile_length_cm}",
                         "tiles_per_box": p.tiles_per_box, "box_m2": round(box_m2, 4), "slip_rating": p.slip_rating,
-                        "surfaces": p.surfaces, "locations": p.locations, "catalog_stock_m2": p.stock_m2})
+                        "surfaces": p.surfaces, "locations": p.locations, "catalog_stock_m2": p.stock_m2,
+                        "commercial": p.commercial, "application": p.application})
     for s in SANITARY.values():
         products[s.sku] = Product(
             tenant_id=tenant.id, sku=s.sku, name=s.name, kind="set", category=s.category, unit="set",
@@ -235,7 +236,8 @@ def seed_tenant(db: Session, slug: str = "ceramica-nova", name: str = "Ceramica 
             cost = q2(sum(l.quantity * l.unit_cost for l in qlines))
             disc = Decimal(0) if rng.random() < 0.5 else Decimal(rng.choice([3, 5, 5, 7, 8, 10, 12]))
             quote = Quote(tenant_id=tenant.id, number=number("Q"), lead_id=lead.id, customer_id=customer.id,
-                          created_by=owner_user.id, status="sent", subtotal=subtotal, discount_pct=Decimal(0),
+                          created_by=owner_user.id, status="sent",
+                          channel={"showroom_chat": "chat", "shop": "shop"}.get(source, "staff"), subtotal=subtotal, discount_pct=Decimal(0),
                           discount_amount=Decimal(0), total=subtotal, cost_total=cost, created_at=t, sent_at=t,
                           valid_until=t + timedelta(days=14), lines=qlines)
             db.add(quote)

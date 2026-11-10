@@ -152,6 +152,7 @@ class Quote(TenantMixin, Base):
     lead_id: Mapped[Optional[int]] = mapped_column(ForeignKey("leads.id"), index=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
     created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
+    channel: Mapped[str] = mapped_column(String(10), default="staff")   # staff | shop | chat
     status: Mapped[str] = mapped_column(String(20), default="draft", index=True)
     subtotal: Mapped[Decimal] = mapped_column(Money)
     discount_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0"))
@@ -214,7 +215,7 @@ class DiscountRequest(TenantMixin, Base):
     __tablename__ = "discount_requests"
     id: Mapped[int] = mapped_column(primary_key=True)
     quote_id: Mapped[int] = mapped_column(ForeignKey("quotes.id"), index=True)
-    requested_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    requested_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))   # None = asked for in the AI chat
     percent: Mapped[Decimal] = mapped_column(Numeric(5, 2))
     margin_after_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2))
     status: Mapped[str] = mapped_column(String(20), index=True)
@@ -222,6 +223,20 @@ class DiscountRequest(TenantMixin, Base):
     decided_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     reason: Mapped[Optional[str]] = mapped_column(String(200))
     created_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class ChatSession(TenantMixin, Base):
+    """Links a Ceramica Nova AI conversation to the CRM (feature 1: chat to lead)."""
+    __tablename__ = "chat_sessions"
+    __table_args__ = (UniqueConstraint("tenant_id", "session_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    session_id: Mapped[str] = mapped_column(String(40))
+    visitor_id: Mapped[str] = mapped_column(String(40))            # anonymous browser id, not a person
+    customer_id: Mapped[Optional[int]] = mapped_column(ForeignKey("customers.id"))
+    lead_id: Mapped[Optional[int]] = mapped_column(ForeignKey("leads.id"))
+    messages: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime)
+    last_message_at: Mapped[datetime] = mapped_column(DateTime)
 
 
 class AuditLog(TenantMixin, Base):

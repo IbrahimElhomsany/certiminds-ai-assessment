@@ -120,6 +120,7 @@ class InventoryResult(BaseModel):
     status: StockStatus
     shortfall_m2: float
     immediately_available: bool     # BR-08
+    single_batch_available: Optional[bool] = None   # can ONE production batch cover it? (shade match; None = unknown)
 
 
 def check_inventory(sku: str, required_area_m2: float) -> InventoryResult:
@@ -136,6 +137,7 @@ def check_inventory(sku: str, required_area_m2: float) -> InventoryResult:
         sku=p.sku, product_name=p.name, required_area_m2=required_area_m2, stock_m2=p.stock_m2,
         status=status, shortfall_m2=max(0.0, round(required_area_m2 - p.stock_m2, 4)),
         immediately_available=status == StockStatus.AVAILABLE,
+        single_batch_available=None if p.largest_batch_m2 is None else p.largest_batch_m2 >= required_area_m2,
     )
 
 
@@ -205,7 +207,8 @@ class Quote(BaseModel):
 
 
 def generate_quote(customer_id: str, items: list[QuoteItemRequest],
-                   discount_percent: float = 0, currency: str = CURRENCY) -> Quote:
+                   discount_percent: float = 0, currency: str = CURRENCY,
+                   quotation_id: Optional[str] = None) -> Quote:
     """There is deliberately no 'approved' parameter: approval can only be granted
     by a human outside this function, so the LLM cannot fabricate it (rule 6)."""
     if currency != CURRENCY:
@@ -251,7 +254,7 @@ def generate_quote(customer_id: str, items: list[QuoteItemRequest],
     discount_amount = _money(subtotal * discount / 100)
     needs_approval = discount > MAX_DISCOUNT_WITHOUT_APPROVAL
     return Quote(
-        quotation_id=f"Q-{uuid.uuid4().hex[:10].upper()}",
+        quotation_id=quotation_id or f"Q-{uuid.uuid4().hex[:10].upper()}",
         customer_id=customer_id,
         currency=currency,
         products=lines,

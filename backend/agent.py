@@ -17,6 +17,7 @@ import time
 import uuid
 from typing import Any, Optional
 
+from backend import crm_bridge
 from backend.catalog import CATALOG, SANITARY, UnknownSKUError
 from backend.gateway import GatewayError, LLMGateway
 from backend.guardrails import CANARY, check_output, inspect_input, numbers_in
@@ -163,6 +164,9 @@ class ToolExecutor:
 
     def _t_generate_quote(self, items: list, discount_percent: float = 0):
         q = generate_quote(self.session.user_id, [QuoteItemRequest(**i) for i in items], discount_percent)
+        number = crm_bridge.save_quote(self.session, q)      # stored in Nova Studio > Quotations
+        if number:
+            q.quotation_id = number                            # the customer sees the same number as staff
         save_quote(q)
         self.session.quote_ids.append(q.quotation_id)
         self.quote = q.model_dump(mode="json")
@@ -339,7 +343,10 @@ def workflow_reply(message: str, analysis: StructuredAnalysis, session: Session,
                         f"I can quote what we have, or suggest a similar tile with enough stock. Which would you prefer?")
             if wants_quote:
                 return _quote_reply(tools, session, [{"sku": sku, "area_m2": req.area_m2}], _discount(t), ar)
-            return (f"**{p.name}** ({p.material} tile) is a good fit, and we have enough in stock.\n\n"
+            shade = ("" if inv.get("single_batch_available") is not False else
+                     " Your quantity will come from two production batches, so our team will check the shade "
+                     "matches before delivery.")
+            return (f"**{p.name}** ({p.material} tile) is a good fit, and we have enough in stock.{shade}\n\n"
                     f"For your {req.area_m2:g} m² it comes to about {money(q['material_subtotal'])}, "
                     f"including a little extra for cutting.\n\nShall I prepare a quote?")
 
@@ -393,6 +400,8 @@ Hard rules (also enforced by the application code):
 - NEVER state a price, stock level, quantity, box count or total unless it came from a tool result in this
   conversation. Use calculate_tile_quantity for arithmetic and check_inventory for stock.
 - Never claim a product is available if check_inventory did not return AVAILABLE for the needed area.
+- If check_inventory returns single_batch_available = false, say the order needs tiles from more than one
+  production batch and the team will confirm the shade matches before delivery.
 - You cannot grant discounts above 12% or claim any approval. generate_quote marks larger discounts as
   pending human approval.
 - Recommend at most 3 products. Outdoor floors need R11 or above; wall-only ceramics never go on floors.
@@ -464,6 +473,7 @@ class SalesAgent:
         METRICS.incr("requests")
         session_id = session_id or uuid.uuid4().hex[:12]
         session = get_or_create_session(session_id, user_id)       # raises AccessDenied
+        crm_bridge.refresh_catalog()                                 # prices and stock from Nova Studio
         flags = inspect_input(message)
 
         # 1) structured analysis (LLM with fallback to rules), 2) merge into memory
@@ -513,6 +523,7 @@ class SalesAgent:
                 violations += final_violations
 
         session.history.append({"role": "assistant", "content": reply})
+        crm_bridge.record_chat_turn(session)                         # chat to lead (feature 1)
         session.grounded_numbers |= tools.allowed_numbers
         total_ms = round((time.perf_counter() - start) * 1000, 1)
         METRICS.record_latency("total", total_ms)

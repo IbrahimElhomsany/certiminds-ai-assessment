@@ -40,6 +40,7 @@ class Product(BaseModel):
     stock_m2: float = Field(ge=0)
     tiles_per_box: int = Field(gt=0)
     style: str
+    largest_batch_m2: Optional[float] = None   # biggest single production batch (None = batches unknown)
 
     @property
     def slip_value(self) -> int:
@@ -106,3 +107,12 @@ def get_sanitary(sku: str) -> SanitaryProduct:
     if product is None:
         raise UnknownSKUError(f"Unknown SKU: {sku}")
     return product
+
+
+def replace_catalog(tiles: dict[str, Product], sets: dict[str, SanitaryProduct]) -> None:
+    """Swap in a fresh snapshot (from the Nova Studio database). The dicts are updated IN PLACE
+    because tools, the recommender and the agent all imported these same objects."""
+    CATALOG.clear()
+    CATALOG.update(tiles)
+    SANITARY.clear()
+    SANITARY.update(sets)

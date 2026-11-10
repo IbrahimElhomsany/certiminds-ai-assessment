@@ -48,6 +48,13 @@ account. Prices and boxes are always calculated by the server. A quotation reque
 customer, a lead assigned to the least busy salesperson, and the quote (and a pending order) in Nova Studio.
 Ceramica Nova AI moved to `/assistant`.
 
+**Step 3 (done): Ceramica Nova AI connected** (`backend/crm_bridge.py`). The assistant reads products,
+prices and stock (per batch) from the database, refreshed every 30 s. A chat becomes a lead once the visitor
+gives project details (room + area or budget), with a summary and a salesperson; chat quotes are stored in
+Quotations under the same number the customer sees; discounts above the limit or below the minimum margin wait
+for a manager. Visitors can ask for a call back, and the chat's Checkout continues the same lead in the shop.
+If the database is unavailable the assistant keeps working exactly as before.
+
 All seeded data is demo data, and the company is flagged `is_demo` so the admin will show a "Demo data" badge.
 
 ## What's inside

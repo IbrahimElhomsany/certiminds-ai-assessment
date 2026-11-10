@@ -21,10 +21,12 @@ from backend.providers import AnthropicProvider, FlakyProvider, MockProvider  # 
 from backend.ratelimit import RateLimiter                            # noqa: E402
 from backend.schemas import ChatRequest, GenerateRequest, StructuredAnalysis  # noqa: E402
 from backend.agent import SalesAgent                                 # noqa: E402
-from backend.store import AccessDenied, get_quote, save_quote        # noqa: E402
+from backend.store import SESSIONS, AccessDenied, get_or_create_session, get_quote, save_quote  # noqa: E402
 from backend.tools import QuoteItemRequest, generate_quote           # noqa: E402
 from backend.offers import project_offers                            # noqa: E402
-from pydantic import BaseModel, Field                                # noqa: E402
+from typing import Optional                                          # noqa: E402
+from pydantic import BaseModel, Field, field_validator               # noqa: E402
+from backend import crm_bridge                                       # noqa: E402
 from backend.quote_pdf import build_quote_pdf                        # noqa: E402
 from backend.catalog import CATALOG, SANITARY                         # noqa: E402
 from backend.admin_api import router as admin_router                 # noqa: E402
@@ -95,6 +97,7 @@ app.mount("/images", StaticFiles(directory=ROOT / "images", check_dir=False), na
 def catalog():
     """Public product list for the showroom page: names, sizes, prices (QAR) and photos.
     Stock levels are not included; they are checked by the tools when a customer asks."""
+    crm_bridge.refresh_catalog()
     def photo(name: str):
         return f"/images/{name}.jpg" if (ROOT / "images" / f"{name}.jpg").exists() else None
     tiles = [{"sku": p.sku, "name": p.name, "kind": "tile", "material": p.material, "finish": p.finish,
@@ -143,6 +146,7 @@ def download_quote_pdf(quotation_id: str, x_user_id: str = Header(...)):
 
 class DirectQuoteRequest(BaseModel):
     items: list[QuoteItemRequest] = Field(min_length=1, max_length=20)
+    session_id: Optional[str] = Field(default=None, pattern=r"^[a-zA-Z0-9_-]{4,64}$")   # links it to the chat lead
 
 
 @app.post("/api/v1/quotes")
@@ -151,12 +155,51 @@ def create_quote(req: DirectQuoteRequest, x_user_id: str = Header(...)):
     No AI call and no discount, so it is instant; every number comes from tools.generate_quote."""
     if not rate_limiter.allow(x_user_id):
         raise HTTPException(status_code=429, detail="Too many requests, please slow down.")
+    crm_bridge.refresh_catalog()
     try:
         q = generate_quote(x_user_id, req.items)
     except (ValueError, KeyError) as e:
         raise HTTPException(status_code=422, detail=str(e))
+    if req.session_id:                       # save it in Nova Studio > Quotations, on this chat's lead
+        try:
+            session = get_or_create_session(req.session_id, x_user_id)
+        except AccessDenied:
+            raise HTTPException(status_code=403, detail="This session belongs to another user.")
+        number = crm_bridge.save_quote(session, q)
+        if number:
+            q.quotation_id = number
+        session.quote_ids.append(q.quotation_id)
     save_quote(q)
     return {"quote": q.model_dump(), "offers": project_offers(q.total)}
+
+
+class CallbackRequest(BaseModel):
+    user_id: str = Field(pattern=r"^USR-\d{3,10}$")
+    session_id: str = Field(pattern=r"^[a-zA-Z0-9_-]{4,64}$")
+    name: str = Field(min_length=2, max_length=80)
+    phone: str = Field(min_length=8, max_length=20)
+
+    @field_validator("phone")
+    @classmethod
+    def phone_ok(cls, v: str) -> str:
+        if not 8 <= sum(c.isdigit() for c in v) <= 15 or any(c not in "+0123456789 -()" for c in v):
+            raise ValueError("enter a valid phone number")
+        return v.strip()
+
+
+@app.post("/api/v1/chat/callback")
+def chat_callback(req: CallbackRequest):
+    """The visitor leaves a name and phone in the chat: the lead gets their contact details and
+    the salesperson sees the whole conversation summary before calling."""
+    if not rate_limiter.allow(req.user_id):
+        raise HTTPException(status_code=429, detail="Too many requests, please slow down.")
+    session = SESSIONS.get(req.session_id)
+    if session is None or session.user_id != req.user_id:
+        raise HTTPException(status_code=404, detail="Please send Nova a message about your project first.")
+    result = crm_bridge.request_callback(session, req.name.strip(), req.phone)
+    if result is None:
+        raise HTTPException(status_code=503, detail="Sorry, we couldn't save that right now. Please call the showroom.")
+    return {"ok": True, "salesperson": result["salesperson"]}
 
 
 @app.post("/api/v1/generate")

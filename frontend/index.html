@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ceramica Nova | Nova AI Design Concierge</title>
+<title>Ceramica Nova AI | Design Concierge</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -32,6 +32,14 @@
   .iconbtn { position:relative; width:38px; height:38px; border-radius:50%; border:1px solid var(--line); background:#fff; display:grid; place-items:center; }
   .badge { position:absolute; top:-4px; right:-4px; min-width:18px; height:18px; border-radius:9px; background:var(--gold); color:#fff; font-size:11px; font-weight:600; display:grid; place-items:center; padding:0 4px; }
   .badge[hidden] { display:none; }
+  .shoplink { font-weight:500; font-size:13px; color:var(--ink); text-decoration:none; border:1px solid var(--line); border-radius:99px; padding:7px 14px; }
+  .shoplink:hover { border-color:var(--ink); }
+  .callback { margin-top:12px; border:1px solid var(--line); border-radius:12px; padding:10px 12px; font-size:12.5px; }
+  .callback summary { cursor:pointer; font-weight:600; color:var(--ink); }
+  .callback form { padding:8px 0 0; display:grid; gap:8px; }
+  .callback input { border:1px solid #d9d9d9; border-radius:8px; padding:8px 10px; font:inherit; }
+  .callback button { border:0; border-radius:8px; padding:9px; background:var(--green); color:#fff; font-weight:600; }
+  .callback .ok { color:var(--green-2); }
 
   /* ---------- stepper */
   .steps { display:flex; justify-content:center; padding:12px 16px 4px; }
@@ -240,9 +248,10 @@
     <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><g transform="rotate(45 20 20)"><rect x="9" y="9" width="10" height="10" fill="#111111"/><rect x="21" y="9" width="10" height="10" fill="#3d6fd8"/><rect x="9" y="21" width="10" height="10" fill="#3d6fd8"/><rect x="21" y="21" width="10" height="10" fill="#111111"/></g></svg>
     <span class="name"><b>CERAMICA</b><small>NOVA</small></span>
     <span class="sep"></span>
-    <span class="product"><b>NOVA AI</b><small>DESIGN CONCIERGE</small></span>
+    <span class="product"><b>AI CONCIERGE</b><small>DESIGN &amp; QUOTATIONS</small></span>
   </a>
   <div class="hright">
+    <a class="shoplink" href="/">&larr; Back to the shop</a>
     <b style="font-size:13px">QAR</b>
     <button class="iconbtn" type="button" id="cartBtn" aria-label="Cart"><svg class="ico" viewBox="0 0 24 24"><path d="M3 4h2l2.4 11.2a2 2 0 002 1.6h7.8a2 2 0 002-1.6L21 8H6.2"/><circle cx="10" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/></svg><span class="badge" id="cartCount" hidden>0</span></button>
   </div>
@@ -255,7 +264,7 @@
   <section class="panel chat">
     <div class="chat-top">
       <div class="avatar"><svg width="24" height="24" viewBox="0 0 40 40"><g transform="rotate(45 20 20)"><rect x="9" y="9" width="10" height="10" fill="#fff"/><rect x="21" y="9" width="10" height="10" fill="#9fbaf0"/><rect x="9" y="21" width="10" height="10" fill="#9fbaf0"/><rect x="21" y="21" width="10" height="10" fill="#fff"/></g></svg></div>
-      <div><b>NOVA AI</b><small>Your Tile &amp; Bathroom Design Consultant</small></div>
+      <div><b>CERAMICA NOVA AI</b><small>Your Tile &amp; Bathroom Design Consultant</small></div>
       <span class="online">Online</span>
     </div>
     <div id="log"></div>
@@ -322,6 +331,15 @@
       <button class="cart" type="button" id="addCart" disabled><svg class="ico" viewBox="0 0 24 24"><path d="M3 4h2l2.4 11.2a2 2 0 002 1.6h7.8a2 2 0 002-1.6L21 8H6.2"/></svg>Add to cart</button>
     </div>
     <div class="hint" id="ctaHint">Ask Nova for a quote to download it or add it to your cart.</div>
+    <details class="callback" id="callback">
+      <summary>Prefer to talk to a person? Ask for a call back</summary>
+      <form id="cbForm" novalidate>
+        <input id="cbName" placeholder="Your name" autocomplete="name" maxlength="80" aria-label="Your name">
+        <input id="cbPhone" type="tel" placeholder="Mobile, e.g. +974 5555 1234" autocomplete="tel" maxlength="20" aria-label="Mobile number">
+        <button type="submit" id="cbSend">Call me back</button>
+        <div id="cbMsg" role="status"></div>
+      </form>
+    </details>
     <div class="more">
       <button type="button" id="printBtn"><svg class="ico" viewBox="0 0 24 24"><path d="M6 9V3h12v6M6 18H4v-7h16v7h-2M6 14h12v7H6z"/></svg>Print</button>
       <button type="button" id="roomImg"><svg class="ico" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4M15 9h.01"/></svg>Download room image</button>
@@ -356,14 +374,22 @@
   <div class="list" id="cartList"></div>
   <div class="dfoot">
     <div class="sum" style="font-weight:600;font-size:15px"><span>Total</span><span id="cartTotal">QAR 0.00</span></div>
-    <button class="checkout" type="button" disabled>Checkout</button>
-    <div class="hint">Online payment isn't connected yet. A showroom advisor confirms the order.</div>
+    <button class="checkout" type="button" id="checkoutBtn" disabled>Checkout</button>
+    <div class="hint">No payment online: our team calls you to confirm delivery and payment.</div>
   </div>
 </div>
 <div class="toast" id="toast" role="status"></div>
 
 <script>
-const USER_ID = "USR-1001";
+// A random id per browser, so one visitor can never open another visitor's quotation.
+// (A real deployment would use customer accounts or signed links.)
+const USER_ID = (() => {
+  try {
+    let id = localStorage.getItem("nova_visitor");
+    if (!/^USR-\d{10}$/.test(id || "")) { id = "USR-" + Array.from(crypto.getRandomValues(new Uint8Array(10)), b => b % 10).join(""); localStorage.setItem("nova_visitor", id); }
+    return id;
+  } catch { return "USR-" + String(Math.floor(Math.random() * 1e10)).padStart(10, "0"); }
+})();
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
@@ -416,6 +442,7 @@ async function send(text) {
     const r = await res.json(); typing.remove();
     if (!res.ok) { add(`<p>Sorry, something went wrong (${esc(res.status === 429 ? "too many messages, please wait a minute" : res.status)}).</p>`, "bot"); return; }
     S.sessionId = r.session_id;
+    try { sessionStorage.setItem("nova_chat", JSON.stringify({ session_id: S.sessionId, visitor_id: USER_ID })); } catch {}
     add(formatReply(r.reply), "bot", `${r.mode} · ${r.latency_ms} ms · ${(r.citations || []).slice(0, 6).join(" ")}`);
     absorb(r);
   } catch (err) { typing.remove(); add("<p>Network error. Is the server running?</p>", "bot"); }
@@ -585,6 +612,7 @@ function renderCart() {
       <div><b>Quotation ${esc(c.quotation_id)}</b><small>${esc(c.products.map(p => p.display_name || p.product_name).join(", "))}</small></div>
       <span class="amt">${money(c.total)}</span></div>`).join("") : '<div class="empty" style="margin-top:12px">Your cart is empty.</div>';
   $("cartTotal").textContent = money(S.cart.reduce((a, c) => a + c.total, 0));
+  $("checkoutBtn").disabled = !S.cart.length;
 }
 function toast(t) { const el = $("toast"); el.textContent = t; el.classList.add("show"); setTimeout(() => el.classList.remove("show"), 2200); }
 
@@ -596,7 +624,7 @@ async function downloadPdf() {
     if (!S.quote) {                                  // no quote yet: the server builds one instantly from what's on screen (no chat)
       const items = [{ sku: S.selected, area_m2: S.req.area_m2 }, ...S.bathroom.map(b => ({ sku: b.sku, quantity: b.quantity }))];
       const r = await fetch("/api/v1/quotes", { method: "POST", headers: { "Content-Type": "application/json", "X-User-Id": USER_ID },
-                                                body: JSON.stringify({ items }) });
+                                                body: JSON.stringify({ items, session_id: S.sessionId }) });
       if (!r.ok) throw new Error(r.status);
       const d = await r.json(); S.quote = d.quote; S.offers = d.offers; renderAll();
     }
@@ -722,10 +750,48 @@ const toggle = () => { document.body.classList.toggle("tech"); sw.setAttribute("
 sw.onclick = toggle; sw.onkeydown = e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(); } };
 $("f").onsubmit = e => { e.preventDefault(); send($("q").value); };
 
+// Checkout: the quoted items go into the shop's cart, and the shop's checkout links the order
+// to this conversation, so staff see one lead from the first chat to the order.
+$("checkoutBtn").onclick = () => {
+  const items = {};
+  for (const q of S.cart) {
+    const tiles = q.products.filter(l => l.unit === "m2");
+    for (const l of q.products) {
+      if (l.unit === "m2") items[l.sku] = { sku: l.sku, area_m2: tiles.length === 1 && S.req.area_m2 ? S.req.area_m2 : l.quantity_m2, layout: "simple" };
+      else items[l.sku] = { sku: l.sku, quantity: l.quantity_units };
+    }
+  }
+  try { localStorage.setItem("nova_cart_v1", JSON.stringify(Object.values(items))); } catch {}
+  location.href = "/#/checkout?type=order";
+};
+
+$("cbForm").onsubmit = async e => {
+  e.preventDefault();
+  const msg = $("cbMsg"), name = $("cbName").value.trim(), phone = $("cbPhone").value.trim();
+  if (!S.sessionId) { msg.textContent = "Tell Nova a little about your project first, so the salesperson has the details."; return; }
+  if (name.length < 2 || (phone.match(/\d/g) || []).length < 8) { msg.textContent = "Please enter your name and a valid mobile number."; return; }
+  $("cbSend").disabled = true;
+  try {
+    const r = await fetch("/api/v1/chat/callback", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: USER_ID, session_id: S.sessionId, name, phone }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(typeof d.detail === "string" ? d.detail : "Please check your name and number.");
+    msg.innerHTML = `<span class="ok">Thank you. ${esc(d.salesperson || "Our team")} will call you soon, with your project details from this chat.</span>`;
+    $("cbName").disabled = $("cbPhone").disabled = true;
+  } catch (ex) { msg.textContent = ex.message; $("cbSend").disabled = false; }
+};
+
 add(formatReply("Hello and welcome to Ceramica Nova! I'm Nova, your design consultant.\n\nWhich room or space are you planning to tile?"), "bot");
 fetch("/health").then(r => r.json()).then(h => $("tmode").textContent = "Server: " + h.agent_mode).catch(() => {});
 fetch("/api/v1/catalog").then(r => r.json()).then(c => {
   S.catalog = c.products; S.by = Object.fromEntries(c.products.map(p => [p.sku, p])); S.rooms = c.rooms || {};
+  const ask = (new URLSearchParams(location.search).get("sku") || "").toUpperCase();   // "Ask about this tile" from the shop
+  if (S.by[ask]) {
+    const p = S.by[ask];
+    if (p.kind === "tile") { S.selected = p.sku; S.surface = (p.surfaces || ["floor"])[0]; }
+    $("q").value = `I'm interested in ${p.name}. Is it right for my project?`;
+    $("q").focus();
+  }
   renderAll();
 }).catch(() => renderAll());
 </script>

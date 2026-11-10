@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from backend import crm_bridge
 from backend.auth import audit
 from backend.db.database import get_db, local_now
 from backend.db.models import (Activity, Batch, Customer, Lead, Order, OrderLine, Product, Quote, QuoteLine,
@@ -205,6 +206,8 @@ class CheckoutRequest(CartRequest):
     delivery_area: str
     room: Optional[str] = None
     notes: Optional[str] = Field(default=None, max_length=500)
+    chat_session_id: Optional[str] = Field(default=None, pattern=r"^[a-zA-Z0-9_-]{4,64}$")   # came from the AI chat
+    chat_visitor_id: Optional[str] = Field(default=None, pattern=r"^USR-\d{3,10}$")
 
     @field_validator("phone")
     @classmethod
@@ -260,31 +263,46 @@ def checkout(req: CheckoutRequest, request: Request, tenant: Tenant = Depends(sh
     cart = price_cart(db, tenant, req.items)
     now = local_now()
 
-    # Returning customer? Match on the phone number within this company only.
-    customer = next((c for c in db.scalars(select(Customer).where(Customer.tenant_id == tenant.id))
-                     if c.phone and phone_key(c.phone) == phone_key(req.phone)), None)
-    if customer is None:
-        customer = Customer(tenant_id=tenant.id, name=req.name.strip(), phone=req.phone, email=req.email,
-                            type="retail", area=req.delivery_area, created_at=now)
-        db.add(customer)
-        db.flush()
-
-    owner = pick_salesperson(db, tenant.id)
     total_m2 = sum(l["_qty"] for l in cart["lines"] if l["kind"] == "tile")
     what = "order" if req.type == "order" else "quotation request"
     summary = (f"Online {what}: {len(cart['lines'])} item(s), QAR {cart['subtotal']:,.2f}"
                + (f", {total_m2:g} m² of tiles" if total_m2 else "")
                + (f", for a {req.room}" if req.room else "") + f". Delivery to {req.delivery_area}."
                + (f" Note: {req.notes.strip()}" if req.notes and req.notes.strip() else ""))
-    lead = Lead(tenant_id=tenant.id, number=next_number(db, Lead, tenant.id, "L"), customer_id=customer.id,
-                owner_id=owner.id if owner else None, stage="quote_sent", source="shop", room=req.room,
-                area_m2=q2(total_m2) if total_m2 else None, budget=None, summary=summary,
-                created_at=now, stage_changed_at=now)
-    db.add(lead)
-    db.flush()
+
+    # Came from a Ceramica Nova AI chat? Continue THAT lead, so staff see one journey, chat to order.
+    lead = None
+    if req.chat_session_id and req.chat_visitor_id:
+        row, lead = crm_bridge.chat_lead_for(db, tenant, req.chat_session_id, req.chat_visitor_id)
+        if lead is not None:
+            customer = crm_bridge.link_customer(db, tenant, row, lead, req.name.strip(), req.phone, req.email,
+                                                req.delivery_area)
+            if lead.stage not in ("won", "lost"):
+                lead.stage, lead.stage_changed_at = "quote_sent", now
+            lead.room = lead.room or req.room
+            lead.summary = f"{lead.summary or ''} Then: {summary}".strip()
+            owner = lead.owner
+
+    if lead is None:
+        # Returning customer? Match on the phone number within this company only.
+        customer = next((c for c in db.scalars(select(Customer).where(Customer.tenant_id == tenant.id))
+                         if c.phone and phone_key(c.phone) == phone_key(req.phone)), None)
+        if customer is None:
+            customer = Customer(tenant_id=tenant.id, name=req.name.strip(), phone=req.phone, email=req.email,
+                                type="retail", area=req.delivery_area, created_at=now)
+            db.add(customer)
+            db.flush()
+        owner = pick_salesperson(db, tenant.id)
+        lead = Lead(tenant_id=tenant.id, number=next_number(db, Lead, tenant.id, "L"), customer_id=customer.id,
+                    owner_id=owner.id if owner else None, stage="quote_sent", source="shop", room=req.room,
+                    area_m2=q2(total_m2) if total_m2 else None, budget=None, summary=summary,
+                    created_at=now, stage_changed_at=now)
+        db.add(lead)
+        db.flush()
 
     quote = Quote(tenant_id=tenant.id, number=next_number(db, Quote, tenant.id, "Q"), lead_id=lead.id,
-                  customer_id=customer.id, created_by=None, status="accepted" if req.type == "order" else "sent",
+                  customer_id=customer.id, created_by=None, channel="shop",
+                  status="accepted" if req.type == "order" else "sent",
                   subtotal=q2(cart["subtotal"]), discount_pct=Decimal(0), discount_amount=Decimal(0),
                   total=q2(cart["subtotal"]), cost_total=q2(cart["_cost"]), created_at=now, sent_at=now,
                   valid_until=now + timedelta(days=QUOTE_VALID_DAYS))
@@ -322,4 +340,5 @@ def checkout(req: CheckoutRequest, request: Request, tenant: Tenant = Depends(sh
 
     return {"type": req.type, "reference": order.number if order else quote.number, "quote_number": quote.number,
             "order_number": order.number if order else None, "valid_until": quote.valid_until.date().isoformat(),
-            "cart": public(cart), "assigned_to": owner.name.split()[0] if owner else None}
+            "cart": public(cart), "assigned_to": owner.name.split()[0] if owner else None,
+            "lead_from_chat": lead.source == "showroom_chat"}

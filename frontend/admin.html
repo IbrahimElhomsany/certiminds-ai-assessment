@@ -4,14 +4,24 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
+<script>/* apply the saved day/night theme before the page paints */
+try { if (localStorage.getItem("nova_admin_theme") === "dark") document.documentElement.dataset.theme = "dark"; } catch (e) {}</script>
 <title>Nova Studio | Ceramica Nova admin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  :root { --bg:#0d0f14; --panel:#151821; --panel2:#1b1f2a; --line:#262b38; --text:#e6e8ee; --muted:#8b92a5;
-          --accent:#6c8cff; --accent-soft:rgba(108,140,255,.14); --ok:#3ecf8e; --ok-soft:rgba(62,207,142,.13);
-          --warn:#f0b44c; --warn-soft:rgba(240,180,76,.13); --bad:#ff6b6b; --bad-soft:rgba(255,107,107,.13);
-          --profit:#3ecf8e; }
+  /* Day theme = the shop's look (white, black type and buttons, light grey surfaces, one blue accent).
+     Night theme via the moon button; the choice is remembered in this browser. */
+  :root { --bg:#f7f7f8; --panel:#fff; --panel2:#f3f3f4; --line:#e7e7e7; --text:#1f2328; --ink:#111; --muted:#6b7280;
+          --accent:#3d6fd8; --accent-soft:#eef3fd; --ok:#2fa865; --ok-soft:#e8f6ee; --ok-ink:#fff;
+          --warn:#c27a00; --warn-soft:#fff3dd; --bad:#c0392b; --bad-soft:#fdecea; --profit:#2fa865;
+          --btn:#111; --btn-text:#fff; --side:#fff; --nav-on:#f1f1f2; --tipbg:#fff; --shadow:0 1px 2px rgba(0,0,0,.04);
+          --grid:#ececee; --axis:#8a8f98; color-scheme:light; }
+  :root[data-theme="dark"] { --bg:#0d0f14; --panel:#151821; --panel2:#1b1f2a; --line:#262b38; --text:#e6e8ee; --ink:#f3f4f7;
+          --muted:#8b92a5; --accent:#6c8cff; --accent-soft:rgba(108,140,255,.14); --ok:#3ecf8e; --ok-soft:rgba(62,207,142,.13);
+          --ok-ink:#06281a; --warn:#f0b44c; --warn-soft:rgba(240,180,76,.13); --bad:#ff6b6b; --bad-soft:rgba(255,107,107,.13);
+          --profit:#3ecf8e; --btn:#6c8cff; --btn-text:#fff; --side:#151821; --nav-on:rgba(108,140,255,.14); --tipbg:#0b0d12;
+          --shadow:none; --grid:#262b38; --axis:#8b92a5; color-scheme:dark; }
   * { box-sizing:border-box; }
   html, body { margin:0; background:var(--bg); color:var(--text); font:13.5px/1.5 "Poppins", -apple-system, "Segoe UI", Roboto, sans-serif; }
   a { color:inherit; text-decoration:none; }
@@ -23,12 +33,12 @@
   h1 { font-size:20px; margin:0; font-weight:600; } h2 { font-size:14.5px; margin:0; font-weight:600; }
   h3 { font-size:13px; margin:0 0 6px; font-weight:600; }
 
-  .btn { display:inline-flex; align-items:center; gap:7px; border:1px solid var(--accent); background:var(--accent);
-         color:#fff; border-radius:9px; padding:8px 14px; font-weight:500; font-size:13px; }
+  .btn { display:inline-flex; align-items:center; gap:7px; border:1px solid var(--btn); background:var(--btn);
+         color:var(--btn-text); border-radius:9px; padding:8px 14px; font-weight:500; font-size:13px; }
   .btn.ghost { background:transparent; color:var(--text); border-color:var(--line); }
   .btn.ghost:hover { border-color:var(--muted); }
-  .btn.danger { background:transparent; color:var(--bad); border-color:rgba(255,107,107,.4); }
-  .btn.ok { background:var(--ok); border-color:var(--ok); color:#06281a; }
+  .btn.danger { background:transparent; color:var(--bad); border-color:var(--bad); }
+  .btn.ok { background:var(--ok); border-color:var(--ok); color:var(--ok-ink); }
   .btn.sm { padding:5px 10px; font-size:12px; border-radius:7px; }
   .btn:disabled { opacity:.45; cursor:default; }
   input, select, textarea { background:var(--panel2); border:1px solid var(--line); border-radius:9px; padding:8px 11px; outline:none; }
@@ -46,16 +56,16 @@
 
   /* layout */
   .app { display:grid; grid-template-columns:232px 1fr; min-height:100vh; }
-  aside { background:var(--panel); border-right:1px solid var(--line); padding:18px 14px; position:sticky; top:0; height:100vh;
+  aside { background:var(--side); border-right:1px solid var(--line); padding:18px 14px; position:sticky; top:0; height:100vh;
           display:flex; flex-direction:column; gap:4px; }
   .brand { display:flex; gap:10px; align-items:center; padding:2px 8px 18px; }
-  .brand .logo { width:34px; height:34px; border-radius:10px; background:linear-gradient(135deg,#6c8cff,#a46cff);
+  .brand .logo { width:34px; height:34px; border-radius:10px; background:var(--ink); color:var(--panel);
                  display:grid; place-items:center; font-weight:700; }
   .brand b { display:block; font-size:15px; } .brand small { color:var(--muted); font-size:11px; }
   nav a { display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:9px; color:var(--muted); font-weight:500; }
   nav a:hover { background:var(--panel2); color:var(--text); }
-  nav a.on { background:var(--accent-soft); color:var(--text); }
-  nav a .count { margin-left:auto; background:var(--warn); color:#2b1d00; font-size:10.5px; font-weight:700; border-radius:9px; padding:0 7px; }
+  nav a.on { background:var(--nav-on); color:var(--ink); font-weight:600; }
+  nav a .count { margin-left:auto; background:var(--warn); color:#fff; font-size:10.5px; font-weight:700; border-radius:9px; padding:0 7px; }
   .soon { margin-top:14px; padding:10px; font-size:11.5px; color:var(--muted); border:1px dashed var(--line); border-radius:10px; }
   .me { margin-top:auto; padding:10px; border-top:1px solid var(--line); font-size:12px; }
   .me b { display:block; font-size:13px; }
@@ -66,8 +76,11 @@
   .seg button { background:none; border:0; padding:5px 12px; border-radius:7px; color:var(--muted); font-size:12.5px; }
   .seg button.on { background:var(--panel2); color:var(--text); }
   .menu-btn { display:none; }
+  .theme-btn { width:34px; height:34px; display:inline-grid; place-items:center; border-radius:9px; border:1px solid var(--line);
+               background:var(--panel); color:var(--text); padding:0; }
+  .theme-btn:hover { border-color:var(--muted); }
 
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px 18px; min-width:0; }
+  .card { background:var(--panel); border:1px solid var(--line); box-shadow:var(--shadow); border-radius:14px; padding:16px 18px; min-width:0; }
   .card .head { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
   .card .head .grow { flex:1; }
   .grid { display:grid; gap:14px; }
@@ -96,7 +109,7 @@
   .funnel .bar { display:flex; align-items:center; gap:10px; margin:7px 0; }
   .funnel .bar span:first-child { width:96px; color:var(--muted); font-size:12px; }
   .funnel .track { flex:1; background:var(--panel2); border-radius:6px; height:22px; position:relative; overflow:hidden; }
-  .funnel .fill { position:absolute; inset:0 auto 0 0; background:linear-gradient(90deg,#6c8cff,#8f7bff); border-radius:6px; }
+  .funnel .fill { position:absolute; inset:0 auto 0 0; background:var(--accent); border-radius:6px; }
   .funnel .n { width:40px; text-align:right; font-weight:600; }
   .proj { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   .proj div { background:var(--panel2); border-radius:10px; padding:10px 12px; }
@@ -110,7 +123,7 @@
   .chart svg { width:100%; height:240px; display:block; }
   .legend { display:flex; gap:16px; font-size:12px; color:var(--muted); }
   .legend i { display:inline-block; width:10px; height:3px; border-radius:2px; margin-right:6px; vertical-align:middle; }
-  .tip { position:absolute; pointer-events:none; background:#0b0d12; border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:12px; display:none; z-index:5; }
+  .tip { position:absolute; pointer-events:none; background:var(--tipbg); box-shadow:0 4px 14px rgba(0,0,0,.12); border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:12px; display:none; z-index:5; }
 
   .filters { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
   .chips { display:flex; gap:6px; flex-wrap:wrap; }
@@ -123,11 +136,11 @@
   .timeline .t { display:grid; grid-template-columns:14px 1fr; gap:10px; padding:6px 0; }
   .timeline .dot { width:9px; height:9px; border-radius:50%; background:var(--accent); margin-top:6px; }
   .timeline .dot.order { background:var(--ok); } .timeline .dot.discount { background:var(--warn); }
-  .timeline .dot.stage_change { background:#a46cff; } .timeline .dot.call, .timeline .dot.note { background:var(--muted); }
+  .timeline .dot.stage_change { background:#8b5cf6; } .timeline .dot.call, .timeline .dot.note { background:var(--muted); }
   .actions { display:flex; gap:8px; flex-wrap:wrap; }
-  .notice { background:var(--accent-soft); border:1px solid rgba(108,140,255,.35); border-radius:10px; padding:9px 12px; font-size:12.5px; }
-  .notice.warn { background:var(--warn-soft); border-color:rgba(240,180,76,.35); }
-  .notice.bad { background:var(--bad-soft); border-color:rgba(255,107,107,.35); }
+  .notice { background:var(--accent-soft); border:1px solid var(--accent); border-radius:10px; padding:9px 12px; font-size:12.5px; }
+  .notice.warn { background:var(--warn-soft); border-color:var(--warn); }
+  .notice.bad { background:var(--bad-soft); border-color:var(--bad); }
   .empty { color:var(--muted); padding:18px 0; text-align:center; font-size:12.5px; }
 
   /* login */
@@ -140,7 +153,7 @@
   /* dialog + toast */
   dialog { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:14px; padding:20px; width:min(440px, 92vw); }
   dialog::backdrop { background:rgba(0,0,0,.55); }
-  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#0b0d12; border:1px solid var(--line);
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--tipbg); box-shadow:0 6px 20px rgba(0,0,0,.15); border:1px solid var(--line);
            padding:10px 16px; border-radius:10px; font-size:13px; z-index:50; display:none; max-width:90vw; }
   .toast.bad { border-color:var(--bad); color:var(--bad); } .toast.ok { border-color:var(--ok); }
 
@@ -181,6 +194,7 @@ const ICONS = {
   approvals:'<path d="M12 3l7 3v6c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/>',
   audit:'<path d="M4 6h16M4 12h10M4 18h7"/><circle cx="18" cy="16" r="3"/><path d="M20.2 18.2L22 20"/>',
   team:'<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-3.6 3.8-5.5 7-5.5s6 1.9 7 5.5"/>',
+  moon:'<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>', sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   menu:'<path d="M4 7h16M4 12h16M4 17h16"/>', back:'<path d="M15 18l-6-6 6-6"/>', out:'<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
 };
 const icon = n => `<svg class="ico" viewBox="0 0 24 24">${ICONS[n] || ""}</svg>`;
@@ -240,7 +254,7 @@ async function act(fn, okMsg) {
 const DEMO = [["owner","Owner","Everything, incl. prices"],["manager","Sara Haddad","Sales manager, approvals"],
               ["omar","Omar Khalil","Salesperson"],["warehouse","Rajesh Nair","Warehouse"],["viewer","Viewer","Read-only reports"]];
 function loginView(msg = "") {
-  $("#root").innerHTML = `<div class="login"><div class="card">
+  $("#root").innerHTML = `<div class="login"><div style="position:fixed;top:16px;right:16px">${themeBtn()}</div><div class="card">
     <div class="brand" style="padding:0 0 16px"><div class="logo">N</div><div><b>Nova Studio</b><small>Ceramica Nova staff</small></div></div>
     <h1 style="font-size:18px">Staff login</h1>
     <p class="muted small" style="margin:4px 0 6px">Customers use the shop; this area is for the showroom team.</p>
@@ -263,6 +277,14 @@ function loginView(msg = "") {
       await boot();
     } catch (err) { loginView(err.message); }
   };
+}
+/* day / night */
+const isDark = () => document.documentElement.dataset.theme === "dark";
+const themeBtn = () => `<button class="theme-btn" onclick="toggleTheme()" title="${isDark() ? "Day mode" : "Night mode"}" aria-label="${isDark() ? "Switch to day mode" : "Switch to night mode"}">${icon(isDark() ? "sun" : "moon")}</button>`;
+function toggleTheme() {
+  if (isDark()) delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = "dark";
+  try { localStorage.setItem("nova_admin_theme", isDark() ? "dark" : "light"); } catch (e) {}
+  document.querySelectorAll(".theme-btn").forEach(b => b.outerHTML = themeBtn());
 }
 function logout() { S.token = null; S.me = null; try { sessionStorage.removeItem("nova_admin_token"); } catch (e) {} loginView(); }
 
@@ -297,7 +319,7 @@ function shell(active, inner) {
 function topbar(title, sub = "", right = "") {
   return `<div class="top"><button class="btn ghost sm menu-btn" onclick="document.getElementById('side').classList.toggle('open')">${icon("menu")}</button>
     <div class="grow"><h1>${title}</h1>${sub ? `<div class="muted small">${sub}</div>` : ""}</div>${right}
-    ${S.me.company.is_demo ? `<span class="tag demo" title="Generated demo data, not a real company's figures">Demo data</span>` : ""}</div>`;
+    ${themeBtn()}${S.me.company.is_demo ? `<span class="tag demo" title="Generated demo data, not a real company's figures">Demo data</span>` : ""}</div>`;
 }
 const loading = () => `<div class="empty">Loading…</div>`;
 const pct = (v, unit = "%") => v == null ? `<span class="delta muted">new</span>` :
@@ -384,15 +406,15 @@ function chartSvg(rows) {
   const line = key => rows.map((r, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(r[key]).toFixed(1)}`).join("");
   let grid = "";
   for (let v = 0; v <= top; v += step)
-    grid += `<line x1="${CH.l}" x2="${CH.w - CH.r}" y1="${y(v)}" y2="${y(v)}" stroke="#262b38"/><text x="${CH.l - 8}" y="${y(v) + 4}" fill="#8b92a5" font-size="11" text-anchor="end">${v >= 1000 ? (v / 1000) + "k" : v}</text>`;
+    grid += `<line x1="${CH.l}" x2="${CH.w - CH.r}" y1="${y(v)}" y2="${y(v)}" style="stroke:var(--grid)"/><text x="${CH.l - 8}" y="${y(v) + 4}" style="fill:var(--axis)" font-size="11" text-anchor="end">${v >= 1000 ? (v / 1000) + "k" : v}</text>`;
   const every = Math.ceil(rows.length / 8);
-  const xl = rows.map((r, i) => i % every === 0 ? `<text x="${x(i)}" y="${CH.h - 6}" fill="#8b92a5" font-size="11" text-anchor="middle">${date(r.date)}</text>` : "").join("");
+  const xl = rows.map((r, i) => i % every === 0 ? `<text x="${x(i)}" y="${CH.h - 6}" style="fill:var(--axis)" font-size="11" text-anchor="middle">${date(r.date)}</text>` : "").join("");
   return `<svg id="chart" viewBox="0 0 ${CH.w} ${CH.h}" preserveAspectRatio="none" role="img" aria-label="Daily revenue and gross profit">
-    <defs><linearGradient id="ga" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6c8cff" stop-opacity=".28"/><stop offset="1" stop-color="#6c8cff" stop-opacity="0"/></linearGradient></defs>
+    <defs><linearGradient id="ga" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--accent)" stop-opacity=".22"/><stop offset="1" style="stop-color:var(--accent)" stop-opacity="0"/></linearGradient></defs>
     ${grid}${xl}<path d="${line("revenue")}L${x(rows.length - 1)},${y(0)}L${x(0)},${y(0)}Z" fill="url(#ga)"/>
-    <path d="${line("revenue")}" fill="none" stroke="#6c8cff" stroke-width="2" vector-effect="non-scaling-stroke"/>
-    <path d="${line("gross_profit")}" fill="none" stroke="#3ecf8e" stroke-width="2" vector-effect="non-scaling-stroke"/>
-    <line id="hair" y1="${CH.t}" y2="${CH.h - CH.b}" stroke="#8b92a5" stroke-dasharray="3 3" visibility="hidden"/></svg>`;
+    <path d="${line("revenue")}" fill="none" style="stroke:var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    <path d="${line("gross_profit")}" fill="none" style="stroke:var(--profit)" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    <line id="hair" y1="${CH.t}" y2="${CH.h - CH.b}" style="stroke:var(--axis)" stroke-dasharray="3 3" visibility="hidden"/></svg>`;
 }
 function niceStep(raw) { const p = Math.pow(10, Math.floor(Math.log10(raw || 1))); const m = raw / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; }
 function bindChart(rows) {

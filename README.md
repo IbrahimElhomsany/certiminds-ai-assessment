@@ -42,6 +42,12 @@ Demo logins (company `ceramica-nova`, password `NovaDemo2026!` unless `DEMO_PASS
 | Warehouse | warehouse@ceramicanova.demo |
 | Viewer | viewer@ceramicanova.demo |
 
+**Step 2 (done): public shop.** `/` is now the shop (`frontend/shop.html`, API in `backend/shop_api.py`):
+home, category listings with filters, product pages with an area calculator, cart and checkout without an
+account. Prices and boxes are always calculated by the server. A quotation request or order creates the
+customer, a lead assigned to the least busy salesperson, and the quote (and a pending order) in Nova Studio.
+Ceramica Nova AI moved to `/assistant`.
+
 All seeded data is demo data, and the company is flagged `is_demo` so the admin will show a "Demo data" badge.
 
 ## What's inside

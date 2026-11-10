@@ -21,7 +21,7 @@ LEAD_STAGES = ("new", "qualified", "quote_sent", "negotiation", "won", "lost")
 LEAD_SOURCES = ("showroom_chat", "shop", "walk_in", "phone", "referral")
 LOST_REASONS = ("price", "stock", "competitor", "timing", "no_response")
 QUOTE_STATUSES = ("draft", "sent", "accepted", "rejected", "expired")
-ORDER_STATUSES = ("confirmed", "delivered", "cancelled")
+ORDER_STATUSES = ("pending", "confirmed", "delivered", "cancelled")   # pending = placed online, not yet confirmed by staff
 DISCOUNT_STATUSES = ("auto_approved", "pending", "approved", "rejected")
 
 
@@ -188,7 +188,7 @@ class Order(TenantMixin, Base):
     quote_id: Mapped[Optional[int]] = mapped_column(ForeignKey("quotes.id"))
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
     created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
-    status: Mapped[str] = mapped_column(String(20), default="confirmed", index=True)
+    status: Mapped[str] = mapped_column(String(20), default="confirmed", index=True)   # one of ORDER_STATUSES
     total: Mapped[Decimal] = mapped_column(Money)
     cost_total: Mapped[Decimal] = mapped_column(Money)
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)

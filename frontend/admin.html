@@ -76,7 +76,12 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
   .showcase::before { content:""; position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,0) 25%, rgba(6,22,17,.88) 100%); }
   .showcase div { position:relative; padding:14px; } .showcase b { display:block; font-size:15px; line-height:1.25; }
   .showcase span { font-size:12px; opacity:.85; line-height:1.35; display:block; margin-top:4px; }
-  .showcase + .me { margin-top:8px; }
+  .showcase + .me { margin-top:0; border-top:0; }
+  /* in the menu the photo has no frame: it runs edge to edge and fades into the menu at the top and bottom */
+  aside .showcase { margin:auto -14px 0; border-radius:0; min-height:240px; background-position:center 40%; color:var(--ink); }
+  aside .showcase::before { background:linear-gradient(180deg, var(--side) 0%, transparent 30%, transparent 48%, var(--side) 92%); }
+  aside .showcase b { font-size:16px; } aside .showcase div { padding:14px 22px 6px; }
+  :root:not([data-theme="dark"]) aside .showcase span { opacity:.75; }
   .login-photo { display:none; }
   @media (min-width:980px) {
     .login.split { grid-template-columns:1.1fr 1fr; place-items:stretch; padding:0; }
@@ -103,7 +108,7 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
   :root[data-theme="dark"] #chart circle { filter:drop-shadow(0 0 5px rgba(255,255,255,.35)); }
   :root[data-theme="dark"] .cv { box-shadow:inset 0 0 18px rgba(255,255,255,.08); }
   :root[data-theme="dark"] .quick a:hover, :root[data-theme="dark"] .crow:hover { border-color:rgba(62,207,142,.5); box-shadow:0 0 12px rgba(62,207,142,.15); }
-  :root[data-theme="dark"] .showcase { box-shadow:0 0 0 1px rgba(62,207,142,.25), 0 0 18px rgba(62,207,142,.12); }
+
   .quick a, .crow { transition:border-color .15s, box-shadow .15s; }
   .me { margin-top:auto; padding:10px; border-top:1px solid var(--line); font-size:12px; }
   .me b { display:block; font-size:13px; }
@@ -317,8 +322,11 @@ const ICONS = {
 };
 const icon = n => `<svg class="ico" viewBox="0 0 24 24">${ICONS[n] || ""}</svg>`;
 
-/* Showroom photo: the server sends images/room_living.jpg if it exists, otherwise the bathroom photo. */
-function paintShowcase() { document.querySelectorAll(".showcase").forEach(el => el.style.backgroundImage = 'url("/admin/showroom.jpg")'); }
+/* Menu photo: /admin/showroom.jpg (images/room_living.jpg, the sofa scene from the design mockup). Login page: the large bathroom photo. */
+function paintShowcase() {
+  document.querySelectorAll(".showcase").forEach(el => el.style.backgroundImage =
+    el.classList.contains("login-photo") ? 'url("/images/room_bathroom.jpg")' : 'url("/admin/showroom.jpg")');
+}
 const showcase = (cls = "") => `<div class="showcase ${cls}" role="img" aria-label="A room finished with Ceramica Nova tiles"><div>
   <b>AI-powered tile retail platform</b><span>From first inquiry to repeat business</span></div></div>`;
 

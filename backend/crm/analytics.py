@@ -36,8 +36,9 @@ def pct_change(now: float, before: float) -> Optional[float]:
 
 
 def own_leads(user: User):
-    """Salespeople see figures for their own leads only; managers and the owner see the company."""
-    return None if has_permission(user, "leads.view_all") else user.id
+    """Salespeople see figures for their own leads only; managers, the owner and read-only board
+    members (reports.view) see the whole company."""
+    return None if has_permission(user, "leads.view_all") or has_permission(user, "reports.view") else user.id
 
 
 def orders_query(user: User, start: datetime, end: datetime):

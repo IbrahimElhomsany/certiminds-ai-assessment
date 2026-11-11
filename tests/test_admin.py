@@ -93,6 +93,13 @@ def test_salesperson_dashboard_is_their_own():
     assert client.get("/api/admin/dashboard", headers=H("warehouse")).status_code == 403
 
 
+def test_board_viewer_sees_company_figures_read_only():
+    board = client.get("/api/admin/dashboard?days=90", headers=H("viewer")).json()
+    company = client.get("/api/admin/dashboard?days=90", headers=H("manager")).json()
+    assert board["scope"] == "company" and board["kpis"]["revenue"] == company["kpis"]["revenue"] > 0
+    assert board["approvals"] == []
+
+
 # ------------------------------------------------------------------ leads
 def test_lead_search_filters_and_isolation():
     r = client.get("/api/admin/leads/search?stage=negotiation&limit=5", headers=H("omar")).json()

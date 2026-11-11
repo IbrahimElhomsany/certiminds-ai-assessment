@@ -16,12 +16,16 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
           --accent:#3d6fd8; --accent-soft:#eef3fd; --ok:#2fa865; --ok-soft:#e8f6ee; --ok-ink:#fff;
           --warn:#c27a00; --warn-soft:#fff3dd; --bad:#c0392b; --bad-soft:#fdecea; --profit:#2fa865;
           --btn:#111; --btn-text:#fff; --side:#fff; --nav-on:#f1f1f2; --tipbg:#fff; --shadow:0 1px 2px rgba(0,0,0,.04);
-          --grid:#ececee; --axis:#8a8f98; color-scheme:light; }
-  :root[data-theme="dark"] { --bg:#0d0f14; --panel:#151821; --panel2:#1b1f2a; --line:#262b38; --text:#e6e8ee; --ink:#f3f4f7;
-          --muted:#8b92a5; --accent:#6c8cff; --accent-soft:rgba(108,140,255,.14); --ok:#3ecf8e; --ok-soft:rgba(62,207,142,.13);
+          --grid:#ececee; --axis:#8a8f98; color-scheme:light;
+          /* chart series: 4 categorical slots (checked for colour-blind separation) + revenue / gross profit */
+          --c1:#1f9d63; --c2:#3d6fd8; --c3:#c98a12; --c4:#8b5cf6; --c5:#157a4b; --rev:#1f9d63; --gp:#c98a12; }
+  :root[data-theme="dark"] { /* night = deep green, like the Nova Studio mockup */
+          --bg:#0a1713; --panel:#10221d; --panel2:#152c26; --line:#1f3a32; --text:#e3eee9; --ink:#f2f8f5;
+          --muted:#8fa89f; --accent:#4fc1d6; --accent-soft:rgba(79,193,214,.13); --ok:#3ecf8e; --ok-soft:rgba(62,207,142,.13);
           --ok-ink:#06281a; --warn:#f0b44c; --warn-soft:rgba(240,180,76,.13); --bad:#ff6b6b; --bad-soft:rgba(255,107,107,.13);
-          --profit:#3ecf8e; --btn:#6c8cff; --btn-text:#fff; --side:#151821; --nav-on:rgba(108,140,255,.14); --tipbg:#0b0d12;
-          --shadow:none; --grid:#262b38; --axis:#8b92a5; color-scheme:dark; }
+          --profit:#3ecf8e; --btn:#1f9d63; --btn-text:#fff; --side:#0c1c17; --nav-on:rgba(62,207,142,.14); --tipbg:#081310;
+          --shadow:0 8px 24px rgba(0,0,0,.25); --grid:#1f3a32; --axis:#8fa89f; color-scheme:dark;
+          --c1:#20a06b; --c2:#4a8cf0; --c3:#b8801c; --c4:#8f72ee; --c5:#178a5a; --rev:#3ecf8e; --gp:#e0a63a; }
   * { box-sizing:border-box; }
   html, body { margin:0; background:var(--bg); color:var(--text); font:13.5px/1.5 "Poppins", -apple-system, "Segoe UI", Roboto, sans-serif; }
   a { color:inherit; text-decoration:none; }
@@ -84,18 +88,85 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
   .card .head .grow { flex:1; }
   .grid { display:grid; gap:14px; }
   .kpis { grid-template-columns:repeat(5, 1fr); }
-  .kpi .label { color:var(--muted); font-size:12px; display:flex; gap:6px; align-items:center; }
-  .kpi .value { font-size:22px; font-weight:600; margin:4px 0 2px; }
+  .kpi { display:flex; gap:12px; align-items:center; padding:14px 16px; }
+  .kico { width:42px; height:42px; border-radius:12px; display:grid; place-items:center; flex:none; }
+  .kico .ico { width:22px; height:22px; }
+  .t1 { background:color-mix(in srgb, var(--c1) 14%, transparent); color:var(--c1); }
+  .t2 { background:color-mix(in srgb, var(--c2) 14%, transparent); color:var(--c2); }
+  .t3 { background:color-mix(in srgb, var(--c3) 16%, transparent); color:var(--c3); }
+  .t4 { background:color-mix(in srgb, var(--c4) 14%, transparent); color:var(--c4); }
+  .kbody { min-width:0; } .kpi .label { color:var(--muted); font-size:12px; }
+  .kval .delta { display:block; }
+  .kpi .value { font-size:21px; font-weight:600; }
   .delta { font-size:12px; font-weight:500; } .delta.up { color:var(--ok); } .delta.down { color:var(--bad); }
   .info { width:15px; height:15px; border-radius:50%; border:1px solid var(--muted); font-size:10px; display:inline-grid;
-          place-items:center; cursor:help; color:var(--muted); }
+          place-items:center; cursor:help; color:var(--muted); flex:none; }
   .row2 { grid-template-columns:2fr 1fr; } .row3 { grid-template-columns:1fr 1fr 1fr; } .row2e { grid-template-columns:1fr 1fr; }
+  .dash-a { grid-template-columns:1.15fr 1.6fr 1fr; margin-top:14px; } .dash-b { grid-template-columns:1.4fr 1fr 1fr .85fr; margin-top:14px; }
+  .rulebadge { font-size:10.5px; color:var(--muted); border:1px solid var(--line); border-radius:6px; padding:1px 7px; cursor:help; white-space:nowrap; }
 
-  .copilot { grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); }
-  .cc { background:var(--panel2); border:1px solid var(--line); border-radius:12px; padding:13px 14px; display:flex; flex-direction:column; gap:6px; }
-  .cc b { font-size:13px; } .cc .why { font-size:11.5px; color:var(--muted); border-top:1px dashed var(--line); padding-top:6px; margin-top:auto; }
-  .cc .btn { align-self:flex-start; }
-  .rulebadge { font-size:10.5px; color:var(--muted); border:1px solid var(--line); border-radius:6px; padding:1px 7px; }
+  /* copilot */
+  .clist { display:flex; flex-direction:column; gap:8px; }
+  .crow { display:flex; gap:10px; align-items:flex-start; background:var(--panel2); border:1px solid var(--line); border-radius:11px; padding:9px 10px; }
+  .crow .grow { flex:1; min-width:0; } .crow b { display:block; font-size:12.5px; line-height:1.35; } .crow .small { display:block; line-height:1.35; }
+  .cact { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:7px; }
+  .cact .why { display:inline-flex; gap:5px; align-items:center; font-size:11px; color:var(--muted); cursor:help; }
+  .crow .btn { white-space:nowrap; } .crow .btn .ico { width:14px; height:14px; }
+  .cico { width:34px; height:34px; border-radius:10px; display:grid; place-items:center; flex:none; }
+  .cico.follow_up { background:color-mix(in srgb, var(--c2) 14%, transparent); color:var(--c2); }
+  .cico.approve { background:color-mix(in srgb, var(--c3) 16%, transparent); color:var(--c3); }
+  .cico.restock, .cico.confirm { background:color-mix(in srgb, var(--c4) 14%, transparent); color:var(--c4); }
+  .cico.trend, .cico.bot { background:color-mix(in srgb, var(--c1) 14%, transparent); color:var(--c1); }
+
+  /* chart */
+  .chart svg { width:100%; height:auto; display:block; }
+  .legend { display:flex; gap:16px; font-size:12px; color:var(--muted); }
+  .legend i { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:-1px; }
+  .ctot { display:flex; gap:18px; flex-wrap:wrap; font-size:12px; color:var(--muted); margin-top:6px; } .ctot b { color:var(--text); font-weight:600; }
+  .tip { position:absolute; pointer-events:none; background:var(--tipbg); box-shadow:0 4px 14px rgba(0,0,0,.12); border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:12px; display:none; z-index:5; }
+
+  /* project donut */
+  .snap { display:flex; flex-direction:column; align-items:center; gap:14px; }
+  .donut-wrap { position:relative; width:160px; height:160px; } .donut { width:100%; height:100%; }
+  .donut-mid { position:absolute; inset:0; display:grid; place-content:center; text-align:center; }
+  .donut-mid b { font-size:26px; line-height:1; } .donut-mid span { font-size:11px; color:var(--muted); }
+  .dlegend { width:100%; display:flex; flex-direction:column; gap:2px; }
+  .dlegend div { display:flex; align-items:center; gap:8px; padding:5px 2px; border-bottom:1px solid var(--line); font-size:12.5px; cursor:help; }
+  .dlegend div:last-child { border-bottom:0; } .dlegend span { flex:1; } .dlegend i { width:10px; height:10px; border-radius:50%; flex:none; }
+
+  /* pipeline chevrons */
+  .pipeline-card { margin-top:14px; }
+  .pipe { display:flex; gap:14px; align-items:stretch; }
+  .chev { flex:1; display:flex; min-width:0; }
+  .cv { flex:1; min-width:0; color:#fff; padding:10px 8px 10px 26px; margin-right:-10px; text-align:center; cursor:help;
+        clip-path:polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%, 16px 50%); }
+  .cv:first-child { clip-path:polygon(0 0, calc(100% - 16px) 0, 100% 50%, calc(100% - 16px) 100%, 0 100%); padding-left:14px; border-radius:10px 0 0 10px; }
+  .cv span { display:block; font-size:11.5px; opacity:.92; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .cv b { display:block; font-size:21px; line-height:1.2; }
+  .cv.s0 { background:var(--c1); } .cv.s1 { background:var(--c2); } .cv.s2 { background:var(--c4); } .cv.s3 { background:var(--c3); } .cv.s4 { background:var(--c5); }
+  .pval { flex:none; min-width:170px; background:var(--panel2); border:1px solid var(--line); border-radius:11px; padding:8px 14px; display:flex; flex-direction:column; justify-content:center; }
+  .pval span { font-size:11.5px; color:var(--muted); } .pval b { font-size:19px; }
+
+  /* tabs, lists, quick actions */
+  .tabs { display:flex; gap:4px; margin:-4px 0 8px; flex-wrap:wrap; }
+  .tabs button { background:none; border:1px solid transparent; border-radius:20px; padding:4px 10px; font-size:12px; white-space:nowrap; color:var(--muted); }
+  .tabs button.on { background:var(--nav-on); border-color:var(--line); color:var(--ink); font-weight:600; }
+  .tabs .cnt { background:var(--warn); color:#fff; border-radius:9px; font-size:10px; font-weight:700; padding:0 6px; }
+  .av { width:32px; height:32px; border-radius:50%; flex:none; display:grid; place-items:center; font-size:11px; font-weight:600;
+        background:color-mix(in srgb, var(--c2) 14%, transparent); color:var(--c2); }
+  .thumb.lg { width:44px; height:44px; border-radius:9px; }
+  .sico { width:32px; height:32px; border-radius:50%; flex:none; display:grid; place-items:center; }
+  .sico .ico { width:16px; height:16px; }
+  .sico.ok { background:var(--ok-soft); color:var(--ok); } .sico.low { background:var(--warn-soft); color:var(--warn); }
+  .sico.critical, .sico.out { background:var(--bad-soft); color:var(--bad); }
+  .st-low { color:var(--warn); } .st-critical, .st-out { color:var(--bad); }
+  .foot { display:flex; justify-content:center; align-items:center; gap:6px; margin-top:8px; font-size:12.5px; color:var(--accent); }
+  .foot .ico { width:14px; height:14px; }
+  .quick { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .quick a { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; text-align:center; min-height:74px;
+             background:var(--panel2); border:1px solid var(--line); border-radius:11px; padding:10px 6px; font-size:12px; font-weight:500; }
+  .quick a:hover { border-color:var(--c1); color:var(--ink); } .quick .ico { width:21px; height:21px; color:var(--c1); }
+  .head .ico { width:14px; height:14px; vertical-align:-2px; }
 
   table { width:100%; border-collapse:collapse; }
   th { text-align:left; font-weight:500; color:var(--muted); font-size:11.5px; padding:8px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
@@ -105,24 +176,12 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
   .thumb { width:34px; height:34px; border-radius:7px; object-fit:cover; background:var(--panel2); flex:none; }
   .pcell { display:flex; gap:10px; align-items:center; }
 
-  .funnel .bar { display:flex; align-items:center; gap:10px; margin:7px 0; }
-  .funnel .bar span:first-child { width:96px; color:var(--muted); font-size:12px; }
-  .funnel .track { flex:1; background:var(--panel2); border-radius:6px; height:22px; position:relative; overflow:hidden; }
-  .funnel .fill { position:absolute; inset:0 auto 0 0; background:var(--accent); border-radius:6px; }
-  .funnel .n { width:40px; text-align:right; font-weight:600; }
-  .proj { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-  .proj div { background:var(--panel2); border-radius:10px; padding:10px 12px; }
-  .proj b { display:block; font-size:20px; }
   .list .it { display:flex; gap:10px; align-items:center; padding:8px 0; border-bottom:1px solid var(--line); }
   .list .it:last-child { border-bottom:0; } .list .it .grow { flex:1; min-width:0; }
   .ellipsis { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .meter { height:6px; border-radius:4px; background:var(--panel2); overflow:hidden; margin-top:4px; }
   .meter i { display:block; height:100%; }
 
-  .chart svg { width:100%; height:240px; display:block; }
-  .legend { display:flex; gap:16px; font-size:12px; color:var(--muted); }
-  .legend i { display:inline-block; width:10px; height:3px; border-radius:2px; margin-right:6px; vertical-align:middle; }
-  .tip { position:absolute; pointer-events:none; background:var(--tipbg); box-shadow:0 4px 14px rgba(0,0,0,.12); border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:12px; display:none; z-index:5; }
 
   .filters { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
   .chips { display:flex; gap:6px; flex-wrap:wrap; }
@@ -165,14 +224,20 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
            padding:10px 16px; border-radius:10px; font-size:13px; z-index:50; display:none; max-width:90vw; }
   .toast.bad { border-color:var(--bad); color:var(--bad); } .toast.ok { border-color:var(--ok); }
 
-  @media (max-width:1180px) { .kpis { grid-template-columns:repeat(3, 1fr); } .row3 { grid-template-columns:1fr 1fr; } }
+  @media (max-width:1380px) { .dash-a { grid-template-columns:1fr 1.4fr; } .dash-a > :last-child { grid-column:1 / -1; }
+    .dash-a > :last-child .snap { flex-direction:row; justify-content:center; gap:32px; } .dash-a > :last-child .dlegend { max-width:280px; }
+    .dash-b { grid-template-columns:1fr 1fr; } }
+  @media (max-width:1180px) { .kpis { grid-template-columns:repeat(3, 1fr); } .row3 { grid-template-columns:1fr 1fr; }
+    .dash-a { grid-template-columns:1fr; } .pipe { flex-direction:column; } }
   @media (max-width:900px) {
     .app { grid-template-columns:1fr; }
     aside { position:fixed; z-index:30; left:0; width:240px; transform:translateX(-100%); transition:transform .2s; }
     aside.open { transform:none; }
     .menu-btn { display:inline-flex; }
     main { padding:16px; }
-    .kpis { grid-template-columns:1fr 1fr; } .row2, .row3, .row2e { grid-template-columns:1fr; }
+    .kpis { grid-template-columns:1fr 1fr; } .row2, .row3, .row2e, .dash-b { grid-template-columns:1fr; }
+    .chev { flex-direction:column; gap:4px; } .cv, .cv:first-child { clip-path:none; border-radius:9px; margin:0; padding:8px 12px; display:flex; justify-content:space-between; align-items:center; text-align:left; }
+    .cv b { font-size:17px; } .dash-a > :last-child .snap { flex-direction:column; }
   }
 </style>
 </head>
@@ -206,6 +271,14 @@ const ICONS = {
   ask:'<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.3 2.4c-.5.2-.8.6-.8 1.1v.5M12 16h.01"/>',
   followups:'<path d="M4 5h16v11H8l-4 4z"/><path d="M8 9h8M8 12h5"/>',
   menu:'<path d="M4 7h16M4 12h16M4 17h16"/>', back:'<path d="M15 18l-6-6 6-6"/>', out:'<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
+  cash:'<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9.5v5M18 9.5v5"/>',
+  coins:'<ellipse cx="9" cy="7" rx="5" ry="2.5"/><path d="M4 7v4c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5V7"/><path d="M10 15.5c.6 1.2 2.6 2 5 2 2.8 0 5-1.1 5-2.5v-4c0-1.4-2.2-2.5-5-2.5"/>',
+  target:'<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/>',
+  arrow:'<path d="M5 12h14M13 6l6 6-6 6"/>', spark:'<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.7 1.8 1.8.7-1.8.7L19 21l-.7-1.8-1.8-.7 1.8-.7z"/>',
+  tagdisc:'<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/>', box:'<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/>',
+  trend:'<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>', check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  alert:'<path d="M12 3.5L2.5 20h19z"/><path d="M12 10v4.5M12 17.5h.01"/>',
+  shop:'<path d="M4 9l1.5-5h13L20 9"/><path d="M4 9c0 1.7 1.3 3 3 3s3-1.3 3-3c0 1.7 1.3 3 3 3s3-1.3 3-3c0 1.7 1.3 3 3 3"/><path d="M5 12v8h14v-8"/>',
 };
 const icon = n => `<svg class="ico" viewBox="0 0 24 24">${ICONS[n] || ""}</svg>`;
 
@@ -337,67 +410,143 @@ const pct = (v, unit = "%") => v == null ? `<span class="delta muted">new</span>
   `<span class="delta ${v >= 0 ? "up" : "down"}">${v >= 0 ? "▲" : "▼"} ${Math.abs(v).toFixed(1)}${unit}</span>`;
 
 /* ------------------------------------------------------------------ dashboard */
+/* Visual layout (mentor feedback, 11 Nov): icon KPI tiles, copilot list, area chart, donut,
+   chevron pipeline, tabbed activity, quick actions. Every figure still comes from /api/admin/dashboard. */
+const ago = s => {
+  const m = Math.max(0, Math.round((Date.now() - new Date(s)) / 60000));
+  return m < 60 ? `${m || 1} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`;
+};
+const initials = n => String(n || "?").split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase();
+const unitOf = u => u === "m2" ? "m²" : "sets";
+const COPILOT_ICON = {follow_up: "followups", approve: "tagdisc", restock: "box", confirm: "orders", trend: "trend"};
+
 async function dashboardView() {
-  shell("dashboard", topbar("Dashboard", "", `<div class="seg" id="per">${[7, 30, 90].map(d =>
-    `<button data-d="${d}" class="${d === S.days ? "on" : ""}">${d} days</button>`).join("")}</div>`) + loading());
-  document.querySelectorAll("#per button").forEach(b => b.onclick = () => {
+  const per = () => `<div class="seg" id="per">${[7, 30, 90].map(d =>
+    `<button data-d="${d}" class="${d === S.days ? "on" : ""}">${d} days</button>`).join("")}</div>`;
+  const bindPer = () => document.querySelectorAll("#per button").forEach(b => b.onclick = () => {
     S.days = +b.dataset.d; try { sessionStorage.setItem("nova_admin_days", S.days); } catch (e) {} dashboardView(); });
+  shell("dashboard", topbar("Dashboard", "", per()) + loading());
+  bindPer();
   const d = await api(`/dashboard?days=${S.days}`);
-  const k = d.kpis;
-  const scope = d.scope === "company" ? "Whole company" : "Your leads only";
-  const kpi = (lbl, v, ch, tip, unit) => `<div class="card kpi"><div class="label">${lbl}<span class="info" title="${esc(tip)}">i</span></div>
-      <div class="value num">${v}</div>${pct(ch, unit)} <span class="muted small">vs previous ${d.period.days} days</span></div>`;
-  const html = topbar(`Good ${new Date().getHours() < 12 ? "morning" : "afternoon"}, ${esc(S.me.user.name.split(" ")[0])}`,
-      `${scope} · last ${d.period.days} days (${date(d.period.start)} to ${date(d.period.end)}) · QAR`,
-      document.querySelector(".top .seg")?.outerHTML || "") +
-    `<div class="grid kpis">
-      ${kpi("Revenue", qar(k.revenue), k.change.revenue, "Orders confirmed or delivered in the period. Pending online orders count once staff confirm them.")}
-      ${kpi("Gross profit", qar(k.gross_profit), k.change.gross_profit, "Order totals minus the cost price of the goods. Margin " + k.margin_pct + "%.")}
-      ${kpi("Orders", num(k.orders), k.change.orders, "Confirmed or delivered orders in the period.")}
-      ${kpi("New leads", num(k.new_leads), k.change.new_leads, "Leads created in the period, from every source (AI chat, shop, walk-in, phone, referral).")}
-      ${kpi("Conversion", k.conversion_pct + "%", k.change.conversion_pp, "Orders divided by new leads in the period. Change shown in percentage points.", " pts")}
+  const k = d.kpis, P = d.period.days;
+  const hello = `Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"}, ${esc(S.me.user.name.split(" ")[0])}`;
+  const sub = `${d.scope === "company" ? "Whole company" : "Your leads only"} · last ${P} days · QAR`;
+
+  const tile = (ic, tone, lbl, v, ch, tip, unit) => `<div class="card kpi" title="${esc(tip)} Change compared with the previous ${P} days.">
+      <span class="kico ${tone}">${icon(ic)}</span>
+      <div class="kbody"><div class="label">${lbl}</div><div class="kval"><span class="value num">${v}</span>${pct(ch, unit)}</div></div></div>`;
+
+  const copilot = d.copilot.length ? d.copilot.map(c => `<div class="crow">
+      <span class="cico ${c.kind}">${icon(COPILOT_ICON[c.kind] || "dashboard")}</span>
+      <div class="grow"><b>${esc(c.title)}</b><span class="small muted">${esc(c.detail)}</span>
+        <div class="cact"><span class="why" title="${esc(c.why)}"><span class="info">?</span> Why this?</span>
+        <a class="btn ghost sm" href="${cardLink(c.action)}">${esc(c.action.label)} ${icon("arrow")}</a></div></div></div>`).join("")
+    : `<div class="empty">Nothing needs attention right now.</div>`;
+
+  const g = d.projects.groups, gtotal = g.reduce((a, x) => a + x.count, 0);
+  const donut = `<div class="donut-wrap">${donutSvg(g)}<div class="donut-mid"><b class="num">${num(d.projects.active)}</b><span>Active projects</span></div></div>
+    <div class="dlegend">${g.map((x, i) => `<div title="${esc(PROJECT_TIP[x.key] || "")}"><i style="background:var(--c${i + 1})"></i><span>${esc(x.label)}</span><b class="num">${num(x.count)}</b></div>`).join("")}</div>`;
+
+  const f = d.pipeline.funnel, first = f[0].count || 1;
+  const pipe = `<div class="chev">${f.map((s, i) => `<div class="cv s${i}" title="${num(s.count)} of the ${num(f[0].count)} leads created in the last ${P} days reached ${label(s.stage)} (${Math.round(s.count / first * 100)}%)">
+      <span>${label(s.stage)}</span><b class="num">${num(s.count)}</b></div>`).join("")}</div>
+    <div class="pval"><span>Open pipeline value</span><b class="num">${qar(d.pipeline.open_value)}</b><small class="muted">${num(d.pipeline.lost)} lost in period</small></div>`;
+
+  const canLeads = S.can.has("leads.view_all") || S.can.has("leads.view_own");
+  const row = (href, inner) => href ? `<a class="it" href="${href}">${inner}</a>` : `<div class="it">${inner}</div>`;
+  const tabs = [["act", "Activity", true], ["fu", "Follow-ups", true], ["ap", "Approvals", S.can.has("discounts.approve")]].filter(t => t[2]);
+  const actList = d.activity.slice(0, 5).map(a => row(canLeads && "#/leads/" + a.lead_id, `<span class="av">${esc(initials(a.customer))}</span>
+      <div class="grow"><div class="ellipsis">${esc(a.text)}</div><span class="muted small">${esc(a.lead)} · ${esc(a.customer)}</span></div>
+      <span class="muted small nowrap">${ago(a.at)}</span>`)).join("") || `<div class="empty">No activity yet.</div>`;
+  const fuList = d.follow_ups.slice(0, 5).map(x => row(S.can.has("quotes.edit") ? "#/followups" : canLeads && "#/leads/" + x.lead_id, `<span class="av">${esc(initials(x.customer))}</span>
+      <div class="grow"><div class="ellipsis">${esc(x.quote)} · ${esc(x.customer)}</div><span class="muted small">${esc(x.owner || "")} · ${qar(x.total)}</span></div>
+      <span class="tag low nowrap" title="Days waiting for a reply">${x.days_waiting} d</span>`)).join("") || `<div class="empty">Every sent quotation has had a follow-up in the last 3 days.</div>`;
+  const apList = d.approvals.slice(0, 5).map(x => `<a class="it" href="#/quotes/${x.quote_id}"><span class="av">${esc(initials(x.customer))}</span>
+      <div class="grow"><div class="ellipsis">${num(x.percent, 1)}% off ${esc(x.quote)} · ${esc(x.customer)}</div><span class="muted small">${esc(x.requested_by)} · margin after ${num(x.margin_after_pct, 1)}%</span></div>
+      <span class="tag pending">Waiting</span></a>`).join("") || `<div class="empty">No discounts waiting.</div>`;
+
+  const quick = [
+    ["followups", "Draft follow-ups", "#/followups", S.can.has("quotes.edit")],
+    ["approvals", "Approve discounts", "#/approvals", S.can.has("discounts.approve")],
+    ["orders", "Confirm orders", "#/orders?status=pending", S.can.has("orders.create")],
+    ["inventory", "Receive stock", "#/inventory", S.can.has("inventory.edit")],
+    ["ask", "Ask your data", "#/ask", S.can.has("dashboard.view")],
+    ["leads", "Find a lead", "#/leads", S.can.has("leads.view_all") || S.can.has("leads.view_own")],
+    ["team", "Manage team", "#/team", S.can.has("users.manage")],
+    ["shop", "Open the shop", "/", true],
+  ].filter(q => q[3]).slice(0, 6);
+
+  $("#view").innerHTML = topbar(hello, sub, per()) + `
+    <div class="grid kpis">
+      ${tile("cash", "t1", "Revenue", qar(k.revenue), k.change.revenue, "Orders confirmed or delivered in the period.")}
+      ${tile("coins", "t3", "Gross profit", qar(k.gross_profit), k.change.gross_profit, `Revenue minus the cost of the goods. Margin ${k.margin_pct}%.`)}
+      ${tile("target", "t2", "Conversion", k.conversion_pct + "%", k.change.conversion_pp, "Orders divided by new leads in the period. Change in percentage points.", " pts")}
+      ${tile("orders", "t4", "Orders", num(k.orders), k.change.orders, "Confirmed or delivered orders in the period.")}
+      ${tile("leads", "t2", "New leads", num(k.new_leads), k.change.new_leads, "Leads created in the period, from every source.")}
     </div>
-    <div class="card" style="margin-top:14px"><div class="head"><h2>Nova Copilot</h2><span class="rulebadge">Suggested by simple rules on your data, not AI</span></div>
-      ${d.copilot.length ? `<div class="grid copilot">${d.copilot.map(c => `<div class="cc"><b>${esc(c.title)}</b><span class="small">${esc(c.detail)}</span>
-        <span class="why">Why: ${esc(c.why)}</span><a class="btn sm" href="${cardLink(c.action)}">${esc(c.action.label)}</a></div>`).join("")}</div>`
-        : `<div class="empty">Nothing needs attention right now.</div>`}</div>
-    <div class="grid row2" style="margin-top:14px">
-      <div class="card chart" style="position:relative"><div class="head"><h2 class="grow">Sales performance</h2>
-        <div class="legend"><span><i style="background:var(--accent)"></i>Revenue</span><span><i style="background:var(--profit)"></i>Gross profit</span></div></div>
-        ${chartSvg(d.sales)}<div class="tip" id="tip"></div></div>
-      <div class="card"><div class="head"><h2 class="grow">Project snapshot</h2><span class="muted small">${num(d.projects.active)} active</span></div>
-        <div class="proj">${d.projects.groups.map(g => `<div><span class="muted small">${esc(g.label)}</span><b class="num">${num(g.count)}</b></div>`).join("")}</div>
-        <p class="muted small" style="margin:10px 0 0">In design = new or qualified leads. Quoted = quotation sent or negotiating. Order in progress = pending or confirmed, not yet delivered.</p></div>
+    <div class="grid dash-a">
+      <div class="card copilot"><div class="head"><span class="cico bot">${icon("spark")}</span><div class="grow"><h2>Nova Copilot</h2>
+          <span class="muted small">Today's opportunities</span></div>
+          <span class="rulebadge" title="These cards come from fixed, explainable rules on your data (for example: quotation sent 3+ days ago with no reply). They are not written by AI.">Rules, not AI</span></div>
+        <div class="clist">${copilot}</div></div>
+      <div class="card chart" style="position:relative"><div class="head"><div class="grow"><h2>Sales performance</h2><span class="muted small" id="chartnote"></span></div>
+        <div class="legend"><span><i style="background:var(--rev)"></i>Revenue</span><span><i style="background:var(--gp)"></i>Gross profit</span></div></div>
+        <div id="chartbox"></div><div class="tip" id="tip"></div></div>
+      <div class="card"><div class="head"><h2 class="grow">Project snapshot</h2></div><div class="snap">${gtotal ? donut : `<div class="empty">No projects yet.</div>`}</div></div>
     </div>
-    <div class="grid row3" style="margin-top:14px">
-      <div class="card"><div class="head"><h2 class="grow">Pipeline</h2><span class="muted small">Open value ${qar(d.pipeline.open_value)}</span></div>
-        <div class="funnel">${d.pipeline.funnel.map(s => `<div class="bar"><span>${label(s.stage)}</span><div class="track"><div class="fill" style="width:${
-          d.pipeline.funnel[0].count ? s.count / d.pipeline.funnel[0].count * 100 : 0}%"></div></div><span class="n num">${num(s.count)}</span></div>`).join("")}</div>
-        <p class="muted small" style="margin:8px 0 0">Leads created in the period and how far they got. ${num(d.pipeline.lost)} marked lost.</p></div>
+    <div class="card pipeline-card"><div class="head"><h2 class="grow">Sales pipeline</h2><span class="muted small">Leads created in the last ${P} days and how far they got</span>
+      ${S.can.has("leads.view_all") || S.can.has("leads.view_own") ? `<a class="muted small" href="#/leads">Open leads ${icon("arrow")}</a>` : ""}</div><div class="pipe">${pipe}</div></div>
+    <div class="grid dash-b">
+      <div class="card"><div class="tabs" id="dtabs">${tabs.map((t, i) => `<button data-t="${t[0]}" class="${i ? "" : "on"}">${t[1]}${
+          t[0] === "fu" && d.follow_ups.length ? ` <span class="cnt">${d.follow_ups.length}</span>` : t[0] === "ap" && d.approvals.length ? ` <span class="cnt">${d.approvals.length}</span>` : ""}</button>`).join("")}</div>
+        <div class="list" data-p="act">${actList}</div><div class="list" data-p="fu" hidden>${fuList}</div><div class="list" data-p="ap" hidden>${apList}</div></div>
       <div class="card"><div class="head"><h2 class="grow">Top-selling products</h2></div><div class="list">
-        ${d.top_products.map(p => `<div class="it"><img class="thumb" src="${esc(p.image || IMG_BLANK)}" onerror="this.src='${IMG_BLANK}'" alt="">
-          <div class="grow"><div class="ellipsis">${esc(p.name)}</div><span class="muted small">${num(p.quantity)} ${p.unit === "m2" ? "m²" : "sets"}</span></div>
-          <div class="right"><div class="num">${qar(p.revenue)}</div>${pct(p.change_pct)}</div></div>`).join("") || `<div class="empty">No sales in this period.</div>`}</div></div>
-      <div class="card"><div class="head"><h2 class="grow">Inventory alerts</h2><a class="muted small" href="#/inventory">All stock</a></div><div class="list">
-        ${d.inventory_alerts.map(s => `<a class="it" href="#/inventory/${esc(s.sku)}"><img class="thumb" src="${esc(s.image || IMG_BLANK)}" onerror="this.src='${IMG_BLANK}'" alt="">
-          <div class="grow"><div class="ellipsis">${esc(s.name)}</div><span class="muted small">${num(s.stock)} ${s.unit === "m2" ? "m²" : "sets"} · ${
-            s.days_of_stock != null ? "~" + num(s.days_of_stock) + " days left" : "no recent sales"}</span></div>
-          <span class="tag ${s.status}">${label(s.status)}</span></a>`).join("")}</div></div>
-    </div>
-    <div class="grid row2e" style="margin-top:14px">
-      <div class="card"><div class="head"><h2 class="grow">Quotations waiting for a reply</h2><a class="muted small" href="#/leads?stalled=1">See all</a></div>
-        ${d.follow_ups.length ? `<div class="tablewrap"><table><tr><th>Quote</th><th>Customer</th><th>Salesperson</th><th class="right">Total</th><th class="right">Waiting</th></tr>
-        ${d.follow_ups.map(f => `<tr class="click" onclick="location.hash='#/leads/${f.lead_id}'"><td>${esc(f.quote)}</td><td>${esc(f.customer)}</td>
-          <td class="muted">${esc(f.owner || "")}</td><td class="right num">${qar(f.total)}</td><td class="right">${f.days_waiting} d</td></tr>`).join("")}</table></div>`
-        : `<div class="empty">Every sent quotation has had a follow-up in the last 3 days.</div>`}</div>
-      <div class="card"><div class="head"><h2 class="grow">Recent activity</h2></div><div class="timeline">
-        ${d.activity.map(a => `<a class="t" href="#/leads/${a.lead_id}"><span class="dot ${esc(a.type)}"></span><div><div class="small">${esc(a.text)}</div>
-          <span class="muted small">${esc(a.lead)} · ${esc(a.customer)} · ${dateTime(a.at)}</span></div></a>`).join("")}</div></div>
+        ${d.top_products.slice(0, 4).map(p => `<div class="it"><img class="thumb lg" src="${esc(p.image || IMG_BLANK)}" onerror="this.src='${IMG_BLANK}'" alt="">
+          <div class="grow"><div class="ellipsis">${esc(p.name)}</div><span class="muted small">${num(p.quantity)} ${unitOf(p.unit)}</span></div>
+          <div class="right nowrap"><div class="num small">${qar(p.revenue)}</div>${pct(p.change_pct)}</div></div>`).join("") || `<div class="empty">No sales in this period.</div>`}</div></div>
+      <div class="card"><div class="head"><h2 class="grow">Inventory &amp; supply</h2></div><div class="list">
+        ${d.inventory_alerts.slice(0, 4).map(s => `<a class="it" href="#/inventory/${esc(s.sku)}"><span class="sico ${s.status}" title="${label(s.status)}">${icon(s.status === "ok" ? "check" : "alert")}</span>
+          <div class="grow"><div class="ellipsis">${esc(s.name)} <span class="muted small">${esc(s.sku)}</span></div><span class="small ${s.status === "ok" ? "muted" : "st-" + s.status}">${num(s.stock)} ${unitOf(s.unit)} left${
+            s.days_of_stock != null ? " · ~" + num(s.days_of_stock) + " days" : ""}</span></div></a>`).join("")}</div>
+        <a class="foot" href="#/inventory">All stock ${icon("arrow")}</a></div>
+      <div class="card"><div class="head"><h2 class="grow">Quick actions</h2></div><div class="quick">
+        ${quick.map(q => `<a href="${q[2]}"${q[2] === "/" ? ' target="_blank" rel="noopener"' : ""}>${icon(q[0])}<span>${q[1]}</span></a>`).join("")}</div></div>
     </div>`;
-  $("#view").innerHTML = html;
-  document.querySelectorAll("#per button").forEach(b => b.onclick = () => {
-    S.days = +b.dataset.d; try { sessionStorage.setItem("nova_admin_days", S.days); } catch (e) {} dashboardView(); });
-  bindChart(d.sales);
+  bindPer();
+  document.querySelectorAll("#dtabs button").forEach(b => b.onclick = () => {
+    document.querySelectorAll("#dtabs button").forEach(x => x.classList.toggle("on", x === b));
+    document.querySelectorAll("[data-p]").forEach(p => p.hidden = p.dataset.p !== b.dataset.t);
+  });
+  drawChart(d.sales);
+}
+/* The chart is drawn at the card's real pixel size (text stays 11px), and again when the window is resized. */
+function drawChart(rows) {
+  const box = $("#chartbox"); if (!box) return;
+  const card = box.closest(".card"), head = card.querySelector(".head");
+  box.innerHTML = "";
+  CH.w = Math.max(300, box.clientWidth);
+  CH.h = Math.max(220, Math.min(380, card.clientHeight - head.offsetHeight - 70));
+  /* Daily sales jump around a lot (a few big orders), so 30/90-day views draw a 7-day average; the tooltip shows both. */
+  const smooth = rows.length > 14, avg = (i, k) => { const w = rows.slice(Math.max(0, i - 6), i + 1); return w.reduce((a, r) => a + r[k], 0) / w.length; };
+  const pts = rows.map((r, i) => ({...r, rv: smooth ? avg(i, "revenue") : r.revenue, gv: smooth ? avg(i, "gross_profit") : r.gross_profit, smooth}));
+  $("#chartnote").textContent = smooth ? "7-day average per day" : "Per day";
+  box.innerHTML = chartSvg(pts);
+  bindChart(pts);
+  clearTimeout(drawChart.t);
+  window.onresize = () => { clearTimeout(drawChart.t); drawChart.t = setTimeout(() => $("#chartbox") && drawChart(rows), 150); };
+}
+const PROJECT_TIP = {design: "New or qualified leads, still choosing tiles.", quoted: "Quotation sent or negotiating.",
+                     in_progress: "Order placed, not delivered yet.", completed: "Delivered in this period (not counted as active)."};
+/* Ring chart, one segment per group, 2px gaps between segments. */
+function donutSvg(groups) {
+  const total = groups.reduce((a, x) => a + x.count, 0) || 1, R = 52, C = 2 * Math.PI * R, gap = groups.filter(x => x.count).length > 1 ? 3 : 0;
+  let off = 0;
+  const segs = groups.map((x, i) => {
+    const len = x.count / total * C, s = `<circle r="${R}" cx="64" cy="64" fill="none" style="stroke:var(--c${i + 1})" stroke-width="14"
+      stroke-dasharray="${Math.max(0, len - gap)} ${C}" stroke-dashoffset="${-off}" transform="rotate(-90 64 64)"><title>${esc(x.label)}: ${num(x.count)}</title></circle>`;
+    off += len; return x.count ? s : "";
+  }).join("");
+  return `<svg viewBox="0 0 128 128" class="donut" role="img" aria-label="Projects by stage">${segs}</svg>`;
 }
 function cardLink(a) {
   if (a.view === "followups") return S.can.has("quotes.edit") ? "#/followups" : "#/leads?stalled=1";
@@ -407,26 +556,39 @@ function cardLink(a) {
   return "#/" + a.view;
 }
 
-/* Revenue + gross profit, one point per day, inline SVG. */
-const CH = {w: 760, h: 240, l: 56, r: 12, t: 12, b: 26};
+/* Revenue + gross profit, one point per day, inline SVG (one axis, both in QAR). */
+const CH = {w: 760, h: 250, l: 44, r: 86, t: 14, b: 26};
 function chartSvg(rows) {
   if (!rows.length) return `<div class="empty">No data</div>`;
-  const max = Math.max(1, ...rows.map(r => r.revenue));
+  const max = Math.max(1, ...rows.map(r => r.rv));
   const step = niceStep(max / 4), top = Math.ceil(max / step) * step;
   const x = i => CH.l + (rows.length === 1 ? 0 : i * (CH.w - CH.l - CH.r) / (rows.length - 1));
   const y = v => CH.t + (1 - v / top) * (CH.h - CH.t - CH.b);
   const line = key => rows.map((r, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(r[key]).toFixed(1)}`).join("");
+  const area = key => `${line(key)}L${x(rows.length - 1)},${y(0)}L${x(0)},${y(0)}Z`;
   let grid = "";
   for (let v = 0; v <= top; v += step)
     grid += `<line x1="${CH.l}" x2="${CH.w - CH.r}" y1="${y(v)}" y2="${y(v)}" style="stroke:var(--grid)"/><text x="${CH.l - 8}" y="${y(v) + 4}" style="fill:var(--axis)" font-size="11" text-anchor="end">${v >= 1000 ? (v / 1000) + "k" : v}</text>`;
-  const every = Math.ceil(rows.length / 8);
+  const every = Math.ceil(rows.length / Math.max(3, Math.floor((CH.w - CH.l - CH.r) / 70)));
   const xl = rows.map((r, i) => i % every === 0 ? `<text x="${x(i)}" y="${CH.h - 6}" style="fill:var(--axis)" font-size="11" text-anchor="middle">${date(r.date)}</text>` : "").join("");
-  return `<svg id="chart" viewBox="0 0 ${CH.w} ${CH.h}" preserveAspectRatio="none" role="img" aria-label="Daily revenue and gross profit">
-    <defs><linearGradient id="ga" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--accent)" stop-opacity=".22"/><stop offset="1" style="stop-color:var(--accent)" stop-opacity="0"/></linearGradient></defs>
-    ${grid}${xl}<path d="${line("revenue")}L${x(rows.length - 1)},${y(0)}L${x(0)},${y(0)}Z" fill="url(#ga)"/>
-    <path d="${line("revenue")}" fill="none" style="stroke:var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke"/>
-    <path d="${line("gross_profit")}" fill="none" style="stroke:var(--profit)" stroke-width="2" vector-effect="non-scaling-stroke"/>
-    <line id="hair" y1="${CH.t}" y2="${CH.h - CH.b}" style="stroke:var(--axis)" stroke-dasharray="3 3" visibility="hidden"/></svg>`;
+  /* Last day's values as labels at the end of each line; period totals go under the chart. */
+  const tot = key => rows.reduce((a, r) => a + r[key], 0);
+  const last = rows.length - 1, lx = x(last);
+  let ry = y(rows[last].rv), gy = y(rows[last].gv);
+  if (Math.abs(ry - gy) < 24) { const m = (ry + gy) / 2; ry = m - 12; gy = m + 12; }
+  const pill = (yy, key, v) => `<g transform="translate(${lx + 10},${Math.max(CH.t + 10, Math.min(CH.h - CH.b - 10, yy))})">
+      <rect x="0" y="-10" width="72" height="20" rx="6" style="fill:var(--panel);stroke:var(--${key})"/>
+      <text x="36" y="4" font-size="10.5" text-anchor="middle" style="fill:var(--text)" font-weight="600">${v >= 1000 ? (v / 1000).toFixed(v >= 100000 ? 0 : 1) + "k" : Math.round(v)}</text></g>`;
+  return `<svg id="chart" viewBox="0 0 ${CH.w} ${CH.h}" role="img" aria-label="Daily revenue and gross profit">
+    <defs>${["rev", "gp"].map(k => `<linearGradient id="g_${k}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--${k})" stop-opacity=".28"/><stop offset="1" style="stop-color:var(--${k})" stop-opacity="0"/></linearGradient>`).join("")}</defs>
+    ${grid}${xl}<path d="${area("rv")}" fill="url(#g_rev)"/><path d="${area("gv")}" fill="url(#g_gp)"/>
+    <path d="${line("rv")}" fill="none" style="stroke:var(--rev)" stroke-width="2" stroke-linejoin="round"/>
+    <path d="${line("gv")}" fill="none" style="stroke:var(--gp)" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="${lx}" cy="${y(rows[last].rv)}" r="4" style="fill:var(--rev);stroke:var(--panel)" stroke-width="2"/>
+    <circle cx="${lx}" cy="${y(rows[last].gv)}" r="4" style="fill:var(--gp);stroke:var(--panel)" stroke-width="2"/>
+    ${pill(ry, "rev", rows[last].rv)}${pill(gy, "gp", rows[last].gv)}
+    <line id="hair" y1="${CH.t}" y2="${CH.h - CH.b}" style="stroke:var(--axis)" stroke-dasharray="3 3" visibility="hidden"/></svg>
+    <div class="ctot"><span>Period revenue <b class="num">${qar(tot("revenue"))}</b></span><span>Gross profit <b class="num">${qar(tot("gross_profit"))}</b></span></div>`;
 }
 function niceStep(raw) { const p = Math.pow(10, Math.floor(Math.log10(raw || 1))); const m = raw / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p; }
 function bindChart(rows) {
@@ -438,10 +600,11 @@ function bindChart(rows) {
     const px = CH.l + i * (CH.w - CH.l - CH.r) / Math.max(1, rows.length - 1);
     hair.setAttribute("x1", px); hair.setAttribute("x2", px); hair.setAttribute("visibility", "visible");
     const r = rows[i];
-    tip.innerHTML = `<b>${new Date(r.date).toLocaleDateString("en-GB", {weekday:"short", day:"numeric", month:"short"})}</b><br>Revenue ${qar(r.revenue)}<br>Gross profit ${qar(r.gross_profit)}`;
+    tip.innerHTML = `<b>${new Date(r.date).toLocaleDateString("en-GB", {weekday:"short", day:"numeric", month:"short"})}</b><br>Revenue ${qar(r.revenue)}<br>Gross profit ${qar(r.gross_profit)}${
+      r.smooth ? `<br><span class="muted">7-day average: ${qar(r.rv)} / ${qar(r.gv)}</span>` : ""}`;
     tip.style.display = "block";
-    const left = px / CH.w * b.width + svg.offsetLeft;
-    tip.style.left = Math.min(left + 12, svg.offsetLeft + b.width - 170) + "px"; tip.style.top = (svg.offsetTop + 10) + "px";
+    const box = svg.parentNode, left = px / CH.w * b.width + box.offsetLeft;   /* svg elements have no offsetLeft */
+    tip.style.left = Math.min(left + 12, box.offsetLeft + b.width - 230) + "px"; tip.style.top = (box.offsetTop + 10) + "px";
   };
   svg.onmouseleave = () => { tip.style.display = "none"; hair.setAttribute("visibility", "hidden"); };
 }

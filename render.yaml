@@ -1,0 +1,40 @@
+# Render Blueprint for the Nova Studio demo (shop at /, Ceramica Nova AI at /assistant, admin at /admin).
+# Render: New -> Blueprint -> pick this repo. It asks for ANTHROPIC_API_KEY (optional) and creates everything else.
+services:
+  - type: web
+    name: nova-studio
+    runtime: python
+    plan: starter            # always on (the free plan sleeps and takes ~30 s to wake up)
+    region: frankfurt        # closest Render region to Qatar
+    branch: nova-studio
+    autoDeploy: true         # every push to nova-studio goes live
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    healthCheckPath: /health
+    disk:                    # keeps the SQLite database between restarts and deploys
+      name: nova-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: DATABASE_URL
+        value: sqlite:////var/data/nova_studio.db
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ANTHROPIC_API_KEY
+        sync: false          # you paste it in Render; never stored in the repo
+      - key: LLM_MODEL
+        value: claude-opus-5-5
+      - key: ADMIN_LLM_MODEL
+        value: claude-haiku-5-5
+      - key: DAILY_AI_LIMIT
+        value: "400"         # Claude calls per day for the whole site; after that, offline mode
+      - key: AUTO_SEED
+        value: "1"
+      - key: DEMO_DAILY_RESET
+        value: "1"           # fresh demo data every day after 03:00 Qatar time
+      - key: RAG_DENSE
+        value: "0"           # keyword search only: saves memory on the small server
+      - key: APP_TIMEZONE
+        value: Asia/Qatar

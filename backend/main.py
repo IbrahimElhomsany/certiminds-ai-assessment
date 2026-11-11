@@ -59,8 +59,11 @@ gateway = LLMGateway(build_providers(), timeout_s=float(os.getenv("LLM_TIMEOUT_S
 agent_client = None
 if use_claude():
     import anthropic
-    agent_client = anthropic.Anthropic(max_retries=2, timeout=60)
+    from backend.deploy import BudgetedClient
+    agent_client = BudgetedClient(anthropic.Anthropic(max_retries=2, timeout=60))   # daily cap on Claude calls
 agent = SalesAgent(gateway, client=agent_client)
+from backend.deploy import start_housekeeping  # noqa: E402
+start_housekeeping()           # demo hosting: seed an empty database, optional daily reset (env flags, off by default)
 rate_limiter = RateLimiter(max_requests=int(os.getenv("RATE_LIMIT_PER_MIN", "20")), window_seconds=60)
 
 

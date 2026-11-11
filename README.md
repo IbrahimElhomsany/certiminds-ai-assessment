@@ -85,6 +85,13 @@ the role may use, and the server checks the role again on every call.
   the quotation are replaced by a standard template; the template is also used when there is no API key.
 - Limits: 12 AI requests per user per minute; each question is recorded in the audit log.
 
+**Online demo (Render).** `render.yaml` describes the whole setup: one always-on web service in Frankfurt
+(Starter plan, about $7/month) with a 1 GB disk for the database, deployed automatically on every push to
+`nova-studio`. On a fresh start it fills the demo data itself and re-creates it every day after 03:00 Qatar time.
+Claude is optional: without `ANTHROPIC_API_KEY` everything runs in offline mode; with it, a daily cap
+(`DAILY_AI_LIMIT`, default 400 calls) switches the site back to offline mode instead of running up the bill.
+Steps: Render dashboard -> New -> Blueprint -> pick the repo -> paste the API key -> Apply.
+
 All seeded data is demo data, and the company is flagged `is_demo` so the admin shows a "Demo data" badge.
 
 ## What's inside

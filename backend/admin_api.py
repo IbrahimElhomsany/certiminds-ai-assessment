@@ -559,7 +559,8 @@ def ai_client():
         return None
     if _ai_client is None:
         import anthropic
-        _ai_client = anthropic.Anthropic(max_retries=1, timeout=45)
+        from backend.deploy import BudgetedClient
+        _ai_client = BudgetedClient(anthropic.Anthropic(max_retries=1, timeout=45))
     return _ai_client
 
 

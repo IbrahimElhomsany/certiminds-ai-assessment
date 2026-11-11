@@ -170,3 +170,16 @@ def test_followups_respect_roles_and_ownership():
         lead = db.get(Lead, q.lead_id)
         who = lead.owner.email.split("@")[0]
     assert client.post(f"/api/admin/followups/{q.id}/draft", json={}, headers=H(who)).status_code == 409
+
+
+def test_daily_ai_budget_stops_claude_and_features_fall_back(monkeypatch):
+    from backend import deploy
+    monkeypatch.setattr(deploy, "_usage", {"day": None, "calls": 0})
+    inner = Fake([resp([text("one")]), resp([text("two")])])
+    capped = deploy.BudgetedClient(inner, daily_limit=1)
+    assert capped.messages.create(model="m").content[0].text == "one"
+    with pytest.raises(deploy.AIBudgetExceeded):
+        capped.messages.create(model="m")
+    monkeypatch.setattr(admin_api, "ai_client", lambda: capped)
+    r = client.post("/api/admin/ask", json={"question": "Which products will run out first?"}, headers=H("owner")).json()
+    assert r["mode"] == "offline" and "AIBudgetExceeded" in r["note"]

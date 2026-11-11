@@ -76,9 +76,20 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
   .showcase::before { content:""; position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,0) 25%, rgba(6,22,17,.88) 100%); }
   .showcase div { position:relative; padding:14px; } .showcase b { display:block; font-size:15px; line-height:1.25; }
   .showcase span { font-size:12px; opacity:.85; line-height:1.35; display:block; margin-top:4px; }
-  .showcase + .me { margin-top:0; border-top:0; }
+  .prof { position:relative; }
+  .prof-btn { display:flex; align-items:center; gap:9px; background:none; border:1px solid transparent; border-radius:12px; padding:3px 8px 3px 3px; text-align:left; }
+  .prof-btn:hover, .prof.open .prof-btn { border-color:var(--line); background:var(--panel); }
+  .prof-btn .av { width:34px; height:34px; } .prof-txt b { display:block; font-size:13px; line-height:1.2; } .prof-txt small { color:var(--muted); font-size:11.5px; }
+  .chev-d { width:16px; height:16px; color:var(--muted); }
+  .prof-menu { display:none; position:absolute; right:0; top:calc(100% + 6px); z-index:40; min-width:220px; background:var(--panel); border:1px solid var(--line);
+               border-radius:12px; box-shadow:0 12px 30px rgba(0,0,0,.18); padding:6px; }
+  .prof.open .prof-menu { display:block; }
+  .prof-head { display:flex; flex-direction:column; padding:8px 10px 10px; border-bottom:1px solid var(--line); margin-bottom:4px; }
+  .prof-menu button { display:flex; gap:9px; align-items:center; width:100%; background:none; border:0; border-radius:8px; padding:8px 10px; color:var(--text); }
+  .prof-menu button:hover { background:var(--panel2); }
+  @media (max-width:900px) { .prof-txt, .chev-d { display:none; } }
   /* in the menu the photo has no frame: it runs edge to edge and fades into the menu at the top and bottom */
-  aside .showcase { margin:auto -14px 0; border-radius:0; min-height:0; aspect-ratio:464 / 574; max-height:300px; background-position:center top; }
+  aside .showcase { margin:auto -14px -18px; border-radius:0; min-height:0; aspect-ratio:464 / 574; max-height:300px; background-position:center top; }
   aside .showcase::before { background:linear-gradient(180deg, var(--side) 0%, color-mix(in srgb, var(--side) 55%, transparent) 14%, transparent 38%, transparent 58%, color-mix(in srgb, var(--side) 60%, transparent) 82%, var(--side) 100%); }
   .login-photo { display:none; }
   @media (min-width:980px) {
@@ -87,7 +98,7 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
     .login.split .login-photo div { padding:48px; max-width:520px; } .login.split .login-photo b { font-size:30px; } .login.split .login-photo span { font-size:15px; }
     .login.split .login-form { display:grid; place-items:center; padding:20px; }
   }
-  @media (max-height:760px) { aside .showcase { display:none; } }
+  @media (max-height:700px) { aside .showcase { display:none; } }
   /* modern / neon touch, kept light: soft gradients in day mode, a faint green glow in night mode */
   .cv { background-image:linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,0) 60%); }
   .copilot { position:relative; overflow:hidden; }
@@ -108,8 +119,6 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
   :root[data-theme="dark"] .quick a:hover, :root[data-theme="dark"] .crow:hover { border-color:rgba(62,207,142,.5); box-shadow:0 0 12px rgba(62,207,142,.15); }
 
   .quick a, .crow { transition:border-color .15s, box-shadow .15s; }
-  .me { margin-top:auto; padding:10px; border-top:1px solid var(--line); font-size:12px; }
-  .me b { display:block; font-size:13px; }
   main { padding:22px 28px 60px; min-width:0; }
   .top { display:flex; align-items:center; gap:14px; margin-bottom:18px; flex-wrap:wrap; }
   .top .grow { flex:1; }
@@ -442,18 +451,26 @@ function shell(active, inner) {
       <nav>${modules().map(m => `<a href="#/${m[0]}" class="${m[0] === active ? "on" : ""}">${icon(m[0])}${m[1]}${
         m[0] === "approvals" && S.pending ? `<span class="count">${S.pending}</span>` : ""}</a>`).join("")}</nav>
       ${showcase("", false)}
-      <div class="me"><b>${esc(u.name)}</b><span class="muted">${esc(label(u.role))}${u.branch ? " · " + esc(u.branch) : ""}</span>
-        <div style="margin-top:8px"><button class="btn ghost sm" id="lo">${icon("out")} Log out</button></div></div>
     </aside>
     <main><div id="view">${inner}</div></main></div>`;
-  $("#lo").onclick = logout;
   paintShowcase();
 }
 function topbar(title, sub = "", right = "") {
   return `<div class="top"><button class="btn ghost sm menu-btn" onclick="document.getElementById('side').classList.toggle('open')">${icon("menu")}</button>
     <div class="grow"><h1>${title}</h1>${sub ? `<div class="muted small">${sub}</div>` : ""}</div>${right}
-    ${themeBtn()}${S.me.company.is_demo ? `<span class="tag demo" title="Generated demo data, not a real company's figures">Demo data</span>` : ""}</div>`;
+    ${S.me.company.is_demo ? `<span class="tag demo" title="Generated demo data, not a real company's figures">Demo data</span>` : ""}${themeBtn()}${profile()}</div>`;
 }
+/* Signed-in person, top right (like the mockup). Click to open: details + Log out. */
+function profile() {
+  const u = S.me.user;
+  return `<div class="prof"><button class="prof-btn" onclick="event.stopPropagation();this.parentNode.classList.toggle('open')" aria-haspopup="menu" title="Account">
+      <span class="av">${esc(initials(u.name))}</span><span class="prof-txt"><b>${esc(u.name)}</b><small>${esc(S.me.company.name)}</small></span>
+      <svg class="ico chev-d" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+    <div class="prof-menu" role="menu"><div class="prof-head"><b>${esc(u.name)}</b><span class="muted small">${esc(label(u.role))}${u.branch ? " · " + esc(u.branch) : ""}</span>
+      <span class="muted small">${esc(u.email || "")}</span></div>
+      <button role="menuitem" onclick="logout()">${icon("out")} Log out</button></div></div>`;
+}
+document.addEventListener("click", () => document.querySelectorAll(".prof.open").forEach(p => p.classList.remove("open")));
 const loading = () => `<div class="empty">Loading…</div>`;
 const pct = (v, unit = "%") => v == null ? `<span class="delta muted">new</span>` :
   `<span class="delta ${v >= 0 ? "up" : "down"}">${v >= 0 ? "▲" : "▼"} ${Math.abs(v).toFixed(1)}${unit}</span>`;

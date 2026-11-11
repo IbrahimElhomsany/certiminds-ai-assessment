@@ -70,7 +70,7 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
   nav a:hover { background:var(--panel2); color:var(--text); }
   nav a.on { background:var(--nav-on); color:var(--ink); font-weight:600; }
   nav a .count { margin-left:auto; background:var(--warn); color:#fff; font-size:10.5px; font-weight:700; border-radius:9px; padding:0 7px; }
-  /* showroom photo panel (bottom of the menu, and the login page). Uses images/room_living.jpg if it exists, else the bathroom photo. */
+  /* showroom photo panel (bottom of the menu, and the login page); picture comes from /admin/showroom.jpg */
   .showcase { margin-top:auto; position:relative; border-radius:14px; overflow:hidden; min-height:190px; display:flex; align-items:flex-end;
               background:var(--panel2) center/cover no-repeat; color:#fff; }
   .showcase::before { content:""; position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,0) 25%, rgba(6,22,17,.88) 100%); }
@@ -85,6 +85,26 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
     .login.split .login-form { display:grid; place-items:center; padding:20px; }
   }
   @media (max-height:760px) { aside .showcase { display:none; } }
+  /* modern / neon touch, kept light: soft gradients in day mode, a faint green glow in night mode */
+  .cv { background-image:linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,0) 60%); }
+  .copilot { position:relative; overflow:hidden; }
+  .copilot::before { content:""; position:absolute; left:0; right:0; top:0; height:2px; background:linear-gradient(90deg, var(--c1), var(--c2), var(--c4)); opacity:.8; }
+  :root[data-theme="dark"] body { background:
+      radial-gradient(900px 500px at 85% -10%, rgba(52,200,138,.10), transparent 60%),
+      radial-gradient(700px 500px at -10% 110%, rgba(79,193,214,.07), transparent 60%), var(--bg); background-attachment:fixed; }
+  :root[data-theme="dark"] .card { border-color:rgba(62,207,142,.16);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.04), 0 10px 30px rgba(0,0,0,.28); }
+  :root[data-theme="dark"] nav a.on { box-shadow:inset 0 0 0 1px rgba(62,207,142,.45), 0 0 14px rgba(62,207,142,.18); }
+  :root[data-theme="dark"] .seg button.on, :root[data-theme="dark"] .tabs button.on { box-shadow:0 0 0 1px rgba(62,207,142,.5), 0 0 10px rgba(62,207,142,.2); }
+  :root[data-theme="dark"] .kico, :root[data-theme="dark"] .cico { box-shadow:0 0 14px color-mix(in srgb, currentColor 22%, transparent); }
+  :root[data-theme="dark"] .ln-rev { filter:drop-shadow(0 0 5px rgba(62,207,142,.6)); }
+  :root[data-theme="dark"] .ln-gp { filter:drop-shadow(0 0 5px rgba(224,166,58,.5)); }
+  :root[data-theme="dark"] .donut { filter:drop-shadow(0 0 6px rgba(62,207,142,.25)); }
+  :root[data-theme="dark"] #chart circle { filter:drop-shadow(0 0 5px rgba(255,255,255,.35)); }
+  :root[data-theme="dark"] .cv { box-shadow:inset 0 0 18px rgba(255,255,255,.08); }
+  :root[data-theme="dark"] .quick a:hover, :root[data-theme="dark"] .crow:hover { border-color:rgba(62,207,142,.5); box-shadow:0 0 12px rgba(62,207,142,.15); }
+  :root[data-theme="dark"] .showcase { box-shadow:0 0 0 1px rgba(62,207,142,.25), 0 0 18px rgba(62,207,142,.12); }
+  .quick a, .crow { transition:border-color .15s, box-shadow .15s; }
   .me { margin-top:auto; padding:10px; border-top:1px solid var(--line); font-size:12px; }
   .me b { display:block; font-size:13px; }
   main { padding:22px 28px 60px; min-width:0; }
@@ -297,15 +317,8 @@ const ICONS = {
 };
 const icon = n => `<svg class="ico" viewBox="0 0 24 24">${ICONS[n] || ""}</svg>`;
 
-/* Showroom photo: drop images/room_living.jpg in to use your own; otherwise the bathroom photo from the shop is used. */
-const SHOWCASE = ["/images/room_living.jpg", "/images/room_bathroom.jpg"];
-function paintShowcase() {
-  const set = url => document.querySelectorAll(".showcase").forEach(el => el.style.backgroundImage = `url("${url}")`);
-  if (S.photo) return set(S.photo);
-  const tryAt = i => { if (i >= SHOWCASE.length) return; const im = new Image();
-    im.onload = () => { S.photo = SHOWCASE[i]; set(S.photo); }; im.onerror = () => tryAt(i + 1); im.src = SHOWCASE[i]; };
-  tryAt(0);
-}
+/* Showroom photo: the server sends images/room_living.jpg if it exists, otherwise the bathroom photo. */
+function paintShowcase() { document.querySelectorAll(".showcase").forEach(el => el.style.backgroundImage = 'url("/admin/showroom.jpg")'); }
 const showcase = (cls = "") => `<div class="showcase ${cls}" role="img" aria-label="A room finished with Ceramica Nova tiles"><div>
   <b>AI-powered tile retail platform</b><span>From first inquiry to repeat business</span></div></div>`;
 
@@ -612,8 +625,8 @@ function chartSvg(rows) {
   return `<svg id="chart" viewBox="0 0 ${CH.w} ${CH.h}" role="img" aria-label="Daily revenue and gross profit">
     <defs>${["rev", "gp"].map(k => `<linearGradient id="g_${k}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--${k})" stop-opacity=".28"/><stop offset="1" style="stop-color:var(--${k})" stop-opacity="0"/></linearGradient>`).join("")}</defs>
     ${grid}${xl}<path d="${area("rv")}" fill="url(#g_rev)"/><path d="${area("gv")}" fill="url(#g_gp)"/>
-    <path d="${line("rv")}" fill="none" style="stroke:var(--rev)" stroke-width="2" stroke-linejoin="round"/>
-    <path d="${line("gv")}" fill="none" style="stroke:var(--gp)" stroke-width="2" stroke-linejoin="round"/>
+    <path class="ln-rev" d="${line("rv")}" fill="none" style="stroke:var(--rev)" stroke-width="2" stroke-linejoin="round"/>
+    <path class="ln-gp" d="${line("gv")}" fill="none" style="stroke:var(--gp)" stroke-width="2" stroke-linejoin="round"/>
     <circle cx="${lx}" cy="${y(rows[last].rv)}" r="4" style="fill:var(--rev);stroke:var(--panel)" stroke-width="2"/>
     <circle cx="${lx}" cy="${y(rows[last].gv)}" r="4" style="fill:var(--gp);stroke:var(--panel)" stroke-width="2"/>
     ${pill(ry, "rev", rows[last].rv)}${pill(gy, "gp", rows[last].gv)}

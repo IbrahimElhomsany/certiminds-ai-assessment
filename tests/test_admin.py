@@ -293,6 +293,8 @@ def test_other_company_cannot_touch_our_records():
 def test_admin_page_is_served():
     r = client.get("/admin")
     assert r.status_code == 200 and "Nova Studio" in r.text
+    photo = client.get("/admin/showroom.jpg")
+    assert photo.status_code == 200 and photo.headers["content-type"] == "image/jpeg"
 
 
 def test_waiting_discount_says_why():

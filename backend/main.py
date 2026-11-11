@@ -99,6 +99,15 @@ def admin_ui():
                         headers={"X-Robots-Tag": "noindex"})
 
 
+@app.get("/admin/showroom.jpg")
+def admin_showroom_photo():
+    """Photo for the admin menu and login page: images/room_living.jpg if the shop adds one, else the bathroom photo."""
+    images = Path(__file__).resolve().parent.parent / "images"
+    living = images / "room_living.jpg"
+    return FileResponse(living if living.exists() else images / "room_bathroom.jpg",
+                        headers={"Cache-Control": "public, max-age=3600"})
+
+
 ROOT = Path(__file__).resolve().parent.parent
 app.mount("/images", StaticFiles(directory=ROOT / "images", check_dir=False), name="images")
 

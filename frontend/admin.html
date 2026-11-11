@@ -78,10 +78,8 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
   .showcase span { font-size:12px; opacity:.85; line-height:1.35; display:block; margin-top:4px; }
   .showcase + .me { margin-top:0; border-top:0; }
   /* in the menu the photo has no frame: it runs edge to edge and fades into the menu at the top and bottom */
-  aside .showcase { margin:auto -14px 0; border-radius:0; min-height:240px; background-position:center 40%; color:var(--ink); }
-  aside .showcase::before { background:linear-gradient(180deg, var(--side) 0%, transparent 30%, transparent 48%, var(--side) 92%); }
-  aside .showcase b { font-size:16px; } aside .showcase div { padding:14px 22px 6px; }
-  :root:not([data-theme="dark"]) aside .showcase span { opacity:.75; }
+  aside .showcase { margin:auto -14px 0; border-radius:0; min-height:0; aspect-ratio:464 / 574; max-height:300px; background-position:center top; }
+  aside .showcase::before { background:linear-gradient(180deg, var(--side) 0%, color-mix(in srgb, var(--side) 55%, transparent) 14%, transparent 38%, transparent 58%, color-mix(in srgb, var(--side) 60%, transparent) 82%, var(--side) 100%); }
   .login-photo { display:none; }
   @media (min-width:980px) {
     .login.split { grid-template-columns:1.1fr 1fr; place-items:stretch; padding:0; }
@@ -322,13 +320,13 @@ const ICONS = {
 };
 const icon = n => `<svg class="ico" viewBox="0 0 24 24">${ICONS[n] || ""}</svg>`;
 
-/* Menu photo: /admin/showroom.jpg (images/room_living.jpg, the sofa scene from the design mockup). Login page: the large bathroom photo. */
+/* Menu photo: /admin/showroom.jpg (images/room_living.jpg, the sofa scene from the design mockup). Login page: the full showroom_lounge.jpg. */
 function paintShowcase() {
   document.querySelectorAll(".showcase").forEach(el => el.style.backgroundImage =
-    el.classList.contains("login-photo") ? 'url("/images/room_bathroom.jpg")' : 'url("/admin/showroom.jpg")');
+    el.classList.contains("login-photo") ? 'url("/images/showroom_lounge.jpg")' : 'url("/admin/showroom.jpg")');
 }
-const showcase = (cls = "") => `<div class="showcase ${cls}" role="img" aria-label="A room finished with Ceramica Nova tiles"><div>
-  <b>AI-powered tile retail platform</b><span>From first inquiry to repeat business</span></div></div>`;
+const showcase = (cls = "", text = true) => `<div class="showcase ${cls}" role="img" aria-label="A tile showroom lounge with marble wall tiles">${text ? `<div>
+  <b>AI-powered tile retail platform</b><span>From first inquiry to repeat business</span></div>` : ""}</div>`;
 
 let S = { token: null, me: null, can: new Set(), days: 30, trail: [], titles: {} };
 try { S.token = sessionStorage.getItem("nova_admin_token"); S.days = +sessionStorage.getItem("nova_admin_days") || 30; } catch (e) {}
@@ -443,7 +441,7 @@ function shell(active, inner) {
       <div class="brand"><div class="logo">N</div><div><b>Nova Studio</b><small>${esc(S.me.company.name)}</small></div></div>
       <nav>${modules().map(m => `<a href="#/${m[0]}" class="${m[0] === active ? "on" : ""}">${icon(m[0])}${m[1]}${
         m[0] === "approvals" && S.pending ? `<span class="count">${S.pending}</span>` : ""}</a>`).join("")}</nav>
-      ${showcase()}
+      ${showcase("", false)}
       <div class="me"><b>${esc(u.name)}</b><span class="muted">${esc(label(u.role))}${u.branch ? " · " + esc(u.branch) : ""}</span>
         <div style="margin-top:8px"><button class="btn ghost sm" id="lo">${icon("out")} Log out</button></div></div>
     </aside>

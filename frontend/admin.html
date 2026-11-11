@@ -70,6 +70,21 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
   nav a:hover { background:var(--panel2); color:var(--text); }
   nav a.on { background:var(--nav-on); color:var(--ink); font-weight:600; }
   nav a .count { margin-left:auto; background:var(--warn); color:#fff; font-size:10.5px; font-weight:700; border-radius:9px; padding:0 7px; }
+  /* showroom photo panel (bottom of the menu, and the login page). Uses images/room_living.jpg if it exists, else the bathroom photo. */
+  .showcase { margin-top:auto; position:relative; border-radius:14px; overflow:hidden; min-height:190px; display:flex; align-items:flex-end;
+              background:var(--panel2) center/cover no-repeat; color:#fff; }
+  .showcase::before { content:""; position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,0) 25%, rgba(6,22,17,.88) 100%); }
+  .showcase div { position:relative; padding:14px; } .showcase b { display:block; font-size:15px; line-height:1.25; }
+  .showcase span { font-size:12px; opacity:.85; line-height:1.35; display:block; margin-top:4px; }
+  .showcase + .me { margin-top:8px; }
+  .login-photo { display:none; }
+  @media (min-width:980px) {
+    .login.split { grid-template-columns:1.1fr 1fr; place-items:stretch; padding:0; }
+    .login.split .login-photo { display:flex; min-height:100vh; border-radius:0; }
+    .login.split .login-photo div { padding:48px; max-width:520px; } .login.split .login-photo b { font-size:30px; } .login.split .login-photo span { font-size:15px; }
+    .login.split .login-form { display:grid; place-items:center; padding:20px; }
+  }
+  @media (max-height:760px) { aside .showcase { display:none; } }
   .me { margin-top:auto; padding:10px; border-top:1px solid var(--line); font-size:12px; }
   .me b { display:block; font-size:13px; }
   main { padding:22px 28px 60px; min-width:0; }
@@ -282,6 +297,18 @@ const ICONS = {
 };
 const icon = n => `<svg class="ico" viewBox="0 0 24 24">${ICONS[n] || ""}</svg>`;
 
+/* Showroom photo: drop images/room_living.jpg in to use your own; otherwise the bathroom photo from the shop is used. */
+const SHOWCASE = ["/images/room_living.jpg", "/images/room_bathroom.jpg"];
+function paintShowcase() {
+  const set = url => document.querySelectorAll(".showcase").forEach(el => el.style.backgroundImage = `url("${url}")`);
+  if (S.photo) return set(S.photo);
+  const tryAt = i => { if (i >= SHOWCASE.length) return; const im = new Image();
+    im.onload = () => { S.photo = SHOWCASE[i]; set(S.photo); }; im.onerror = () => tryAt(i + 1); im.src = SHOWCASE[i]; };
+  tryAt(0);
+}
+const showcase = (cls = "") => `<div class="showcase ${cls}" role="img" aria-label="A room finished with Ceramica Nova tiles"><div>
+  <b>AI-powered tile retail platform</b><span>From first inquiry to repeat business</span></div></div>`;
+
 let S = { token: null, me: null, can: new Set(), days: 30, trail: [], titles: {} };
 try { S.token = sessionStorage.getItem("nova_admin_token"); S.days = +sessionStorage.getItem("nova_admin_days") || 30; } catch (e) {}
 
@@ -337,7 +364,7 @@ async function act(fn, okMsg) {
 const DEMO = [["owner","Owner","Everything, incl. prices"],["manager","Sara Haddad","Sales manager, approvals"],
               ["omar","Omar Khalil","Salesperson"],["warehouse","Rajesh Nair","Warehouse"],["viewer","Viewer","Read-only reports"]];
 function loginView(msg = "") {
-  $("#root").innerHTML = `<div class="login"><div style="position:fixed;top:16px;right:16px">${themeBtn()}</div><div class="card">
+  $("#root").innerHTML = `<div class="login split">${showcase("login-photo")}<div style="position:fixed;top:16px;right:16px;z-index:2">${themeBtn()}</div><div class="login-form"><div class="card">
     <div class="brand" style="padding:0 0 16px"><div class="logo">N</div><div><b>Nova Studio</b><small>Ceramica Nova staff</small></div></div>
     <h1 style="font-size:18px">Staff login</h1>
     <p class="muted small" style="margin:4px 0 6px">Customers use the shop; this area is for the showroom team.</p>
@@ -350,7 +377,8 @@ function loginView(msg = "") {
     <div class="notice warn small" style="margin-top:16px"><b>Demo company.</b> All customers, leads and sales are generated demo data.
       Password for every demo account: <b>NovaDemo2026!</b></div>
     <div class="demo-users">${DEMO.map(d => `<button type="button" data-u="${d[0]}"><b>${esc(d[1])}</b><span class="muted">${esc(d[2])}</span></button>`).join("")}</div>
-  </div></div>`;
+  </div></div></div>`;
+  paintShowcase();
   document.querySelectorAll("[data-u]").forEach(b => b.onclick = () => { $("#em").value = b.dataset.u + "@ceramicanova.demo"; $("#pw").focus(); });
   $("#lf").onsubmit = async e => {
     e.preventDefault();
@@ -394,11 +422,13 @@ function shell(active, inner) {
       <div class="brand"><div class="logo">N</div><div><b>Nova Studio</b><small>${esc(S.me.company.name)}</small></div></div>
       <nav>${modules().map(m => `<a href="#/${m[0]}" class="${m[0] === active ? "on" : ""}">${icon(m[0])}${m[1]}${
         m[0] === "approvals" && S.pending ? `<span class="count">${S.pending}</span>` : ""}</a>`).join("")}</nav>
+      ${showcase()}
       <div class="me"><b>${esc(u.name)}</b><span class="muted">${esc(label(u.role))}${u.branch ? " · " + esc(u.branch) : ""}</span>
         <div style="margin-top:8px"><button class="btn ghost sm" id="lo">${icon("out")} Log out</button></div></div>
     </aside>
     <main><div id="view">${inner}</div></main></div>`;
   $("#lo").onclick = logout;
+  paintShowcase();
 }
 function topbar(title, sub = "", right = "") {
   return `<div class="top"><button class="btn ghost sm menu-btn" onclick="document.getElementById('side').classList.toggle('open')">${icon("menu")}</button>

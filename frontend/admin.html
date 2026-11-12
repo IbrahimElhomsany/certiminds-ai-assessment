@@ -242,6 +242,8 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
   .timeline .t { display:grid; grid-template-columns:14px 1fr; gap:10px; padding:6px 0; }
   .timeline .dot { width:9px; height:9px; border-radius:50%; background:var(--accent); margin-top:6px; }
   .timeline .dot.order { background:var(--ok); } .timeline .dot.discount { background:var(--warn); }
+  .timeline .tpic { display:block; width:100%; max-width:260px; border-radius:10px; margin:6px 0 2px; border:1px solid var(--line); }
+  .timeline .dot.room_preview { background:var(--accent); }
   .timeline .dot.stage_change { background:#8b5cf6; } .timeline .dot.follow_up { background:var(--ok); } .timeline .dot.call, .timeline .dot.note { background:var(--muted); }
   .actions { display:flex; gap:8px; flex-wrap:wrap; }
   .ai-tag { display:inline-flex; gap:5px; align-items:center; font-size:11px; font-weight:600; padding:2px 8px; border-radius:6px;
@@ -743,8 +745,11 @@ async function leadView(id) {
           <span>Name</span><span>${esc(c.name)}</span><span>Phone</span><span>${c.phone ? `<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>` : "-"}</span>
           <span>Email</span><span class="ellipsis">${esc(c.email || "-")}</span><span>Type</span><span>${esc(label(c.type))}</span><span>Area</span><span>${esc(c.area || "-")}</span></div></div>
         <div class="card"><div class="head"><h2>Timeline</h2></div><div class="timeline">
-          ${d.timeline.map(t => `<div class="t"><span class="dot ${esc(t.type)}"></span><div><div class="small">${esc(t.text)}</div>
-            <span class="muted small">${esc(t.by)} · ${dateTime(t.at)}</span></div></div>`).join("")}</div></div>
+          ${d.timeline.map(t => { const pic = (t.text.match(/\/api\/v1\/visual\/files\/[a-f0-9]{32}\.jpg/) || [])[0];
+            const txt = pic ? t.text.replace(pic, "").trim() : t.text;
+            return `<div class="t"><span class="dot ${esc(t.type)}"></span><div><div class="small">${esc(txt)}</div>
+            ${pic ? `<a href="${pic}" target="_blank" rel="noopener"><img class="tpic" src="${pic}" alt="Room preview" loading="lazy"></a>` : ""}
+            <span class="muted small">${esc(t.by)} · ${dateTime(t.at)}</span></div></div>`; }).join("")}</div></div>
       </div></div>`;
   if ($("#bStage")) $("#bStage").onclick = async () => {
     const v = await ask("Change stage", [

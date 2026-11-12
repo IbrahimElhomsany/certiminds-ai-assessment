@@ -31,6 +31,7 @@ from backend.quote_pdf import build_quote_pdf                        # noqa: E40
 from backend.catalog import CATALOG, SANITARY                         # noqa: E402
 from backend.admin_api import router as admin_router                 # noqa: E402
 from backend.shop_api import router as shop_router                   # noqa: E402
+from backend.visual import router as visual_router                   # noqa: E402
 from backend.db.database import init_db                               # noqa: E402
 
 
@@ -54,6 +55,7 @@ app = FastAPI(title="Ceramica Nova AI Sales API + Nova Studio admin", version="1
 init_db()                      # creates missing tables; demo data comes from `python -m backend.db.seed`
 app.include_router(admin_router)
 app.include_router(shop_router)
+app.include_router(visual_router)
 gateway = LLMGateway(build_providers(), timeout_s=float(os.getenv("LLM_TIMEOUT_S", "30")),
                      cache=TTLCache(ttl_seconds=3600), prompt_version=PROMPT_VERSION)
 agent_client = None

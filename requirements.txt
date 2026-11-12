@@ -11,3 +11,5 @@ fastembed>=0.4          # optional dense embeddings for hybrid RAG; app falls ba
 sqlalchemy>=2.0          # Nova Studio database (SQLite for the demo, PostgreSQL in production)
 PyJWT>=2.8               # staff login tokens
 bcrypt>=4.0              # password hashing
+Pillow>=10.0             # room photos: check, rotate, resize and strip EXIF before storing
+segno>=1.6               # QR code for "take the photo with your phone"

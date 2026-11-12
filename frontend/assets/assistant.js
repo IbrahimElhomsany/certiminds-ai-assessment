@@ -39,23 +39,27 @@ const isTile = sku => BY[sku] && BY[sku].kind === "tile";
 const fits = (sku, surface) => isTile(sku) && (BY[sku].surfaces || []).includes(surface);
 
 // ---------------------------------------------------------------- routing + step bar
-const PAGES = { "": "start", chat: "chat", visual: "visual", project: "project" };
+const PAGES = { "": "start", chat: "chat", rooms: "rooms", mark: "mark", visual: "visual", project: "project" };
+const STEP_OF = { rooms: "visual", mark: "visual" };
 function route() {
   const key = (location.hash.replace(/^#\/?/, "").split("?")[0]) || "";
   const page = PAGES[key] || "start";
-  document.body.dataset.page = page;
-  ["Start", "Chat", "Visual", "Project"].forEach(n => $("p" + n).hidden = page !== n.toLowerCase());
+  document.body.dataset.page = page; document.body.dataset.step = STEP_OF[page] || page;
+  ["Start", "Chat", "Rooms", "Mark", "Visual", "Project"].forEach(n => $("p" + n).hidden = page !== n.toLowerCase());
+  if (page !== "visual") { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); $("stagewrap").classList.remove("fs"); }
   renderSteps();
   if (page === "start") $("resume").hidden = !(S.log.length > 1 || S.proj.floor.sku || S.proj.wall.sku);
   if (page === "chat") { renderCards(); scrollLog(); }
   if (page === "visual") showVisual();
+  if (page === "rooms") renderRoomsPage();
+  if (page === "mark") showMark();
   if (page === "project") renderProject();
   window.scrollTo(0, 0);
 }
 function renderSteps() {
   const done = { chat: S.recs.length > 0 || !!S.selected, visual: !!(S.vis.floor || S.vis.wall), project: !!S.quote };
   document.querySelectorAll("#steps a").forEach(a => {
-    const p = a.dataset.p, now = document.body.dataset.page === p;
+    const p = a.dataset.p, now = document.body.dataset.step === p;
     a.classList.toggle("now", now); a.classList.toggle("done", !now && done[p]);
     a.querySelector(".dot").textContent = !now && done[p] ? "✓" : { chat: 1, visual: 2, project: 3 }[p];
     if (now) a.setAttribute("aria-current", "step"); else a.removeAttribute("aria-current");
@@ -182,8 +186,21 @@ function renderTech(r) {
 }
 
 // ---------------------------------------------------------------- 2. visualiser
-let V = null, vReady = false, roomToken = 0, loadedRoom = null;
-const curRoom = () => ROOMS.find(r => r.id === S.vis.room) || ROOMS[0];
+let V = null, vReady = false, roomToken = 0, loadedKey = null, AVAIL = {};
+const SAMPLE_W = 1672, SAMPLE_H = 941;          // our sample room photos
+function ownRoom() {
+  const o = S.own;
+  if (!o || !o.photo || !o.floor || !o.floor.size) return null;
+  const surfaces = { floor: [{ quad: o.floor.pts, size: o.floor.size, area: o.floor.pts, keep: [] }] };
+  if (o.wall && o.wall.on && o.wall.size) surfaces.wall = [{ quad: o.wall.pts, size: o.wall.size, area: o.wall.pts, keep: [] }];
+  return { id: "own", name: "Your room", location: o.location || "indoor", photo: o.photo.url,
+           width: o.photo.width, height: o.photo.height, surfaces, keepMask: o.keep || null };
+}
+const allRooms = () => { const own = ownRoom(); return own ? [own, ...ROOMS] : ROOMS; };
+const curRoom = () => allRooms().find(r => r.id === S.vis.room) || ROOMS[0];
+const roomKey = r => r.id === "own" ? "own:" + (S.own.rev || 0) : r.id;
+const roomDims = r => [r.width || SAMPLE_W, r.height || SAMPLE_H];
+const tileOkInRoom = (sku, room) => (BY[sku].locations || []).includes(room.location);
 function tileSpec(sku) {
   const p = BY[sku]; const [w, h] = String(p.size_cm).split("x").map(Number);
   const f = (p.finish || "").toLowerCase();
@@ -191,27 +208,28 @@ function tileSpec(sku) {
   return { image: p.image, w, h, patch: PATCHES[sku] || null, gloss };
 }
 async function showVisual() {
+  if (!S.vis.picked && !S.selected) { location.replace("#/rooms"); return; }
   const room = curRoom();
   if (!room.surfaces[S.vis.surface]) S.vis.surface = room.surfaces.floor ? "floor" : "wall";
-  renderVisControls();
+  renderVisControls(); sizeStage();
   if (!V && !vReady) {
     vReady = true;
     try { V = window.NovaVisualiser && NovaVisualiser.create($("vcanvas")); } catch (e) { V = null; }
     if (!V) { $("vfail").hidden = false; return; }
   }
   if (!V) return;
-  if (loadedRoom !== room.id) await loadRoom(room);
+  if (loadedKey !== roomKey(room)) await loadRoom(room);
   else await applyTiles();
 }
 async function loadRoom(room) {
-  const token = ++roomToken; $("vload").hidden = false;
+  const token = ++roomToken; $("vload").hidden = false; loadedKey = null;
   $("before").src = room.photo;
   try {
     await V.setRoom(room);
     if (token !== roomToken) return;
-    loadedRoom = room.id;
+    loadedKey = roomKey(room);
     await applyTiles();
-  } catch (e) { toast("Sorry, this room could not be loaded."); }
+  } catch (e) { toast(room.id === "own" ? "Your photo could not be loaded. It may have expired: please upload it again." : "Sorry, this room could not be loaded."); }
   finally { if (token === roomToken) $("vload").hidden = true; }
 }
 async function applyTiles() {
@@ -222,11 +240,25 @@ async function applyTiles() {
     await V.setTile(surf, sku ? tileSpec(sku) : null);
   }
 }
-const tileOkInRoom = (sku, room) => (BY[sku].locations || []).includes(room.location);
+// the photo keeps its own shape: as wide as the column allows, never taller than most of the screen
+function sizeStage() {
+  const room = curRoom(), [w, h] = roomDims(room), ratio = w / h, st = $("stage");
+  const full = document.fullscreenElement === $("stagewrap") || $("stagewrap").classList.contains("fs");
+  const boxW = $("stagebox").clientWidth || $("stagewrap").clientWidth - 24;
+  const maxH = full ? window.innerHeight - 90 : Math.min(window.innerHeight * 0.72, 780);
+  const sw = Math.max(200, Math.min(boxW, maxH * ratio));
+  st.style.aspectRatio = "auto"; st.style.width = sw + "px"; st.style.height = Math.round(sw / ratio) + "px";
+  $("vout").setAttribute("viewBox", `0 0 ${w} ${h}`);
+}
 function renderVisControls() {
   const room = curRoom(), surf = S.vis.surface;
-  $("rooms").innerHTML = ROOMS.map(r => `<button type="button" class="room ${r.id === room.id ? "on" : ""}" data-room="${r.id}">
-      <img src="${r.photo}" alt="" loading="lazy"><span>${esc(r.name)}</span></button>`).join("");
+  $("vtitle").textContent = room.name;
+  $("rooms").innerHTML = allRooms().map(r => `<button type="button" class="room ${r.id === room.id ? "on" : ""}" data-room="${r.id}">
+      <img src="${r.photo}" alt="" loading="lazy"><span>${esc(r.name)}</span></button>`).join("") +
+    `<a class="room" href="#/rooms" style="display:grid;place-items:center;text-decoration:none;color:var(--ink);border:1.5px dashed #ccc;min-height:92px"><span style="text-align:center">+ Your own<br>photo</span></a>`;
+  $("visnote").innerHTML = room.id === "own"
+    ? `Your photo. The tiles follow the dots you placed${S.own.areaM2 ? `, and your floor is about <b>${S.own.areaM2.toFixed(1)} m²</b>` : ""}. <a href="#/mark">Adjust the dots</a>. Measure your room before you order.`
+    : "Sample room. Tiles are drawn at their real size and follow the room's light, but colours on screen can look slightly different from the real tile. Ask for a sample in the showroom before you order.";
   document.querySelectorAll("#vsurf button").forEach(b => { b.disabled = !room.surfaces[b.dataset.s]; b.classList.toggle("on", b.dataset.s === surf); });
   $("swTitle").textContent = `${SURF[surf]} tiles for ${room.location === "outdoor" ? "outdoors" : "indoors"}`;
   const tiles = CAT.filter(p => p.kind === "tile" && (p.surfaces || []).includes(surf) && (p.locations || []).includes(room.location));
@@ -235,11 +267,7 @@ function renderVisControls() {
     tiles.map(p => `<button type="button" class="sw ${p.sku === cur ? "on" : ""}" data-vt="${p.sku}" title="${esc(p.name)}, ${esc(p.size_cm)} cm, ${money(p.price)} per m²">
       <img src="${p.image || BLANK}" alt="${esc(p.name)}" loading="lazy"></button>`).join("");
   const p = cur && BY[cur];
-  $("vchosen").innerHTML = p ? `<div class="chosen"><img src="${p.image || BLANK}" alt="">
-      <div><b>${esc(p.name)}</b><small>${esc(p.size_cm)} cm · ${esc(cap(p.finish))} · ${esc(cap(p.material))}</small>
-        <button class="linkbtn" type="button" data-specs="${p.sku}">View specs</button></div>
-      <div class="pr">${money(p.price)}<small><br>per m²</small></div></div>`
-    : `<div class="hint">Pick a tile above to lay it on the ${surf}. ${S.vis[surf] && !cur ? `${esc(BY[S.vis[surf]]?.name || "")} isn't made for this room's ${room.location} ${surf}.` : ""}</div>`;
+  renderPbar(room, surf, p, S.vis[surf] && !cur ? BY[S.vis[surf]] : null);
   const o = S.vis.opt[surf], patch = p && PATCHES[p.sku], square = p && /^(\d+)x\1$/.test(p.size_cm);
   $("vlayout").hidden = !!patch; $("vpatchNote").hidden = !patch;
   $("vrot").hidden = !p || !!patch || square;
@@ -249,14 +277,64 @@ function renderVisControls() {
   document.querySelectorAll("#vgw button").forEach(b => b.classList.toggle("on", +b.dataset.w === S.vis.grout));
   $("vuse").disabled = !(S.vis.floor || S.vis.wall);
 }
-function visChanged() { save(); renderVisControls(); renderSteps(); if (V && loadedRoom === curRoom().id) applyTiles(); }
+// under the picture: the tile on the selected surface, its price and stock, and "Add to project"
+function renderPbar(room, surf, p, unfit) {
+  if (!p) {
+    $("pbar").innerHTML = `<div class="nm"><b>Pick a ${surf} tile on the right</b><small>${unfit ? `${esc(unfit.name)} isn't made for this room's ${room.location} ${surf}.` : "Click the floor or a wall in the picture to switch."}</small></div>`;
+    return;
+  }
+  const a = AVAIL[p.sku], tag = a ? `<span class="tag ${a === "In stock" ? "ok" : a === "Low stock" ? "low" : "out"}">${esc(a)}</span>` : "";
+  const inProj = S.proj[surf].sku === p.sku;
+  const area = room.id === "own" && surf === "floor" && S.own.areaM2 ? ` · your floor ≈ ${S.own.areaM2.toFixed(1)} m²` : "";
+  $("pbar").innerHTML = `<img src="${p.image || BLANK}" alt="">
+    <div class="nm"><b>${esc(p.name)}</b><small>${SURF[surf]} · ${esc(p.size_cm)} cm · ${esc(cap(p.finish))}${area}</small><div>${tag}<button class="linkbtn" type="button" data-specs="${p.sku}">Specs</button></div></div>
+    <div class="pr">${money(p.price)}<small>per m²</small></div>
+    <button class="btn ${inProj ? "ghost" : ""}" type="button" data-addproj="${surf}">${inProj ? "✓ In your project" : "Add to project"}</button>`;
+}
+function addToProject(surf) {
+  const sku = S.vis[surf]; if (!fits(sku, surf)) return false;
+  S.proj[surf].sku = sku;
+  if (curRoom().id === "own" && surf === "floor" && S.own.areaM2 && !S.proj.floor.area) S.proj.floor.area = Math.round(S.own.areaM2 * 10) / 10;
+  if (curRoom().id === "own" && surf === "wall" && S.own.wallM2 && !S.proj.wall.area) S.proj.wall.area = Math.round(S.own.wallM2 * 10) / 10;
+  save(); return true;
+}
+function visChanged() { save(); renderVisControls(); renderSteps(); if (V && loadedKey === roomKey(curRoom())) applyTiles(); }
+
+// hover a surface to see its outline, click it to choose it
+function outlinePath(room, surf) {
+  return (room.surfaces[surf] || []).map(pl => "M" + pl.area.map(([x, y]) => `${x},${y}`).join("L") + "Z").join("");
+}
+function wirePicking() {
+  const st = $("stage"); let last = null;
+  const clear = () => { $("vout").innerHTML = ""; $("vhl").hidden = true; st.classList.remove("pick"); last = null; };
+  st.addEventListener("pointermove", e => {
+    if (cmp || !V || !loadedKey || e.pointerType === "touch") return;
+    const b = st.getBoundingClientRect(), u = (e.clientX - b.left) / b.width, v = (e.clientY - b.top) / b.height;
+    const surf = V.surfaceAt(u, v), room = curRoom();
+    if (!surf || !room.surfaces[surf]) { clear(); return; }
+    if (surf !== last) { $("vout").innerHTML = `<path d="${outlinePath(room, surf)}"/>`; last = surf; }
+    st.classList.add("pick");
+    const hl = $("vhl"); hl.hidden = false; hl.style.left = (e.clientX - b.left) + "px"; hl.style.top = (e.clientY - b.top) + "px";
+    hl.textContent = surf === S.vis.surface ? `${SURF[surf]} (selected)` : `Click to tile the ${surf}`;
+  });
+  st.addEventListener("pointerleave", clear);
+  st.addEventListener("click", e => {
+    if (cmp || !V || !loadedKey) return;
+    const b = st.getBoundingClientRect(), surf = V.surfaceAt((e.clientX - b.left) / b.width, (e.clientY - b.top) / b.height);
+    if (surf && curRoom().surfaces[surf] && surf !== S.vis.surface) {
+      S.vis.surface = surf; save(); renderVisControls();
+      $("vout").innerHTML = `<path d="${outlinePath(curRoom(), surf)}"/>`;
+      if (e.pointerType === "touch" || !e.pointerType) setTimeout(() => { $("vout").innerHTML = ""; }, 900);
+    }
+  });
+}
 
 // before / after: the original photo is laid over the canvas and cut at the handle
 let cmp = false, cmpX = 50;
 function setCompare(on) {
   cmp = on; $("vcmp").classList.toggle("on", on);
-  $("before").hidden = $("handle").hidden = $("lblR").hidden = !on;
-  $("lblL").textContent = on ? "Before" : "Sample room";
+  $("before").hidden = $("handle").hidden = $("lblR").hidden = $("lblL").hidden = !on;
+  $("vout").innerHTML = ""; $("vhl").hidden = true;
   placeHandle(cmpX);
 }
 function placeHandle(x) {
@@ -271,15 +349,225 @@ function wireCompare() {
   st.addEventListener("pointermove", e => { if (drag) at(e); });
   st.addEventListener("pointerup", () => drag = false); st.addEventListener("pointercancel", () => drag = false);
 }
-function downloadImage() {
-  if (!V || !loadedRoom) { toast("The room is still loading."); return; }
-  V.render();
-  $("vcanvas").toBlob(b => {
-    if (!b) { toast("Sorry, the image could not be saved."); return; }
-    const url = URL.createObjectURL(b);
-    const a = Object.assign(document.createElement("a"), { href: url, download: `ceramica-nova-${curRoom().id}.jpg` });
-    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }, "image/jpeg", 0.92);
+function toggleZoom() {
+  const w = $("stagewrap");
+  if (document.fullscreenElement) document.exitFullscreen();
+  else if (w.requestFullscreen && !w.classList.contains("fs")) w.requestFullscreen().catch(() => { w.classList.add("fs"); sizeStage(); });
+  else { w.classList.toggle("fs"); sizeStage(); }
+}
+const canvasBlob = () => new Promise(ok => { V.render(); $("vcanvas").toBlob(ok, "image/jpeg", 0.9); });
+function tilesText() {
+  const room = curRoom();
+  return ["floor", "wall"].filter(s => room.surfaces[s] && fits(S.vis[s], s) && tileOkInRoom(S.vis[s], room))
+    .map(s => `${BY[S.vis[s]].name} on the ${s}`).join(" and ");
+}
+async function downloadImage() {
+  if (!V || !loadedKey) { toast("The room is still loading."); return; }
+  const b = await canvasBlob();
+  if (!b) { toast("Sorry, the image could not be saved."); return; }
+  const url = URL.createObjectURL(b);
+  const a = Object.assign(document.createElement("a"), { href: url, download: `ceramica-nova-${curRoom().id}.jpg` });
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+// Share: the picture is saved on the server (30 days) so it has a link, and goes on the customer's lead.
+async function shareRoom() {
+  if (!V || !loadedKey) { toast("The room is still loading."); return; }
+  const tiles = tilesText();
+  if (!tiles) { toast("Choose a tile first, then share your room."); return; }
+  const btn = $("vshare"); btn.disabled = true;
+  try {
+    const b = await canvasBlob(), room = curRoom();
+    const q = new URLSearchParams({ room: room.name, tiles }); if (S.sessionId) q.set("session_id", S.sessionId);
+    const r = await fetch("/api/v1/visual/renders?" + q, { method: "POST", headers: { "Content-Type": "image/jpeg", "X-User-Id": USER_ID }, body: b });
+    const d = await r.json();
+    if (!r.ok) throw new Error(typeof d.detail === "string" ? d.detail : "");
+    const text = `My ${room.name.toLowerCase()} with ${tiles} from Ceramica Nova: ${d.share_url}`;
+    $("shareImg").src = d.url;
+    $("shareWa").href = "https://wa.me/?text=" + encodeURIComponent(text);
+    $("shareCopy").onclick = async () => { try { await navigator.clipboard.writeText(d.share_url); toast("Link copied."); } catch { prompt("Copy this link:", d.share_url); } };
+    $("shareNative").hidden = !navigator.share;
+    $("shareNative").onclick = () => navigator.share({ title: "My room with Ceramica Nova tiles", text, url: d.share_url }).catch(() => {});
+    $("shareNote").textContent = (d.lead ? "Saved with your project, so your salesperson can see it too. " : "") + "Anyone with the link can see this picture for 30 days.";
+    $("shareModal").classList.add("open");
+  } catch (e) { toast(e.message || "Sorry, the picture could not be shared right now."); }
+  finally { btn.disabled = false; }
+}
+
+// ---------------------------------------------------------------- 2a. choose a room, or upload your own photo
+function renderRoomsPage() {
+  const own = ownRoom();
+  const card = (r, note) => `<button type="button" class="rcard" data-room="${r.id}"><img src="${r.photo}" alt="" loading="lazy">
+    <span>${esc(r.name)}</span><small>${note || (r.surfaces.wall ? "Floor and wall" : "Floor")}${r.location === "outdoor" ? " · outdoor" : ""}</small></button>`;
+  $("rgrid").innerHTML = (own ? card(own, "Your photo") : "") + ROOMS.map(r => card(r)).join("");
+  startHandoff();
+}
+async function shrinkImage(file) {                  // big phone photos: smaller and faster to send
+  const url = URL.createObjectURL(file);
+  try {
+    const im = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = url; });
+    const k = Math.min(1, 2000 / Math.max(im.naturalWidth, im.naturalHeight));
+    const c = document.createElement("canvas"); c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
+    c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+    return await new Promise(ok => c.toBlob(ok, "image/jpeg", 0.88));
+  } catch { return file; } finally { URL.revokeObjectURL(url); }
+}
+async function uploadPhoto(file) {
+  if (!file || !/^image\//.test(file.type || "image/")) { toast("Please choose a photo (JPG, PNG or WebP)."); return; }
+  $("drop").classList.add("busy");
+  try {
+    const body = await shrinkImage(file);
+    const r = await fetch("/api/v1/visual/photos", { method: "POST", headers: { "Content-Type": body.type || "image/jpeg", "X-User-Id": USER_ID }, body });
+    const d = await r.json();
+    if (!r.ok) throw new Error(typeof d.detail === "string" ? d.detail : "Sorry, that photo could not be used.");
+    newOwn(d);
+  } catch (e) { toast(e.message); }
+  finally { $("drop").classList.remove("busy"); $("file").value = ""; }
+}
+function newOwn(photo) {
+  const W = photo.width, H = photo.height;
+  S.own = { photo, location: "indoor", rev: ((S.own && S.own.rev) || 0) + 1, keep: null, areaM2: null, wallM2: null,
+            floor: { pts: [[0.24 * W, 0.6 * H], [0.76 * W, 0.6 * H], [1.03 * W, 1.03 * H], [-0.03 * W, 1.03 * H]], widthM: null, depthM: null },
+            wall: { on: false, pts: [[0.24 * W, 0.14 * H], [0.76 * W, 0.14 * H], [0.76 * W, 0.58 * H], [0.24 * W, 0.58 * H]], widthM: null } };
+  save(); location.hash = "#/mark";
+}
+let hand = null, handTimer = null;
+async function startHandoff(force) {
+  if (hand && !force && hand.expires > Date.now() + 60000) { pollHandoff(); return; }
+  clearTimeout(handTimer); hand = null;
+  $("qrWait").hidden = false; $("qrWait").textContent = "Making a code…"; $("qrState").textContent = "";
+  try {
+    const r = await fetch("/api/v1/visual/handoff", { method: "POST", headers: { "X-User-Id": USER_ID } });
+    const d = await r.json(); if (!r.ok) throw new Error();
+    hand = { code: d.code, expires: Date.now() + d.expires_in * 1000 };
+    $("qrImg").onload = () => { $("qrWait").hidden = true; };
+    $("qrImg").src = d.qr;
+    pollHandoff();
+  } catch { $("qrWait").textContent = "The phone link isn't available right now."; }
+}
+async function pollHandoff() {
+  clearTimeout(handTimer);
+  if (document.body.dataset.page !== "rooms" || !hand) return;
+  try {
+    const r = await fetch(`/api/v1/visual/handoff/${encodeURIComponent(hand.code)}`, { headers: { "X-User-Id": USER_ID } });
+    const d = await r.json();
+    if (r.ok && d.status === "done") { hand = null; toast("Photo received from your phone."); newOwn(d.photo); return; }
+    if (!r.ok || d.status === "expired") { hand = null; $("qrWait").hidden = false; $("qrWait").textContent = "This code has expired."; $("qrState").textContent = ""; return; }
+    $("qrState").textContent = `Waiting for your photo · code valid ${Math.max(1, Math.ceil(d.seconds_left / 60))} more min`;
+  } catch {}
+  handTimer = setTimeout(pollHandoff, 2000);
+}
+
+// ---------------------------------------------------------------- 2b. mark your own photo: 4 dots per surface, one measurement
+let mtab = "floor", mtool = "paint", msize = 28;
+const DOT_NAMES = { floor: ["far left", "far right", "near right", "near left"], wall: ["top left", "top right", "bottom right", "bottom left"] };
+function showMark() {
+  if (!S.own || !S.own.photo) { location.replace("#/rooms"); return; }
+  const o = S.own, img = $("mphoto");
+  if (img.dataset.src !== o.photo.url) {
+    img.dataset.src = o.photo.url; img.src = o.photo.url;
+    const c = $("mbrush"); c.width = Math.round(o.photo.width / 2); c.height = Math.round(o.photo.height / 2);
+    const ctx = c.getContext("2d"); ctx.clearRect(0, 0, c.width, c.height);
+    if (o.keep) { const k = new Image(); k.onload = () => ctx.drawImage(k, 0, 0, c.width, c.height); k.src = o.keep; }
+  }
+  $("mWidth").value = o.floor.widthM ?? ""; $("mDepth").value = o.floor.depthM ?? "";
+  $("mWallOn").checked = !!o.wall.on; $("mWallWidth").value = o.wall.widthM ?? "";
+  sizeMark(); renderMark();
+}
+function sizeMark() {
+  if (!S.own || !S.own.photo) return;
+  const { width: W, height: H } = S.own.photo, ratio = W / H, box = $("mstage").parentElement;
+  const sw = Math.max(200, Math.min(box.clientWidth - 40, Math.min(window.innerHeight * 0.68, 760) * ratio));
+  $("mstage").style.width = sw + "px";
+}
+function measureOwn() {
+  const o = S.own, { width: W, height: H } = o.photo, out = {};
+  if (o.floor.widthM > 0) {
+    const sh = NovaVisualiser.rectShape(o.floor.pts, W, H);
+    const w = o.floor.widthM, d = o.floor.depthM > 0 ? o.floor.depthM : Math.min(60, w * sh.along);
+    out.floor = { w, d, guessed: !(o.floor.depthM > 0) };
+  }
+  if (o.wall.on && o.wall.widthM > 0) {
+    const sh = NovaVisualiser.rectShape(o.wall.pts, W, H);
+    out.wall = { w: o.wall.widthM, h: Math.min(12, o.wall.widthM * sh.along) };
+  }
+  return out;
+}
+function renderMark() {
+  const o = S.own, { width: W, height: H } = o.photo, svg = $("msvg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  document.querySelectorAll("#mseg button").forEach(b => b.classList.toggle("on", b.dataset.ms === mtab));
+  document.querySelectorAll("#mloc button").forEach(b => b.classList.toggle("on", b.dataset.ml === o.location));
+  $("mFloorBox").hidden = mtab !== "floor"; $("mWallBox").hidden = mtab !== "wall"; $("mBrushBox").hidden = mtab !== "brush";
+  $("mWallFields").hidden = !o.wall.on;
+  const r = Math.max(W, H) * 0.014, sw = Math.max(W, H) * 0.0025;
+  const poly = (pts, on, color) => `<path d="M${pts.map(p => p.join(",")).join("L")}Z" fill="${color}" fill-opacity="${on ? 0.18 : 0.08}" stroke="${color}" stroke-width="${on ? sw : sw * 0.6}" ${on ? "" : `stroke-dasharray="${sw * 4} ${sw * 3}"`}/>`;
+  // shapes are clipped to the photo (near corners may sit below it); the dots stay visible outside
+  let html = `<defs><clipPath id="mclip"><rect width="${W}" height="${H}"/></clipPath></defs><g clip-path="url(#mclip)">` + poly(o.floor.pts, mtab === "floor", "#3d6fd8");
+  if (o.wall.on) html += poly(o.wall.pts, mtab === "wall", "#c98a12");
+  html += "</g>";
+  const edge = mtab === "floor" ? o.floor.pts : mtab === "wall" && o.wall.on ? o.wall.pts : null;
+  if (edge) {                                             // the edge that the measurement is about
+    const a = mtab === "floor" ? edge[0] : edge[3], b = mtab === "floor" ? edge[1] : edge[2];
+    html += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#fff" stroke-width="${sw * 2.6}"/><line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${mtab === "floor" ? "#3d6fd8" : "#c98a12"}" stroke-width="${sw * 1.4}"/>`;
+    html += `<text x="${(a[0] + b[0]) / 2}" y="${(a[1] + b[1]) / 2 - r * 1.2}" font-size="${r * 1.5}" text-anchor="middle" fill="#fff" stroke="#111" stroke-width="${sw * 1.2}" paint-order="stroke" font-family="Poppins, sans-serif" font-weight="600">width</text>`;
+    html += edge.map((p, i) => `<circle class="dot" data-i="${i}" cx="${p[0]}" cy="${p[1]}" r="${r}" fill="#fff" stroke="#111" stroke-width="${sw * 1.4}"><title>${DOT_NAMES[mtab][i]}</title></circle>`).join("");
+  }
+  svg.innerHTML = html;
+  svg.style.pointerEvents = mtab === "brush" ? "none" : "auto";
+  $("mbrush").style.pointerEvents = mtab === "brush" ? "auto" : "none";
+  $("mhelp").textContent = mtab === "floor" ? "Place the far dots where the floor meets the back wall, and the near dots at the front corners of the floor (below the photo is fine)."
+    : mtab === "wall" ? (o.wall.on ? "Place the dots on the corners of the wall area you want to tile." : "Tick the box on the right to also try tiles on a wall.")
+    : "Paint over the sofa, bed, bathtub or anything else that stands in front, so the tiles go behind it.";
+  const m = measureOwn();
+  $("mArea").innerHTML = m.floor ? `Floor ≈ <b>${(m.floor.w * m.floor.d).toFixed(1)} m²</b> (${m.floor.w.toFixed(1)} × ${m.floor.d.toFixed(1)} m)` +
+    (m.floor.guessed ? `<br><small>The depth is estimated from the photo. Enter it if you know it.</small>` : "") : "";
+  $("mdone").disabled = !m.floor;
+  $("mdone").title = m.floor ? "" : "Enter the width of the far edge first";
+}
+function wireMark() {
+  const svg = $("msvg"); let drag = null;
+  const toPhoto = e => { const b = svg.getBoundingClientRect(), { width: W, height: H } = S.own.photo;
+    return [Math.max(-0.06 * W, Math.min(1.06 * W, (e.clientX - b.left) / b.width * W)), Math.max(-0.04 * H, Math.min(1.1 * H, (e.clientY - b.top) / b.height * H))]; };
+  svg.addEventListener("pointerdown", e => { const c = e.target.closest(".dot"); if (!c) return; drag = +c.dataset.i; svg.setPointerCapture(e.pointerId); e.preventDefault(); });
+  svg.addEventListener("pointermove", e => { if (drag === null) return; S.own[mtab].pts[drag] = toPhoto(e).map(v => Math.round(v)); renderMark(); });
+  const end = () => { if (drag !== null) { drag = null; save(); } };
+  svg.addEventListener("pointerup", end); svg.addEventListener("pointercancel", end);
+  // furniture brush
+  const c = $("mbrush"), ctx = c.getContext("2d"); let painting = false, lastP = null;
+  const at = e => { const b = c.getBoundingClientRect(); return [(e.clientX - b.left) / b.width * c.width, (e.clientY - b.top) / b.height * c.height, msize * c.width / b.width]; };
+  const dab = e => {
+    const [x, y, r] = at(e);
+    ctx.globalCompositeOperation = mtool === "erase" ? "destination-out" : "source-over";
+    ctx.strokeStyle = ctx.fillStyle = "#e0245e"; ctx.lineWidth = r * 2; ctx.lineCap = "round";
+    ctx.beginPath(); if (lastP) { ctx.moveTo(lastP[0], lastP[1]); ctx.lineTo(x, y); ctx.stroke(); } else { ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+    lastP = [x, y];
+  };
+  c.addEventListener("pointerdown", e => { painting = true; lastP = null; c.setPointerCapture(e.pointerId); dab(e); });
+  c.addEventListener("pointermove", e => { if (painting) dab(e); });
+  const stop = () => { if (!painting) return; painting = false; lastP = null; saveBrush(); };
+  c.addEventListener("pointerup", stop); c.addEventListener("pointercancel", stop);
+  $("mclear").onclick = () => { ctx.clearRect(0, 0, c.width, c.height); saveBrush(); };
+  const num = v => { const n = parseFloat(v); return n > 0 ? n : null; };
+  $("mWidth").oninput = e => { S.own.floor.widthM = num(e.target.value); save(); renderMark(); };
+  $("mDepth").oninput = e => { S.own.floor.depthM = num(e.target.value); save(); renderMark(); };
+  $("mWallWidth").oninput = e => { S.own.wall.widthM = num(e.target.value); save(); renderMark(); };
+  $("mWallOn").onchange = e => { S.own.wall.on = e.target.checked; save(); renderMark(); };
+  $("mdone").onclick = () => {
+    const m = measureOwn(); if (!m.floor) return;
+    const o = S.own;
+    o.floor.size = [Math.round(m.floor.w * 100), Math.round(m.floor.d * 100)];
+    o.areaM2 = m.floor.w * m.floor.d;
+    if (m.wall) { o.wall.size = [Math.round(m.wall.w * 100), Math.round(m.wall.h * 100)]; o.wallM2 = m.wall.w * m.wall.h; }
+    else { o.wall.size = null; o.wallM2 = null; }
+    o.rev = (o.rev || 0) + 1;
+    S.vis.room = "own"; S.vis.picked = true; S.vis.surface = "floor";
+    save(); location.hash = "#/visual";
+  };
+}
+function saveBrush() {
+  const c = $("mbrush"), d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+  let any = false; for (let i = 3; i < d.length; i += 64) if (d[i]) { any = true; break; }
+  S.own.keep = any ? c.toDataURL("image/png") : null; save();
 }
 
 // ---------------------------------------------------------------- 3. project
@@ -464,7 +752,12 @@ document.addEventListener("click", e => {
   else if (d.quote) send(`I'd like a quote for ${d.quote}.`);
   else if (d.swap) send(`Show me alternatives to ${d.swap}.`);
   else if (d.specs) showSpecs([d.specs]);
-  else if (d.room) { S.vis.room = d.room; S.vis.picked = true; save(); showVisual(); }
+  else if (d.room) { S.vis.room = d.room; S.vis.picked = true; save(); if (location.hash === "#/visual") showVisual(); else location.hash = "#/visual"; }
+  else if (d.addproj) { if (addToProject(d.addproj)) { renderVisControls(); toast("Added to your project.", ["Open project", "#/project"]); } }
+  else if (d.ms) { mtab = d.ms; renderMark(); }
+  else if (d.ml) { S.own.location = d.ml; save(); renderMark(); }
+  else if (d.mt) { mtool = d.mt; document.querySelectorAll("#mtool button").forEach(b => b.classList.toggle("on", b === t)); }
+  else if (d.mz) { msize = +d.mz; document.querySelectorAll("#msize button").forEach(b => b.classList.toggle("on", b === t)); }
   else if (t.closest("#vsurf") && d.s) { S.vis.surface = d.s; save(); renderVisControls(); }
   else if (d.vt !== undefined) { S.vis[S.vis.surface] = d.vt || null; if (d.vt) S.selected = d.vt; visChanged(); }
   else if (d.l !== undefined) { S.vis.opt[S.vis.surface].layout = +d.l; visChanged(); }
@@ -490,13 +783,26 @@ document.addEventListener("input", e => { const d = e.target.dataset; if (d.area
 $("vrot").onclick = () => { const o = S.vis.opt[S.vis.surface]; o.rotate = !o.rotate; visChanged(); };
 $("vcmp").onclick = () => setCompare(!cmp);
 $("vdl").onclick = downloadImage;
+$("vzoom").onclick = toggleZoom;
+$("vshare").onclick = shareRoom;
+$("shareClose").onclick = () => $("shareModal").classList.remove("open");
+$("shareModal").onclick = e => { if (e.target.id === "shareModal") $("shareModal").classList.remove("open"); };
 $("vuse").onclick = () => {
-  for (const surf of ["floor", "wall"]) {
-    const sku = S.vis[surf], room = curRoom();
-    if (sku && room.surfaces[surf] && fits(sku, surf)) { if (S.proj[surf].sku !== sku) S.proj[surf].sku = sku; }
-  }
+  const room = curRoom();
+  for (const surf of ["floor", "wall"]) if (room.surfaces[surf] && fits(S.vis[surf], surf)) addToProject(surf);
   save(); location.hash = "#/project";
 };
+$("file").onchange = e => uploadPhoto(e.target.files[0]);
+const drop = $("drop");
+["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", e => uploadPhoto(e.dataTransfer.files[0]));
+$("qrNew").onclick = () => startHandoff(true);
+document.addEventListener("fullscreenchange", () => { $("vzoom").classList.toggle("on", !!document.fullscreenElement); sizeStage(); });
+let resizeT = null;
+window.addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => {
+  if (document.body.dataset.page === "visual") sizeStage(); if (document.body.dataset.page === "mark") sizeMark(); }, 120); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && $("stagewrap").classList.contains("fs")) { $("stagewrap").classList.remove("fs"); sizeStage(); } });
 $("pdf").onclick = downloadPdf;
 $("addCart").onclick = () => { if (toCart()) toast("Added to your cart.", ["View cart", "/#/cart"]); };
 $("orderNow").onclick = () => { if (toCart()) location.href = "/#/checkout?type=order"; };
@@ -526,7 +832,7 @@ $("cbForm").onsubmit = async e => {
     $("cbName").disabled = $("cbPhone").disabled = true;
   } catch (ex) { msg.textContent = ex.message; $("cbSend").disabled = false; }
 };
-wireCompare();
+wireCompare(); wirePicking(); wireMark();
 window.addEventListener("hashchange", route);
 window.addEventListener("storage", e => { if (e.key === "nova_cart_v1") renderSteps(); });
 
@@ -536,6 +842,10 @@ S.log.forEach(e => $("log").appendChild(rowEl(e)));
 fetch("/health").then(r => r.json()).then(h => $("tmode").textContent = "Server: " + h.agent_mode).catch(() => {});
 fetch("/api/v1/catalog").then(r => r.json()).then(c => {
   CAT = c.products; BY = Object.fromEntries(CAT.map(p => [p.sku, p]));
+  fetch("/api/shop/products").then(r => r.json()).then(d => {      // stock labels for the price bar
+    AVAIL = Object.fromEntries((d.products || []).map(p => [p.sku, p.availability]));
+    if (document.body.dataset.page === "visual") renderVisControls();
+  }).catch(() => {});
   const ask = (new URLSearchParams(location.search).get("sku") || "").toUpperCase();   // "Ask about this tile" from the shop
   if (BY[ask]) {
     if (isTile(ask)) { S.selected = ask; useTile(ask); save(); }

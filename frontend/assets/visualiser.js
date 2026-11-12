@@ -221,6 +221,7 @@
       const lightTex = texture(c2.canvas);
       const small = c2.getImageData(0, 0, W, H).data;
 
+      const keepMask = room.keepMask ? await loadImage(room.keepMask) : null;   // brush strokes from the customer
       const planes = [];
       for (const [surface, list] of Object.entries(room.surfaces || {})) {
         for (const pl of list) {
@@ -229,6 +230,7 @@
           drawShapes(m, [pl.area], sx);
           m.globalCompositeOperation = "destination-out";
           drawShapes(m, pl.keep, sx);
+          if (keepMask) m.drawImage(keepMask, 0, 0, W, H);
           m.filter = "none";
           if (pl.auto) m.drawImage(autoKeep(pl, sharp, W, H, sx), 0, 0);
           m.globalCompositeOperation = "source-over";
@@ -237,7 +239,9 @@
           for (let i = 0; i < md.length; i += 4 * 37) if (md[i + 3] > 200) { sum += (0.299 * small[i] + 0.587 * small[i + 1] + 0.114 * small[i + 2]) / 255; n++; }
           const [w, d] = pl.size;
           const H2 = homography([[0, 0], [w, 0], [w, d], [0, d]], pl.quad.map(([x, y]) => [x * sx, y * sx]));
-          planes.push({ surface, maskTex: texture(m.canvas), hinv: invert3(H2), mean: n ? Math.max(0.12, sum / n) : 0.6 });
+          const hit = new Uint8Array(Math.ceil(W / 4) * Math.ceil(H / 4));   // coarse copy of the mask, to know what was clicked
+          for (let y = 0, k = 0; y < H; y += 4) for (let x = 0; x < W; x += 4, k++) hit[k] = md[(y * W + x) * 4 + 3];
+          planes.push({ surface, maskTex: texture(m.canvas), hinv: invert3(H2), mean: n ? Math.max(0.12, sum / n) : 0.6, hit });
         }
       }
       scene = { photoTex, lightTex, planes, W, H, closeup: !!room.closeup };
@@ -311,8 +315,32 @@
       }
     }
 
-    return { setRoom, setTile, setOptions, render, get size() { return scene ? [scene.W, scene.H] : null; } };
+    /** Which surface is at (u, v), both 0..1 across the photo? Walls first (they are drawn in front of floor edges). */
+    function surfaceAt(u, v) {
+      if (!scene) return null;
+      const cw = Math.ceil(scene.W / 4), x = Math.min(cw - 1, Math.max(0, (u * scene.W / 4) | 0)), y = Math.max(0, (v * scene.H / 4) | 0);
+      const order = [...scene.planes].sort((a, b) => (a.surface === "wall" ? -1 : 1) - (b.surface === "wall" ? -1 : 1));
+      for (const pl of order) if ((pl.hit[y * cw + x] || 0) > 110) return pl.surface;
+      return null;
+    }
+
+    return { setRoom, setTile, setOptions, render, surfaceAt, get size() { return scene ? [scene.W, scene.H] : null; } };
   }
 
-  window.NovaVisualiser = { create, homography, invert3 };
+  /** Real proportions of a rectangle seen in a photo: its 4 corners (pixels, in order around it) and the photo size.
+   *  Uses the camera's focal length, found from the two vanishing directions when they are usable,
+   *  otherwise a typical phone camera. Returns { across, along } with across = 1 (the first side). */
+  function rectShape(pts, W, H) {
+    const Hm = homography([[0, 0], [1, 0], [1, 1], [0, 1]], pts);          // unit square -> photo
+    const cx = W / 2, cy = H / 2, col = j => [Hm[j], Hm[3 + j], Hm[6 + j]];
+    const sh = ([a, b, c]) => [a - cx * c, b - cy * c, c];
+    const h1 = sh(col(0)), h2 = sh(col(1));
+    let f2 = -(h1[0] * h2[0] + h1[1] * h2[1]) / (h1[2] * h2[2]);
+    const big = Math.max(W, H), fDefault = 0.8 * big;
+    let f = Number.isFinite(f2) && f2 > (0.45 * big) ** 2 && f2 < (2.6 * big) ** 2 ? Math.sqrt(f2) : fDefault;
+    const len = h => Math.hypot(h[0] / f, h[1] / f, h[2]);
+    return { across: 1, along: len(h2) / len(h1), focal: f };
+  }
+
+  window.NovaVisualiser = { create, homography, invert3, rectShape };
 })();

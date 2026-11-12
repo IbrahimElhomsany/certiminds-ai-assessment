@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Send a room photo | Ceramica Nova</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#111; --muted:#6b7280; --line:#e7e7e7; --ok:#2fa865; --bad:#c0392b; --accent:#3d6fd8; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#fafafa; color:#1f2328; font:15px/1.5 "Poppins", -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width:480px; margin:0 auto; padding:20px 16px 32px; }
+  .brand { display:flex; align-items:center; gap:10px; margin-bottom:18px; }
+  .brand b { letter-spacing:.08em; font-size:16px; } .brand small { display:block; font-size:10px; letter-spacing:.3em; color:var(--muted); }
+  h1 { font-size:22px; margin:0 0 6px; color:var(--ink); }
+  p { margin:0 0 14px; color:var(--muted); }
+  .tips { background:#fff; border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-bottom:16px; font-size:13.5px; }
+  .tips li { margin:3px 0; }
+  .btn { display:flex; width:100%; align-items:center; justify-content:center; gap:8px; border:0; border-radius:14px; padding:15px; font:inherit; font-weight:600; background:var(--ink); color:#fff; cursor:pointer; }
+  .btn.ghost { background:#fff; color:var(--ink); border:1px solid var(--line); margin-top:10px; }
+  .btn:disabled { opacity:.45; }
+  input[type=file] { display:none; }
+  img.prev { width:100%; border-radius:14px; margin:4px 0 12px; display:block; }
+  .msg { margin-top:14px; font-size:14px; text-align:center; }
+  .ok { color:var(--ok); font-weight:600; } .bad { color:var(--bad); }
+  .done { text-align:center; padding:30px 10px; }
+  .done .tick { width:64px; height:64px; border-radius:50%; background:var(--ok); color:#fff; display:grid; place-items:center; font-size:34px; margin:0 auto 14px; }
+  .fine { font-size:12px; color:var(--muted); margin-top:18px; text-align:center; }
+</style>
+</head>
+<body>
+<main>
+  <div class="brand">
+    <svg width="34" height="34" viewBox="0 0 40 40" aria-hidden="true"><g transform="rotate(45 20 20)"><rect x="9" y="9" width="10" height="10" fill="#111"/><rect x="21" y="9" width="10" height="10" fill="#3d6fd8"/><rect x="9" y="21" width="10" height="10" fill="#3d6fd8"/><rect x="21" y="21" width="10" height="10" fill="#111"/></g></svg>
+    <div><b>CERAMICA</b><small>NOVA</small></div>
+  </div>
+  <section id="ask">
+    <h1>Send a photo of your room</h1>
+    <p>It appears on the screen where you scanned the code, so you can try our tiles in your own room.</p>
+    <ul class="tips">
+      <li>Hold the phone level, at chest height, in landscape.</li>
+      <li>Show as much of the floor as you can, including the far corners.</li>
+      <li>Turn on the lights and avoid people in the picture.</li>
+    </ul>
+    <img class="prev" id="prev" alt="" hidden>
+    <label class="btn" for="cam" id="camBtn">📷 Take a photo</label>
+    <input id="cam" type="file" accept="image/*" capture="environment">
+    <label class="btn ghost" for="pick">Choose from my photos</label>
+    <input id="pick" type="file" accept="image/*">
+    <button class="btn" id="send" type="button" hidden style="margin-top:10px;background:var(--accent)">Send to the screen</button>
+    <div class="msg" id="msg" role="status"></div>
+  </section>
+  <section class="done" id="done" hidden>
+    <div class="tick">✓</div>
+    <h1>Sent!</h1>
+    <p>Look at the screen: your room is ready to try tiles on. You can close this page.</p>
+  </section>
+  <div class="fine">This link works once and expires 15 minutes after it was made. Your photo is deleted after 7 days.</div>
+</main>
+<script>
+const code = location.pathname.split("/").pop();
+const $ = id => document.getElementById(id);
+let blob = null;
+
+// Shrink big phone photos before sending: faster on mobile data, and the server only keeps 2000 px.
+async function shrink(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const im = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = url; });
+    const k = Math.min(1, 2000 / Math.max(im.naturalWidth, im.naturalHeight));
+    const c = document.createElement("canvas"); c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
+    c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+    return await new Promise(ok => c.toBlob(ok, "image/jpeg", 0.88));
+  } catch { return file; } finally { URL.revokeObjectURL(url); }
+}
+async function chosen(e) {
+  const f = e.target.files[0]; if (!f) return;
+  $("msg").textContent = "Preparing…";
+  blob = await shrink(f);
+  $("prev").src = URL.createObjectURL(blob); $("prev").hidden = false;
+  $("send").hidden = false; $("camBtn").textContent = "📷 Take another"; $("msg").textContent = "";
+}
+$("cam").onchange = chosen; $("pick").onchange = chosen;
+$("send").onclick = async () => {
+  if (!blob) return;
+  $("send").disabled = true; $("msg").textContent = "Sending…";
+  try {
+    const r = await fetch(`/api/v1/visual/handoff/${encodeURIComponent(code)}/photo`, { method: "POST", headers: { "Content-Type": "image/jpeg" }, body: blob });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(typeof d.detail === "string" ? d.detail : "Sorry, that didn't work. Please try again.");
+    $("ask").hidden = true; $("done").hidden = false;
+  } catch (e) { $("msg").innerHTML = `<span class="bad">${e.message.replace(/[<>&]/g, "")}</span>`; $("send").disabled = false; }
+};
+</script>
+</body>
+</html>

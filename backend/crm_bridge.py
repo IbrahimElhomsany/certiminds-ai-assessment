@@ -308,3 +308,22 @@ def request_callback(session, name: str, phone: str, email: Optional[str] = None
     except Exception as e:
         log_event("crm_callback_failed", error=type(e).__name__)
         return None
+
+
+def save_room_preview(session, url: str, room: str, tiles: str) -> Optional[str]:
+    """A customer saved a picture of their room with our tiles: put it on their lead's timeline."""
+    try:
+        with SessionLocal() as db:
+            t = _tenant(db)
+            if t is None:
+                return None
+            row = _chat_row(db, t, session)
+            lead = _ensure_lead(db, t, row, session)
+            what = f"{room} with {tiles}" if tiles else room or "their room"
+            db.add(Activity(tenant_id=t.id, lead_id=lead.id, type="room_preview", created_at=local_now(),
+                            text=f"Saved a room preview in the visualiser: {what}. {url}"))
+            db.commit()
+            return lead.number
+    except Exception as e:
+        log_event("crm_room_preview_failed", error=type(e).__name__)
+        return None

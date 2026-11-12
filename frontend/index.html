@@ -250,8 +250,77 @@
   .toast.show { transform:translateX(-50%); visibility:visible; }
   .toast a { color:#9fbaf0; font-weight:600; margin-left:8px; }
 
+  /* ---------- choose a room / own photo */
+  .roomsgrid { display:grid; grid-template-columns:minmax(0, 46%) minmax(0, 1fr); gap:28px; align-items:start; }
+  .ptitle { font-size:26px; margin:6px 0 16px; color:var(--ink); font-weight:600; letter-spacing:-.01em; }
+  .ptitle em { font-style:normal; color:var(--gold); } .ptitle.muted { color:var(--muted); font-weight:500; }
+  .upl { padding:16px; display:grid; gap:14px; background:var(--cream); border:0; }
+  .drop { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; text-align:center; border:1.5px dashed #c9c9c9; border-radius:16px; padding:34px 16px; background:#fff; cursor:pointer; color:var(--ink); transition:border-color .2s, background .2s; }
+  .drop span { font-size:12.5px; color:var(--muted); }
+  .drop.over, .drop:hover { border-color:var(--ink); background:#fdfdfd; }
+  .drop.busy { opacity:.6; pointer-events:none; }
+  .qrbox { display:flex; gap:16px; align-items:center; background:#fff; border-radius:16px; padding:16px; }
+  .qrbox b { display:block; color:var(--ink); } .qrbox small { display:block; color:var(--text); font-size:12.5px; margin:3px 0; } .qrbox small.muted { color:var(--muted); }
+  .qr { position:relative; width:132px; height:132px; flex:none; border-radius:10px; background:#f3f3f3; overflow:hidden; }
+  .qr img { width:100%; height:100%; display:block; }
+  .qrwait { position:absolute; inset:0; display:grid; place-items:center; font-size:12px; color:var(--muted); text-align:center; padding:8px; background:rgba(255,255,255,.9); }
+  .fine { font-size:11.5px; color:var(--muted); margin:10px 2px 0; }
+  .rgrid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:16px; }
+  .rcard { border:0; padding:0; background:none; text-align:left; color:inherit; }
+  .rcard img { width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:12px; transition:transform .2s, box-shadow .2s; }
+  .rcard:hover img { transform:translateY(-2px); box-shadow:0 10px 24px rgba(0,0,0,.12); }
+  .rcard span { display:block; font-size:13.5px; margin-top:6px; color:var(--ink); }
+  .rcard small { color:var(--muted); font-size:11.5px; }
+  .mstage { position:relative; margin:0 auto; touch-action:none; user-select:none; }
+  .mstage img, .mstage canvas, .mstage svg { position:absolute; left:0; top:0; width:100%; height:100%; display:block; }
+  .mstage img { position:relative; height:auto; border-radius:10px; }
+  .mstage svg { overflow:visible; }
+  .mstage .dot { cursor:grab; }
+  .fields2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; } .fields2 .field input { width:100%; }
+  .measure { margin-top:10px; font-size:13px; color:var(--ink); background:var(--gold-soft); border-radius:10px; padding:8px 10px; }
+  .measure:empty { display:none; }
+  .chk { display:flex; gap:8px; align-items:center; font-weight:500; font-size:13.5px; cursor:pointer; }
+  /* toolbar, outline, price bar */
+  .vtool { display:flex; align-items:center; gap:4px; margin-bottom:10px; flex-wrap:wrap; }
+  .vtool .tb { display:inline-flex; align-items:center; gap:6px; border:0; background:none; border-radius:10px; padding:7px 10px; font-size:13px; font-weight:500; color:var(--ink); text-decoration:none; }
+  .vtool .tb:hover, .vtool .tb.on { background:var(--cream); }
+  .vtool .tb .ico { width:17px; height:17px; }
+  .vtitle { flex:1; text-align:center; font-weight:600; color:var(--ink); font-size:13.5px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .stagebox { display:flex; justify-content:center; }
+  .stagewrap:fullscreen, .stagewrap.fs { background:#111; display:flex; flex-direction:column; padding:16px; border-radius:0; }
+  .stagewrap.fs { position:fixed; inset:0; z-index:60; border:0; }
+  .stagewrap:fullscreen .vtool .tb, .stagewrap:fullscreen .vtitle, .stagewrap.fs .vtool .tb, .stagewrap.fs .vtitle { color:#fff; }
+  .stagewrap:fullscreen .vtool .tb:hover, .stagewrap.fs .vtool .tb:hover, .stagewrap.fs .vtool .tb.on { background:#2a2a2a; }
+  .stagewrap:fullscreen .stagebox, .stagewrap.fs .stagebox { flex:1; align-items:center; }
+  .stagewrap:fullscreen .pbar, .stagewrap:fullscreen .rooms, .stagewrap:fullscreen .visnote,
+  .stagewrap.fs .pbar, .stagewrap.fs .rooms, .stagewrap.fs .visnote { display:none; }
+  #pMark .stagewrap { padding:24px 24px 72px; }
+  #mbrush { opacity:.5; }
+  .stage .outline { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+  .stage .outline path { fill:rgba(61,111,216,.10); stroke:#3d6fd8; stroke-width:2.5; vector-effect:non-scaling-stroke; stroke-linejoin:round; }
+  .hoverlbl { position:absolute; pointer-events:none; background:var(--ink); color:#fff; font-size:12px; font-weight:500; padding:4px 10px; border-radius:99px; transform:translate(-50%, -150%); white-space:nowrap; }
+  .stage.pick { cursor:pointer; }
+  .pbar { display:flex; align-items:center; gap:12px; border:1px solid var(--line); border-radius:14px; padding:8px 10px; margin-top:12px; }
+  .pbar:empty { display:none; }
+  .pbar img { width:46px; height:46px; border-radius:8px; object-fit:cover; flex:none; }
+  .pbar .nm { min-width:0; } .pbar .nm b { display:block; color:var(--ink); font-size:13.5px; } .pbar .nm small { color:var(--muted); font-size:11.5px; }
+  .pbar .pr { margin-left:auto; text-align:right; white-space:nowrap; font-weight:700; color:var(--ink); }
+  .pbar .pr small { display:block; font-weight:500; color:var(--muted); font-size:11px; }
+  .pbar .btn { padding:9px 14px; flex:none; }
+  .sharebtns { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; }
+  .sharebtns .btn { padding:10px; }
+  @media (max-width: 1180px) { .roomsgrid { grid-template-columns:1fr; } }
+  @media (max-width: 760px) {
+    .rgrid { grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; }
+    .ptitle { font-size:21px; }
+    .vtool .tb span { display:none; } .vtool .tb { padding:8px; }
+    .pbar { flex-wrap:wrap; } .pbar .btn { width:100%; }
+    .qr { width:110px; height:110px; }
+    .sharebtns { grid-template-columns:1fr; }
+  }
+
   @media print {
-    header.top, #pStart, #pChat, #pVisual, .areas, .cta, .more, .callback, .toast, .modal { display:none !important; }
+    header.top, #pStart, #pChat, #pVisual, #pRooms, #pMark, .areas, .cta, .more, .callback, .toast, .modal { display:none !important; }
     #pProject { display:block !important; } .projgrid { display:block !important; } .summary { border:0 !important; position:static !important; }
   }
   @media (max-width: 1180px) {
@@ -306,7 +375,7 @@
     <a class="choice" href="#/chat"><div class="img" style="background-image:url('/images/CN006.jpg')"><span class="num">1</span></div>
       <div class="body"><b>Find my tiles</b><p>Tell Nova about your room, area and budget. It suggests tiles that suit it, checks stock and prices them.</p>
         <span class="go">Chat with Nova <svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
-    <a class="choice" href="#/visual"><div class="img" style="background-image:url('/images/vis_living.jpg')"><span class="num">2</span></div>
+    <a class="choice" href="#/rooms"><div class="img" style="background-image:url('/images/vis_living.jpg')"><span class="num">2</span></div>
       <div class="body"><b>See it in a room</b><p>Try any tile on the floor or wall of a sample room, at its real size, with your grout colour and layout.</p>
         <span class="go">Open the visualiser <svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
     <a class="choice" href="#/project"><div class="img" style="background-image:url('/images/vis_kitchen.jpg')"><span class="num">3</span></div>
@@ -359,32 +428,126 @@
   </div>
 </main>
 
-<!-- 2. VISUAL -->
-<main class="page" id="pVisual" hidden>
+<!-- 2a. CHOOSE A ROOM -->
+<main class="page" id="pRooms" hidden>
+  <div class="roomsgrid">
+    <section>
+      <h2 class="ptitle">See our tiles <em>in your room</em></h2>
+      <div class="panel upl">
+        <label class="drop" id="drop">
+          <input type="file" id="file" accept="image/*" hidden>
+          <svg width="64" height="64" viewBox="0 0 24 24" class="ico" style="width:58px;height:58px;stroke-width:1.3"><path d="M6 3h9l4 4v14H6zM14 3v5h5M8 18l3-4 2 2 2-3 2 5z"/></svg>
+          <b>Drag &amp; drop a photo of your room</b>
+          <span>or <u>choose an image</u> from this device</span>
+        </label>
+        <div class="qrbox">
+          <div class="qr" id="qrWrap"><img id="qrImg" alt="QR code to send a photo from your phone"><div class="qrwait" id="qrWait">Making a code…</div></div>
+          <div><b>Use your phone's camera</b>
+            <small>Scan this code, take a photo of your room, and it appears on this screen.</small>
+            <small class="muted" id="qrState"></small>
+            <button class="linkbtn" type="button" id="qrNew">Make a new code</button></div>
+        </div>
+      </div>
+      <p class="fine">Your photo is only used for this preview. The phone link works once and expires after 15 minutes, and photos are deleted after 7 days.</p>
+    </section>
+    <section>
+      <h2 class="ptitle muted">or try one of our rooms</h2>
+      <div class="rgrid" id="rgrid"></div>
+    </section>
+  </div>
+</main>
+
+<!-- 2b. MARK YOUR OWN PHOTO -->
+<main class="page" id="pMark" hidden>
   <div class="visgrid">
     <section class="panel stagewrap">
-      <div class="stage" id="stage">
-        <canvas id="vcanvas" aria-label="Room with your tiles"></canvas>
-        <img class="before" id="before" alt="" hidden>
-        <div class="handle" id="handle" hidden></div>
-        <span class="label" id="lblL">Sample room</span><span class="label r" id="lblR" hidden>With your tiles</span>
-        <div class="loading" id="vload" hidden>Loading the room…</div>
-        <div class="fail" id="vfail" hidden>This browser can't draw the visualiser (WebGL 2 is off). You can still choose tiles here and plan your project.</div>
+      <div class="mstage" id="mstage">
+        <img id="mphoto" alt="Your room">
+        <canvas id="mbrush"></canvas>
+        <svg id="msvg" preserveAspectRatio="none"></svg>
       </div>
+      <div class="visnote" id="mhelp"></div>
+    </section>
+    <aside class="panel controls">
+      <div>
+        <h4>Your room</h4>
+        <div class="seg" id="mseg"><button type="button" data-ms="floor">Floor</button><button type="button" data-ms="wall">Wall</button><button type="button" data-ms="brush">Furniture</button></div>
+      </div>
+      <div id="mFloorBox">
+        <div class="hint" style="margin-bottom:8px">Drag the 4 dots to the corners of the floor. The front dots can go below the photo if the floor continues.</div>
+        <div class="fields2">
+          <label class="field">Width of the far edge (m)<input type="number" id="mWidth" min="0.5" max="40" step="0.1" inputmode="decimal" placeholder="e.g. 4.2"></label>
+          <label class="field">Depth (m), if you know it<input type="number" id="mDepth" min="0.5" max="40" step="0.1" inputmode="decimal" placeholder="optional"></label>
+        </div>
+        <div class="measure" id="mArea"></div>
+      </div>
+      <div id="mWallBox" hidden>
+        <label class="chk"><input type="checkbox" id="mWallOn"> Also try tiles on a wall</label>
+        <div id="mWallFields">
+          <div class="hint" style="margin:6px 0 8px">Drag the 4 dots to the corners of the wall area to tile: top left, top right, bottom right, bottom left.</div>
+          <label class="field">Width of that wall (m)<input type="number" id="mWallWidth" min="0.3" max="40" step="0.1" inputmode="decimal" placeholder="e.g. 3.0"></label>
+        </div>
+      </div>
+      <div id="mBrushBox" hidden>
+        <div class="hint" style="margin-bottom:8px">Paint over furniture and things standing in front of the floor or wall, so the tiles go behind them.</div>
+        <div class="ctl2">
+          <div class="seg" id="mtool"><button type="button" data-mt="paint" class="on">Paint</button><button type="button" data-mt="erase">Erase</button></div>
+          <div class="seg" id="msize"><button type="button" data-mz="14">S</button><button type="button" data-mz="28" class="on">M</button><button type="button" data-mz="56">L</button></div>
+          <button class="tglbtn" type="button" id="mclear">Clear</button>
+        </div>
+      </div>
+      <div>
+        <h4>This room is</h4>
+        <div class="seg" id="mloc"><button type="button" data-ml="indoor">Indoors</button><button type="button" data-ml="outdoor">Outdoors</button></div>
+      </div>
+      <div class="vbtns">
+        <button class="btn" type="button" id="mdone">Try tiles in my room <svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+        <a class="btn ghost" href="#/rooms">Choose another photo</a>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<!-- 2c. VISUALISER -->
+<main class="page" id="pVisual" hidden>
+  <div class="visgrid">
+    <section class="panel stagewrap" id="stagewrap">
+      <div class="vtool">
+        <a class="tb" href="#/rooms"><svg class="ico" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg><span>Rooms</span></a>
+        <span class="vtitle" id="vtitle"></span>
+        <button class="tb" type="button" id="vcmp"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3v18M4 5h16v14H4z"/></svg><span>Compare</span></button>
+        <button class="tb" type="button" id="vzoom"><svg class="ico" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span>Zoom</span></button>
+        <button class="tb" type="button" id="vshare"><svg class="ico" viewBox="0 0 24 24"><path d="M18 8a3 3 0 100-6 3 3 0 000 6zM6 15a3 3 0 100-6 3 3 0 000 6zM18 22a3 3 0 100-6 3 3 0 000 6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg><span>Share</span></button>
+        <button class="tb" type="button" id="vdl"><svg class="ico" viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg><span>Download</span></button>
+        <a class="tb" href="#/rooms" id="vup"><svg class="ico" viewBox="0 0 24 24"><path d="M12 20V9m0 0l-4 4m4-4l4 4M5 4h14"/></svg><span>Upload</span></a>
+      </div>
+      <div class="stagebox" id="stagebox">
+        <div class="stage" id="stage">
+          <canvas id="vcanvas" aria-label="Room with your tiles"></canvas>
+          <img class="before" id="before" alt="" hidden>
+          <svg class="outline" id="vout" preserveAspectRatio="none" aria-hidden="true"></svg>
+          <div class="handle" id="handle" hidden></div>
+          <span class="label" id="lblL" hidden>Before</span><span class="label r" id="lblR" hidden>With your tiles</span>
+          <span class="hoverlbl" id="vhl" hidden></span>
+          <div class="loading" id="vload" hidden>Loading the room…</div>
+          <div class="fail" id="vfail" hidden>This browser can't draw the visualiser (WebGL 2 is off). You can still choose tiles here and plan your project.</div>
+        </div>
+      </div>
+      <div class="pbar" id="pbar"></div>
       <div class="rooms" id="rooms"></div>
-      <div class="visnote">Sample rooms. Tiles are drawn at their real size and follow the room's light, but colours on screen can look slightly different from the real tile. Ask for a sample in the showroom before you order.</div>
+      <div class="visnote" id="visnote"></div>
     </section>
 
     <aside class="panel controls">
       <div>
-        <h4>Tile the</h4>
+        <h4>Tiling the</h4>
         <div class="seg" id="vsurf"><button type="button" data-s="floor">Floor</button><button type="button" data-s="wall">Wall</button></div>
+        <div class="hint" style="margin-top:5px">Or click the floor or a wall in the picture.</div>
       </div>
       <div>
         <h4 id="swTitle">Floor tiles</h4>
         <div class="swgrid" id="vsw"></div>
       </div>
-      <div id="vchosen"></div>
       <div id="vlayoutBox">
         <h4>Layout</h4>
         <div class="ctl2">
@@ -399,10 +562,6 @@
           <div class="dots" id="vgc"></div>
           <div class="seg" id="vgw"><button type="button" data-w="0.2">2 mm</button><button type="button" data-w="0.3">3 mm</button><button type="button" data-w="0.5">5 mm</button></div>
         </div>
-      </div>
-      <div class="ctl2">
-        <button class="tglbtn" type="button" id="vcmp"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3v18M4 5h16v14H4z"/></svg>Before / after</button>
-        <button class="tglbtn" type="button" id="vdl"><svg class="ico" viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg>Download image</button>
       </div>
       <div class="vbtns">
         <button class="btn" type="button" id="vuse">Use these tiles <svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
@@ -463,6 +622,17 @@
   <div class="box"><h3 id="specTitle">Technical data</h3><small style="color:var(--muted)">From the Ceramica Nova catalog</small>
     <div id="specBody"></div>
     <div class="mfoot"><button type="button" id="specCsv">Download (CSV)</button><button type="button" class="dark" id="specClose">Close</button></div></div>
+</div>
+<div class="modal" id="shareModal" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+  <div class="box"><h3 id="shareTitle">Share your room</h3>
+    <img id="shareImg" alt="" style="width:100%;border-radius:12px;margin:10px 0;display:block">
+    <div class="sharebtns">
+      <a class="btn" id="shareWa" target="_blank" rel="noopener">WhatsApp</a>
+      <button class="btn ghost" type="button" id="shareCopy">Copy link</button>
+      <button class="btn ghost" type="button" id="shareNative" hidden>More…</button>
+    </div>
+    <div class="hint" id="shareNote" style="margin-top:10px"></div>
+    <div class="mfoot"><button type="button" class="dark" id="shareClose">Close</button></div></div>
 </div>
 <div class="toast" id="toast" role="status"></div>
 

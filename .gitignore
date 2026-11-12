@@ -7,3 +7,4 @@ __pycache__/
 training/models/
 training/adapters/0*_adapters.safetensors
 data/*.db
+data/uploads/

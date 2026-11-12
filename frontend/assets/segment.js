@@ -113,6 +113,13 @@
     return c;
   }
 
+  // no reliable dots: still mark what is neither floor nor wall, so the tiles go behind the furniture
+  function maskOnly({ gw, gh, lab }) {
+    const keep = new Uint8Array(gw * gh);
+    for (let i = 0; i < gw * gh; i++) keep[i] = lab[i] === 0 ? 1 : 0;
+    return { floor: null, wall: null, keep, gw, gh };
+  }
+
   /* seg: {gw, gh, lab}; W, H: photo size in px. Returns null when no usable floor was found. */
   function fit(seg, W, H) {
     const { gw, gh, lab } = seg, sx = W / gw, sy = H / gh;
@@ -121,55 +128,69 @@
     if (main.size < gw * gh * 0.03) return null;                  // under 3% of the picture: not a floor we can use
     const F = main.mask;
 
-    // 1. the far edge: where the floor meets the wall behind it
-    const tops = [], junction = [], wallBottoms = [];
-    for (let x = 0; x < gw; x++) {
-      let y = 0; while (y < gh && !F[y * gw + x]) y++;
-      if (y >= gh || y === 0) continue;
-      tops.push([x, y]);
-      if (near(x, y, 2, 0, -1, 4)) junction.push([x, y]);
-      let w = y - 1; while (w >= 0 && lab[w * gw + x] !== 2) w--;
-      if (w >= 0) wallBottoms.push([x, w + 1]);                  // the lowest wall seen above this bit of floor
-    }
-    if (tops.length < gw * 0.15) return null;
-    // floor next to wall is the real edge; a bed or sofa in the middle hides it, so a few stretches are enough
-    const span = junction.length ? junction[junction.length - 1][0] - junction[0][0] : 0;
-    let far = null, pts = null;
-    if (junction.length >= Math.max(8, gw * 0.03) && span >= gw * 0.12) {
-      pts = junction; far = fitLine(pts);
-      if (far.inliers.length < pts.length * 0.6) {                // a corner view: two walls make a "V", keep the longer side
-        const apex = pts.reduce((m, p) => (p[1] < m[1] ? p : m), pts[0])[0];
-        const L = pts.filter(p => p[0] <= apex), R = pts.filter(p => p[0] >= apex);
-        pts = L.length >= R.length ? L : R;
-        far = fitLine(pts);
+    // 1. the far edge: where the floor meets the back wall. It must run under every bit of that wall and over every
+    //    bit of floor, which pins it where the two touch; a bed in the middle leaves a band, then we take the
+    //    most level line in that band (people photograph a room facing a wall).
+    const tops = new Int32Array(gw).fill(-1);
+    for (let x = 0; x < gw; x++) { let y = 0; while (y < gh && !F[y * gw + x]) y++; if (y < gh && y > 0) tops[x] = y; }
+    if ([...tops].filter(t => t >= 0).length < gw * 0.15) return maskOnly(seg);
+    const back = largestComponent(lab, gw, gh, 2);
+    let far = null, xL = 0, xR = 0;
+    if (back.size > gw * gh * 0.04) {
+      let wx0 = gw, wx1 = -1;
+      for (let i = 0; i < gw * gh; i++) if (back.mask[i]) { const x = i % gw; if (x < wx0) wx0 = x; if (x > wx1) wx1 = x; }
+      const wb = [], ft = [];
+      for (let x = wx0; x <= wx1; x++) {
+        if (tops[x] < 0) continue;
+        let y = tops[x] - 1; while (y >= 0 && !back.mask[y * gw + x]) y--;
+        if (y < 0) continue;
+        wb.push([x, y + 1]); ft.push([x, tops[x]]);
+      }
+      // the back wall's foot is the highest part of the floor outline; side walls run down towards the camera
+      const hi = Math.min(...ft.map(p => p[1])) + gh * 0.06;
+      for (let i = ft.length - 1; i >= 0; i--) if (ft[i][1] > hi) { ft.splice(i, 1); wb.splice(i, 1); }
+      if (wb.length >= gw * 0.06) {
+        const pct = (arr, q) => { const s = [...arr].sort((p, r) => p - r); return s[Math.min(s.length - 1, Math.max(0, Math.round(q * (s.length - 1))))]; };
+        let best = null;
+        for (let k = -80; k <= 80; k++) {
+          const sl = k * 0.005;
+          const bMin = pct(wb.map(([x, y]) => y - sl * x), 0.9), bMax = pct(ft.map(([x, y]) => y - sl * x), 0.1);
+          const gap = bMin - bMax;                               // > 0: the line can't pass between wall and floor
+          const score = gap > 2 ? 1000 + gap : Math.abs(sl);
+          if (!best || score < best.score) best = { score, a: sl, b: Math.max(bMin, bMax) };   // where the floor starts
+        }
+        if (best.score < 1000) {
+          far = { a: best.a, b: best.b };
+          const cols = wb.map(p => p[0]); xL = Math.min(...cols); xR = Math.max(...cols);
+        }
       }
     }
-    if ((!far || far.inliers.length < 10) && wallBottoms.length >= gw * 0.1) {
-      // furniture hides the edge: it runs just under the lowest bits of wall (the bottom of their hull)
-      const cross = (o, a, b) => (a[0] - o[0]) * (o[1] - b[1]) - (o[1] - a[1]) * (b[0] - o[0]);
-      const hull = [];
-      for (const p of wallBottoms) { while (hull.length >= 2 && cross(hull[hull.length - 2], hull[hull.length - 1], p) <= 0) hull.pop(); hull.push(p); }
-      let best = null;
-      for (let i = 1; i < hull.length; i++) {
-        const [p, q] = [hull[i - 1], hull[i]], dx = q[0] - p[0];
-        if (dx > 0 && Math.abs((q[1] - p[1]) / dx) < 0.5 && (!best || dx > best[1][0] - best[0][0])) best = [p, q];
-      }
-      const topAt = x => { const t = tops.find(p => p[0] === x); return t ? t[1] : Infinity; };
-      const touches = p => topAt(p[0]) - p[1] <= gh * 0.04;      // the floor really starts there (not a kitchen worktop)
-      if (best && best[1][0] - best[0][0] >= gw * 0.25) {
-        const a = (best[1][1] - best[0][1]) / (best[1][0] - best[0][0]);
-        const on = wallBottoms.filter(p => Math.abs(p[1] - (best[0][1] + a * (p[0] - best[0][0]))) <= 3);
-        if (on.filter(touches).length >= 3) { pts = on; far = { a, b: best[0][1] - a * best[0][0], inliers: [best[0], ...on, best[1]] }; }
-      }
+    if (!far) {                                                  // no wall to go by: the top of the floor
+      const pts = []; tops.forEach((y, x) => { if (y >= 0) pts.push([x, y]); });
+      const l = fitLine(pts); far = { a: l.a, b: l.b };
+      const xs = l.inliers.map(p => p[0]); xL = Math.min(...xs); xR = Math.max(...xs);
     }
-    if (!far) { pts = tops; far = fitLine(pts); }
-    if (Math.abs(far.a) > 0.8 || far.inliers.length < 10) return null;
-    const xs = far.inliers.map(p => p[0]);
-    const xL = Math.min(...xs), xR = Math.max(...xs);
-    if (xR - xL < gw * 0.15) return null;
+    if (Math.abs(far.a) > 0.8 || xR - xL < gw * 0.15) return maskOnly(seg);
     const yAt = x => far.a * x + far.b;
 
-    // 2. the side edges: where the floor meets a side wall (x = c*y + d)
+    // 2. the back wall: from the far edge up to where the wall ends
+    let wall = null, rise = null;
+    { const r = [];
+      for (let x = Math.ceil(xL); x <= xR; x += 2) {
+        const yb = Math.round(yAt(x)); let top = -1;
+        for (let y = 0; y < yb; y++) if (lab[y * gw + x] === 2) { top = y; break; }
+        if (top >= 0) r.push(yb - top);
+      }
+      if (r.length > (xR - xL) / 2 * 0.4) rise = median(r);
+    }
+    if (rise && rise > gh * 0.12) {
+      wall = [[xL, Math.max(0, yAt(xL) - rise)], [xR, Math.max(0, yAt(xR) - rise)], [xR, yAt(xR)], [xL, yAt(xL)]];
+      let n = 0, w = 0;                                           // mostly wall inside? otherwise skip it
+      for (let y = 0; y < gh; y += 3) for (let x = 0; x < gw; x += 3) if (inQuad(wall, x, y)) { n++; if (lab[y * gw + x] === 2) w++; }
+      if (!n || w / n < 0.35) wall = null;
+    }
+
+    // 3. the side edges: where the floor meets a side wall (x = a*y + b)
     const side = dir => {
       const p = [], x0 = dir < 0 ? xL : xR;
       for (let y = Math.ceil(yAt(x0)) + 2; y < gh; y++) {
@@ -180,51 +201,38 @@
       if (p.length < Math.max(8, gh * 0.08)) return null;
       p.push([x0, yAt(x0)], [x0, yAt(x0)]);                       // the corner counts double
       const l = fitLine(p, false);
-      return Math.sign(l.a || 0) === dir || Math.abs(l.a) < 0.05 ? l : null;   // must open towards the camera
+      return Math.sign(l.a || 0) === dir && Math.abs(l.a) > 0.2 ? l : null;   // must open towards the camera
     };
     let left = side(-1), right = side(1);
-    const yNear = gh * 1.03;
-    const deflt = (x0, xTo) => { const c = (xTo - x0) / (yNear - yAt(x0)); return { a: c, b: x0 - c * yAt(x0) }; };
-    if (!left && right) left = { a: -right.a, b: xL + right.a * yAt(xL) };
-    if (!right && left) right = { a: -left.a, b: xR + left.a * yAt(xR) };
-    if (!left) left = deflt(xL, -0.03 * gw);
-    if (!right) right = deflt(xR, 1.03 * gw);
+    // a side we can't see runs to the vanishing point: in the middle of the photo, at eye height,
+    // which in a room photo is about 3/8 of the wall height above the floor edge
+    const horizon = yAt(gw / 2) - Math.max(rise ? 0.38 * rise : 0, gh * 0.27);
+    const at = (l, y) => l.a * y + l.b;
+    const vp = left && !right ? [at(left, horizon), horizon] : right && !left ? [at(right, horizon), horizon] : [gw / 2, horizon];
+    const toVp = x0 => { const y0 = yAt(x0), a = (x0 - vp[0]) / (y0 - vp[1]); return { a, b: x0 - a * y0 }; };
+    if (!left) left = toVp(xL);
+    if (!right) right = toVp(xR);
 
-    // 3. the near edge: parallel to the far edge, as close to the camera as the dots may go
+    // 4. the near edge: parallel to the far edge, as close to the camera as the dots may go
+    //    (the tiles still cover the floor in front of it: the visualiser extends the sides to the bottom)
     const meet = (side, b2) => { const y = (far.a * side.b + b2) / (1 - far.a * side.a); return [side.a * y + side.b, y]; };
     const ok = p => p[0] >= -0.06 * gw && p[0] <= 1.06 * gw && p[1] <= 1.1 * gh;
-    let b2 = yNear - far.a * gw / 2, NL = meet(left, b2), NR = meet(right, b2);
+    let b2 = gh * 1.03 - far.a * gw / 2, NL = meet(left, b2), NR = meet(right, b2);
     const minB = far.b + gh * 0.1;
     while ((!ok(NL) || !ok(NR)) && b2 > minB) { b2 -= gh * 0.01; NL = meet(left, b2); NR = meet(right, b2); }
     const floor = [[xL, yAt(xL)], [xR, yAt(xR)], NR, NL];
 
-    // 4. the back wall: from the far edge up to where the wall ends
-    let wall = null;
-    const rise = [];
-    for (let x = Math.ceil(xL); x <= xR; x += 2) {
-      const yb = Math.round(yAt(x)); let top = -1;
-      for (let y = 0; y < yb; y++) if (lab[y * gw + x] === 2) { top = y; break; }
-      if (top >= 0) rise.push(yb - top);
-    }
-    if (rise.length > (xR - xL) / 2 * 0.4) {
-      const h = median(rise);
-      if (h > gh * 0.12) {
-        wall = [[xL, Math.max(0, yAt(xL) - h)], [xR, Math.max(0, yAt(xR) - h)], [xR, yAt(xR)], [xL, yAt(xL)]];
-        let n = 0, w = 0;                                         // mostly wall inside? otherwise skip it
-        for (let y = 0; y < gh; y += 3) for (let x = 0; x < gw; x += 3) if (inQuad(wall, x, y)) { n++; if (lab[y * gw + x] === 2) w++; }
-        if (!n || w / n < 0.35) wall = null;
-      }
-    }
-
     // 5. what stands in front: inside the floor shape but not floor, inside the wall shape but not wall
+    //    (the floor shape runs on to the bottom of the photo, like the tiles do)
+    const down = (a, b) => { const y = gh * 1.05, t = (y - a[1]) / ((b[1] - a[1]) || 1e-6); return t > 1 ? [a[0] + (b[0] - a[0]) * t, y] : b; };
+    const floorArea = [floor[0], floor[1], down(floor[1], floor[2]), down(floor[0], floor[3])];
     const keep = new Uint8Array(gw * gh);
     for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
       const v = lab[y * gw + x], cx = x + 0.5, cy = y + 0.5;
-      if ((v !== 1 && inQuad(floor, cx, cy)) || (wall && v !== 2 && inQuad(wall, cx, cy))) keep[y * gw + x] = 1;
+      if ((v !== 1 && inQuad(floorArea, cx, cy)) || (wall && v !== 2 && inQuad(wall, cx, cy))) keep[y * gw + x] = 1;
     }
     const px = q => q.map(([x, y]) => [Math.round(x * sx), Math.round(y * sy)]);
-    return { floor: px(floor), wall: wall ? px(wall) : null, keep, gw, gh,
-             share: main.size / (gw * gh) };
+    return { floor: px(floor), wall: wall ? px(wall) : null, keep, gw, gh };
   }
 
   // draws the keep mask onto a canvas (soft edges), in the brush colour

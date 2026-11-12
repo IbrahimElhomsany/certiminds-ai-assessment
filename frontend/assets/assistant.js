@@ -191,7 +191,10 @@ const SAMPLE_W = 1672, SAMPLE_H = 941;          // our sample room photos
 function ownRoom() {
   const o = S.own;
   if (!o || !o.photo || !o.floor || !o.floor.size) return null;
-  const surfaces = { floor: [{ quad: o.floor.pts, size: o.floor.size, area: o.floor.pts, keep: [] }] };
+  // tiles cover the floor between the far dots and the bottom of the photo, not only up to the near dots
+  const down = (a, b) => { const y = o.photo.height * 1.05, t = (y - a[1]) / ((b[1] - a[1]) || 1e-6); return t > 1 ? [a[0] + (b[0] - a[0]) * t, y] : b; };
+  const [fl, fr, nr, nl] = o.floor.pts;
+  const surfaces = { floor: [{ quad: o.floor.pts, size: o.floor.size, area: [fl, fr, down(fr, nr), down(fl, nl)], keep: [] }] };
   if (o.wall && o.wall.on && o.wall.size) surfaces.wall = [{ quad: o.wall.pts, size: o.wall.size, area: o.wall.pts, keep: [] }];
   return { id: "own", name: "Your room", location: o.location || "indoor", photo: o.photo.url,
            width: o.photo.width, height: o.photo.height, surfaces, keepMask: o.keep || null };
@@ -494,11 +497,12 @@ async function autoDetect() {
     if (!S.own || S.own.rev !== rev) return;                 // the customer moved on to another photo
     const res = NovaSegment.fit(seg, o.photo.width, o.photo.height);
     if (!res) { o.auto = "failed"; save(); say("We couldn't find the floor in this photo. Place the 4 dots by hand.", "bad"); return; }
-    o.floor.pts = res.floor;
+    if (res.floor) o.floor.pts = res.floor;
     if (res.wall) { o.wall.pts = res.wall; o.wall.fromFloor = true; }
     NovaSegment.drawKeep(res, $("mbrush")); saveBrush();
     o.auto = "done"; save(); renderMark();
-    say(`Found the floor${res.wall ? " and the wall" : ""}, and marked the furniture. Check the dots, then enter the width.`, "ok");
+    say(res.floor ? `Found the floor${res.wall ? " and the wall" : ""}, and marked the furniture. Check the dots, then enter the width.`
+                  : "Marked the furniture. We couldn't place the dots for this view, so please drag them to the floor corners.", res.floor ? "ok" : "bad");
   } catch (e) {
     if (!S.own || S.own.rev !== rev) return;
     o.auto = "failed"; save();

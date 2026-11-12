@@ -110,6 +110,7 @@ def admin_showroom_photo():
 
 ROOT = Path(__file__).resolve().parent.parent
 app.mount("/images", StaticFiles(directory=ROOT / "images", check_dir=False), name="images")
+app.mount("/assets", StaticFiles(directory=ROOT / "frontend" / "assets", check_dir=False), name="assets")
 
 
 @app.get("/api/v1/catalog")

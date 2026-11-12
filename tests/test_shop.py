@@ -48,7 +48,8 @@ def checkout(type_="quote", items=None, **over):
 # ------------------------------------------------------------------ pages
 def test_shop_is_the_home_page_and_assistant_moved():
     assert "Ceramica Nova" in client.get("/").text and "/api/shop/products" in client.get("/").text
-    assert "/api/v1/chat" in client.get("/assistant").text
+    assert "/assets/assistant.js" in client.get("/assistant").text
+    assert "/api/v1/chat" in client.get("/assets/assistant.js").text
 
 
 # ------------------------------------------------------------------ browsing

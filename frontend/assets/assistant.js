@@ -425,7 +425,7 @@ async function uploadPhoto(file) {
 }
 function newOwn(photo) {
   const W = photo.width, H = photo.height;
-  S.own = { photo, location: "indoor", rev: ((S.own && S.own.rev) || 0) + 1, keep: null, areaM2: null, wallM2: null,
+  S.own = { photo, location: "indoor", rev: ((S.own && S.own.rev) || 0) + 1, auto: "pending", keep: null, areaM2: null, wallM2: null,
             floor: { pts: [[0.24 * W, 0.6 * H], [0.76 * W, 0.6 * H], [1.03 * W, 1.03 * H], [-0.03 * W, 1.03 * H]], widthM: null, depthM: null },
             wall: { on: false, pts: [[0.24 * W, 0.14 * H], [0.76 * W, 0.14 * H], [0.76 * W, 0.58 * H], [0.24 * W, 0.58 * H]], widthM: null } };
   save(); location.hash = "#/mark";
@@ -472,6 +472,38 @@ function showMark() {
   $("mWidth").value = o.floor.widthM ?? ""; $("mDepth").value = o.floor.depthM ?? "";
   $("mWallOn").checked = !!o.wall.on; $("mWallWidth").value = o.wall.widthM ?? "";
   sizeMark(); renderMark();
+  if (o.auto === "pending" || o.auto === "running") autoDetect(); else showAuto();
+}
+
+// automatic floor, wall and furniture detection (frontend/assets/segment.js); the customer can always adjust it
+let autoMsg = null;
+function showAuto() {
+  const box = $("mauto"), m = autoMsg && S.own && autoMsg.url === S.own.photo.url ? autoMsg : null;
+  box.hidden = !m; if (!m) return;
+  box.className = "auto" + (m.kind ? " " + m.kind : "");
+  $("mautoTxt").textContent = m.text; $("mredo").hidden = m.kind === "";
+}
+async function autoDetect() {
+  const o = S.own, url = o.photo.url, rev = o.rev;
+  const say = (text, kind = "") => { autoMsg = { url, text, kind }; if (S.own && S.own.rev === rev) showAuto(); };
+  if (!window.NovaSegment) { o.auto = "failed"; save(); return; }
+  o.auto = "running";
+  say("Finding the floor and walls…");
+  try {
+    const seg = await NovaSegment.detect(url, f => say(`Getting the room detector ready (first time only)… ${Math.round(f * 100)}%`));
+    if (!S.own || S.own.rev !== rev) return;                 // the customer moved on to another photo
+    const res = NovaSegment.fit(seg, o.photo.width, o.photo.height);
+    if (!res) { o.auto = "failed"; save(); say("We couldn't find the floor in this photo. Place the 4 dots by hand.", "bad"); return; }
+    o.floor.pts = res.floor;
+    if (res.wall) { o.wall.pts = res.wall; o.wall.fromFloor = true; }
+    NovaSegment.drawKeep(res, $("mbrush")); saveBrush();
+    o.auto = "done"; save(); renderMark();
+    say(`Found the floor${res.wall ? " and the wall" : ""}, and marked the furniture. Check the dots, then enter the width.`, "ok");
+  } catch (e) {
+    if (!S.own || S.own.rev !== rev) return;
+    o.auto = "failed"; save();
+    say("Automatic detection isn't available right now. Place the 4 dots by hand.", "bad");
+  }
 }
 function sizeMark() {
   if (!S.own || !S.own.photo) return;
@@ -551,7 +583,12 @@ function wireMark() {
   $("mWidth").oninput = e => { S.own.floor.widthM = num(e.target.value); save(); renderMark(); };
   $("mDepth").oninput = e => { S.own.floor.depthM = num(e.target.value); save(); renderMark(); };
   $("mWallWidth").oninput = e => { S.own.wall.widthM = num(e.target.value); save(); renderMark(); };
-  $("mWallOn").onchange = e => { S.own.wall.on = e.target.checked; save(); renderMark(); };
+  $("mWallOn").onchange = e => {
+    const w = S.own.wall; w.on = e.target.checked;
+    if (w.on && !w.widthM && w.fromFloor && S.own.floor.widthM) { w.widthM = S.own.floor.widthM; $("mWallWidth").value = w.widthM; }   // same edge
+    save(); renderMark();
+  };
+  $("mredo").onclick = () => { if (S.own && S.own.auto !== "running") autoDetect(); };
   $("mdone").onclick = () => {
     const m = measureOwn(); if (!m.floor) return;
     const o = S.own;

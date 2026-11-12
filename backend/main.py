@@ -112,7 +112,15 @@ def admin_showroom_photo():
 
 ROOT = Path(__file__).resolve().parent.parent
 app.mount("/images", StaticFiles(directory=ROOT / "images", check_dir=False), name="images")
-app.mount("/assets", StaticFiles(directory=ROOT / "frontend" / "assets", check_dir=False), name="assets")
+class _RevalidatedFiles(StaticFiles):
+    """Scripts change with every deploy: the browser keeps them but checks the ETag each time (a cheap 304)."""
+    async def get_response(self, path, scope):
+        resp = await super().get_response(path, scope)
+        resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
+
+app.mount("/assets", _RevalidatedFiles(directory=ROOT / "frontend" / "assets", check_dir=False), name="assets")
 
 
 @app.get("/api/v1/catalog")

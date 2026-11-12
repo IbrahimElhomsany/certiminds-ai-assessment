@@ -123,3 +123,8 @@ def test_saved_preview_goes_on_the_customers_lead():
     # someone else can't attach a picture to this chat's lead
     r2 = client.post(f"/api/v1/visual/renders?session_id={sid}", content=jpeg(), headers={"X-User-Id": OTHER, "Content-Type": "image/jpeg"})
     assert r2.status_code == 403
+
+
+def test_scripts_are_revalidated_after_a_deploy():
+    r = client.get("/assets/segment.js")
+    assert r.status_code == 200 and r.headers["cache-control"] == "no-cache" and "NovaSegment" in r.text

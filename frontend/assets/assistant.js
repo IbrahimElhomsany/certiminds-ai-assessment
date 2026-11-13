@@ -262,7 +262,7 @@ async function loadRoom(room) {
     if (room.kind === "pano") {                   // find the floor in the 360° photo (once per photo)
       $("vload").textContent = "Finding the floor in your 360° photo…";
       const key = roomKey(room);
-      if (!(key in panoFloorCache)) panoFloorCache[key] = await W3mod.panoFloor(room.photo).catch(() => null);
+      if (!(key in panoFloorCache)) panoFloorCache[key] = await W3mod.panoFloor(room.photo, (n, t) => { $("vload").textContent = `Finding the floor in your 360° photo (${n}/${t})…`; }).catch(() => null);
       const f = panoFloorCache[key];
       if (!f || f.share < 0.03) toast("We couldn't find the floor in this 360° photo, so it is shown without tiles.");
       if (f) { room.mask = f.mask; room.floorMean = f.mean; }

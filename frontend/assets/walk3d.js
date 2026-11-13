@@ -416,13 +416,62 @@ export function create(canvas, { onPick } = {}) {
            get state() { return { kind, chosen: Object.keys(chosen), floorMap: !!(built && built.floor.material.map) }; } };
 }
 
-/** Floor mask for a 360° photo, from the room detector's label grid. Returns { mask: DataTexture, mean } */
-export async function panoFloor(url) {
+/** Floor mask for a 360° photo. The room detector was trained on ordinary photos, and a stretched
+ *  360° picture confuses it, so we cut the sphere into ordinary views (looking down at the floor all
+ *  around, plus one straight down), find the floor in each, and vote the answers back onto the photo.
+ *  Returns { mask: DataTexture, mean, share }. onStep(n, total) reports progress. */
+export async function panoFloor(url, onStep) {
   if (!window.NovaSegment) return null;
-  const seg = await window.NovaSegment.detect(url);
-  const { gw, gh, lab } = seg, data = new Uint8Array(gw * gh);
-  // the floor is below the horizon (the lower half of the photo)
-  for (let y = Math.floor(gh * 0.5); y < gh; y++) for (let x = 0; x < gw; x++) if (lab[y * gw + x] === 1) data[y * gw + x] = 255;
+  const im = await loadImage(url), ratio = im.naturalWidth / im.naturalHeight;
+  const full = ratio >= 1.95 && ratio <= 2.05;
+  const hfov = full ? Math.PI * 2 : Math.min(Math.PI * 2, ratio * 67 * Math.PI / 180), vfov = full ? Math.PI : hfov / ratio;
+  // the photo's pixels, at most 2048 wide
+  const sw = Math.min(2048, im.naturalWidth), sh = Math.round(sw / ratio);
+  const sc = Object.assign(document.createElement("canvas"), { width: sw, height: sh }), sx = sc.getContext("2d", { willReadFrequently: true });
+  sx.drawImage(im, 0, 0, sw, sh); const src = sx.getImageData(0, 0, sw, sh).data;
+  // the answer grid, in photo coordinates
+  const gw = 480, gh = Math.max(1, Math.round(gw / ratio)), floorV = new Uint16Array(gw * gh), allV = new Uint16Array(gw * gh);
+  const VW = 480, VH = 360, F = Math.tan(Math.PI / 4), FY = F * VH / VW, D = Math.PI / 180;
+  const views = [];
+  const span = Math.max(0, hfov - 80 * D), n = full ? 6 : Math.max(1, Math.ceil(span / (60 * D)) + 1);
+  for (let k = 0; k < n; k++) views.push({ yaw: full ? k * 60 * D : (n === 1 ? 0 : -span / 2 + k * span / (n - 1)), pitch: -40 * D });
+  if (full) views.push({ yaw: 0, pitch: -90 * D });
+  const vc = Object.assign(document.createElement("canvas"), { width: VW, height: VH }), vx = vc.getContext("2d");
+  for (let v = 0; v < views.length; v++) {
+    onStep && onStep(v + 1, views.length);
+    const { yaw, pitch } = views[v], cp = Math.cos(pitch), sp = Math.sin(pitch), cy = Math.cos(yaw), sy = Math.sin(yaw);
+    const out = vx.createImageData(VW, VH), cell = new Int32Array(VW * VH).fill(-1);
+    for (let j = 0; j < VH; j++) for (let i = 0; i < VW; i++) {
+      const x = (2 * (i + 0.5) / VW - 1) * F, y = -(2 * (j + 0.5) / VH - 1) * FY;
+      const y1 = y * cp + sp, z1 = -y * sp + cp;                 // tilt down, then turn
+      const dx = x * cy + z1 * sy, dz = -x * sy + z1 * cy;
+      const th = Math.atan2(dx, dz), ph = Math.atan2(y1, Math.hypot(dx, dz));
+      const u = 0.5 + th / hfov, w = 0.5 - ph / vfov, o = (j * VW + i) * 4;
+      if (u < 0 || u >= 1 || w < 0 || w >= 1) { out.data[o + 3] = 255; continue; }
+      const q = (Math.floor(w * sh) * sw + Math.floor(u * sw)) * 4;
+      out.data[o] = src[q]; out.data[o + 1] = src[q + 1]; out.data[o + 2] = src[q + 2]; out.data[o + 3] = 255;
+      if (ph < 0) cell[j * VW + i] = Math.floor(w * gh) * gw + Math.floor(u * gw);   // the floor is below eye level
+    }
+    vx.putImageData(out, 0, 0);
+    const blob = await new Promise(ok => vc.toBlob(ok, "image/jpeg", 0.92)), burl = URL.createObjectURL(blob);
+    try {
+      const seg = await window.NovaSegment.detect(burl);
+      for (let j = 0; j < VH; j++) for (let i = 0; i < VW; i++) {
+        const c = cell[j * VW + i]; if (c < 0) continue;
+        const l = seg.lab[Math.min(seg.gh - 1, Math.floor(j * seg.gh / VH)) * seg.gw + Math.min(seg.gw - 1, Math.floor(i * seg.gw / VW))];
+        allV[c]++; if (l === 1) floorV[c]++;
+      }
+    } finally { URL.revokeObjectURL(burl); }
+  }
+  const data = new Uint8Array(gw * gh);
+  for (let i = 0; i < gw * gh; i++) if (allV[i] && floorV[i] * 2 > allV[i]) data[i] = 255;
+  // close small gaps between views (a cell no view landed on takes its neighbours' answer)
+  for (let y = 1; y < gh - 1; y++) for (let x = 0; x < gw; x++) {
+    const i = y * gw + x; if (allV[i]) continue;
+    let s = 0, m = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const k = (y + dy) * gw + (x + dx + gw) % gw; if (allV[k]) { m++; if (data[k]) s++; } }
+    if (m && s * 2 > m) data[i] = 255;
+  }
   // soften the edge a little
   const soft = new Uint8Array(gw * gh);
   for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
@@ -430,7 +479,7 @@ export async function panoFloor(url) {
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const yy = y + dy, xx = (x + dx + gw) % gw; if (yy < 0 || yy >= gh) continue; s += data[yy * gw + xx]; n++; }
     soft[y * gw + x] = s / n;
   }
-  const im = await loadImage(url), c = Object.assign(document.createElement("canvas"), { width: gw, height: gh }), x = c.getContext("2d", { willReadFrequently: true });
+  const c = Object.assign(document.createElement("canvas"), { width: gw, height: gh }), x = c.getContext("2d", { willReadFrequently: true });
   x.drawImage(im, 0, 0, gw, gh);
   const px = x.getImageData(0, 0, gw, gh).data; let sum = 0, cnt = 0;
   for (let i = 0; i < gw * gh; i++) if (data[i]) { sum += (0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2]) / 255; cnt++; }

@@ -292,9 +292,10 @@ async function loadRoom(room) {
   if (!is3d(room)) $("before").src = room.photo;
   try {
     if (room.kind === "pano") {                   // find the floor in the 360° photo (once per photo)
-      $("vload").textContent = "Finding the floor in your 360° photo…";
+      const mine = room.id === "pano" ? "your 360° photo" : "the 360° room";
+      $("vload").textContent = `Finding the floor in ${mine}…`;
       const key = roomKey(room);
-      if (!(key in panoFloorCache)) panoFloorCache[key] = await W3mod.panoFloor(room.photo, (n, t) => { $("vload").textContent = `Finding the floor in your 360° photo (${n}/${t})…`; }).catch(() => null);
+      if (!(key in panoFloorCache)) panoFloorCache[key] = await W3mod.panoFloor(room.photo, (n, t) => { $("vload").textContent = `Finding the floor in ${mine} (${n}/${t})…`; }).catch(() => null);
       const f = panoFloorCache[key];
       if (!f || f.share < 0.03) toast("We couldn't find the floor in this 360° photo, so it is shown without tiles.");
       if (f) { room.mask = f.mask; room.floorMean = f.mean; }
@@ -328,12 +329,14 @@ function sizeStage() {
 function renderVisControls() {
   const room = curRoom(), surf = S.vis.surface;
   $("vtitle").textContent = room.name;
-  $("v3d").querySelector("span").textContent = is3d(room) ? "Photo rooms" : "Walk in 3D";
+  $("v3d").querySelector("span").textContent = is3d(room) ? "Photo rooms" : room.view360 ? "360° view" : "Walk in 3D";
   $("rooms").innerHTML = allRooms().map(r => `<button type="button" class="room ${r.id === room.id ? "on" : ""}" data-room="${r.id}">
-      <img src="${r.photo}" alt="" loading="lazy"><span>${esc(r.name)}</span>${is3d(r) ? `<i class="b3d">${r.kind === "pano" ? "360°" : "3D"}</i>` : ""}</button>`).join("") +
+      <img src="${r.thumb || r.photo}" alt="" loading="lazy"><span>${esc(r.name)}</span>${is3d(r) ? `<i class="b3d">${r.kind === "pano" ? "360°" : "3D"}</i>` : ""}</button>`).join("") +
     `<a class="room" href="#/rooms" style="display:grid;place-items:center;text-decoration:none;color:var(--ink);border:1.5px dashed #ccc;min-height:92px"><span style="text-align:center">+ Your own<br>photo</span></a>`;
   $("visnote").innerHTML = room.kind === "3d"
     ? "A 3D room made by Ceramica Nova. Walk around to see your tiles from every side, at their real size. Colours on screen can look slightly different from the real tile."
+    : room.kind === "pano" && room.id !== "pano"
+    ? "A 360° room by Ceramica Nova, with the tiles laid on the floor the AI found in the picture. Drag to look all around. Colours on screen can look slightly different from the real tile."
     : room.kind === "pano"
     ? "Your 360° photo, with the tiles laid on a flat floor about 1.5 m below the camera. Look all around; measure your room before you order."
     : room.id === "own"
@@ -477,7 +480,7 @@ async function shareRoom() {
 function renderRoomsPage() {
   const own = ownRoom();
   const pano = panoRoom();
-  const card = (r, note) => `<button type="button" class="rcard" data-room="${r.id}"><img src="${r.photo}" alt="" loading="lazy">
+  const card = (r, note) => `<button type="button" class="rcard" data-room="${r.id}"><img src="${r.thumb || r.photo}" alt="" loading="lazy">
     ${is3d(r) ? `<i class="b3d">${r.kind === "pano" ? "360°" : "Walk in 3D"}</i>` : ""}
     <span>${esc(r.name)}</span><small>${note || (r.surfaces.wall ? "Floor and wall" : "Floor")}${r.location === "outdoor" ? " · outdoor" : ""}</small></button>`;
   $("rgrid").innerHTML = (own ? card(own, "Your photo") : "") + (pano ? card(pano, "Your 360° photo") : "") + ROOMS.map(r => card(r)).join("");
@@ -921,8 +924,8 @@ $("vdepth").onclick = () => {
   } else { $("vdepth").classList.remove("on"); hideDepth(); }
 };
 $("v3d").onclick = () => {                         // jump to the 3D room closest to the one on screen
-  const r = curRoom(), want = /bath|spa/.test(r.id) ? "walk_bath" : "walk_living";
-  S.vis.room = is3d(r) ? "living" : want; S.vis.picked = true; save(); showVisual();
+  const r = curRoom(), want = r.view360 || (/bath|spa/.test(r.id) ? "walk_bath" : "walk_living");
+  S.vis.room = is3d(r) ? (r.from || "living") : want; S.vis.picked = true; save(); showVisual();
 };
 $("vdl").onclick = downloadImage;
 $("vzoom").onclick = toggleZoom;

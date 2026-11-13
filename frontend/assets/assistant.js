@@ -223,6 +223,36 @@ async function walker() {
   return W3;
 }
 const viewer = () => is3d(curRoom()) ? W3 : V;
+// 3D effect on a photo room: a small AI guesses how far each part of the photo is (see depth3d.js)
+let D = null, Dmod = null, depthOn = false, depthToken = 0; const depthCache = {};
+const vSource = () => { V.render(); return $("vcanvas"); };
+function depthHint() {
+  const touch = matchMedia("(pointer: coarse)").matches;
+  $("walkhint").textContent = "3D effect made by AI from the photo · " + (touch ? "drag or tilt your phone" : "move the mouse over it");
+}
+function hideDepth() { depthToken++; $("dcanvas").hidden = true; if (D) D.stop(); if (!is3d(curRoom())) $("walkhint").hidden = true; }
+async function showDepth() {
+  const room = curRoom(), tok = ++depthToken;
+  $("vdepth").classList.toggle("on", depthOn);
+  if (!depthOn || is3d(room) || !V || loadedKey !== roomKey(room)) { $("dcanvas").hidden = true; if (D) D.stop(); return; }
+  const key = roomKey(room);
+  try {
+    if (!D) { Dmod = await import("/assets/depth3d.js"); D = Dmod.create($("dcanvas")); }
+    if (!depthCache[key]) {
+      $("vload").hidden = false; $("vload").textContent = "Getting the 3D effect ready…";
+      depthCache[key] = Dmod.estimate(room.photo, f => { if (tok === depthToken) $("vload").textContent = `Getting the 3D effect ready… ${Math.round(f * 100)}%`; });
+      depthCache[key].catch(() => { delete depthCache[key]; });
+    }
+    const depth = await depthCache[key];
+    if (tok !== depthToken || !depthOn || roomKey(curRoom()) !== key) return;
+    $("dcanvas").hidden = false; D.show(vSource(), depth);
+    depthHint(); $("walkhint").hidden = false;
+  } catch (e) {
+    if (tok !== depthToken) return;
+    depthOn = false; $("vdepth").classList.remove("on"); $("dcanvas").hidden = true;
+    toast("The 3D effect couldn't load. Please check your connection and try again.");
+  } finally { if (tok === depthToken) { $("vload").hidden = true; $("vload").textContent = "Loading the room…"; } }
+}
 const tileOkInRoom = (sku, room) => (BY[sku].locations || []).includes(room.location);
 function tileSpec(sku) {
   const p = BY[sku]; const [w, h] = String(p.size_cm).split("x").map(Number);
@@ -238,6 +268,7 @@ async function showVisual() {
   const three = is3d(room);
   $("vcanvas").hidden = three; $("wcanvas").hidden = !three; $("walkhint").hidden = !three;
   $("vcmp").hidden = three; if (three && cmp) setCompare(false);
+  $("vdepth").hidden = three; if (three) hideDepth();
   const touch = matchMedia("(pointer: coarse)").matches;
   $("walkhint").textContent = room.kind === "pano" ? (touch ? "Drag to look all around" : "Drag to look all around · scroll to zoom")
     : touch ? "Drag to look around · tap the floor to walk there" : "Drag to look around · click the floor to walk there · arrow keys or WASD";
@@ -254,6 +285,7 @@ async function showVisual() {
   if (!V) return;
   if (loadedKey !== roomKey(room)) await loadRoom(room);
   else await applyTiles();
+  if (depthOn) showDepth(); else hideDepth();
 }
 async function loadRoom(room) {
   const token = ++roomToken; $("vload").hidden = false; loadedKey = null;
@@ -281,6 +313,7 @@ async function applyTiles() {
     const sku = room.surfaces[surf] && fits(S.vis[surf], surf) && tileOkInRoom(S.vis[surf], room) ? S.vis[surf] : null;
     await R.setTile(surf, sku ? tileSpec(sku) : null);
   }
+  if (depthOn && D && !is3d(room) && !$("dcanvas").hidden) D.refresh(vSource());
 }
 // the photo keeps its own shape: as wide as the column allows, never taller than most of the screen
 function sizeStage() {
@@ -355,7 +388,7 @@ function wirePicking() {
   const st = $("stage"); let last = null;
   const clear = () => { $("vout").innerHTML = ""; $("vhl").hidden = true; st.classList.remove("pick"); last = null; };
   st.addEventListener("pointermove", e => {
-    if (cmp || !V || !loadedKey || e.pointerType === "touch" || is3d(curRoom())) return;
+    if (cmp || depthOn || !V || !loadedKey || e.pointerType === "touch" || is3d(curRoom())) return;
     const b = st.getBoundingClientRect(), u = (e.clientX - b.left) / b.width, v = (e.clientY - b.top) / b.height;
     const surf = V.surfaceAt(u, v), room = curRoom();
     if (!surf || !room.surfaces[surf]) { clear(); return; }
@@ -877,7 +910,16 @@ document.addEventListener("change", e => {
 document.addEventListener("input", e => { const d = e.target.dataset; if (d.area) { const v = parseFloat(e.target.value); S.proj[d.area].area = v > 0 ? Math.min(5000, v) : null; save(); priceProject(); } });
 
 $("vrot").onclick = () => { const o = S.vis.opt[S.vis.surface]; o.rotate = !o.rotate; visChanged(); };
-$("vcmp").onclick = () => setCompare(!cmp);
+$("vcmp").onclick = () => { if (!cmp && depthOn) { depthOn = false; $("vdepth").classList.remove("on"); hideDepth(); } setCompare(!cmp); };
+$("vdepth").onclick = () => {
+  depthOn = !depthOn;
+  if (depthOn) {
+    if (cmp) setCompare(false);
+    // iPhones ask before a page may read the phone's tilt
+    if (window.DeviceOrientationEvent && DeviceOrientationEvent.requestPermission) DeviceOrientationEvent.requestPermission().catch(() => {});
+    showDepth();
+  } else { $("vdepth").classList.remove("on"); hideDepth(); }
+};
 $("v3d").onclick = () => {                         // jump to the 3D room closest to the one on screen
   const r = curRoom(), want = /bath|spa/.test(r.id) ? "walk_bath" : "walk_living";
   S.vis.room = is3d(r) ? "living" : want; S.vis.picked = true; save(); showVisual();

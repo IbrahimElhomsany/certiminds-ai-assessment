@@ -217,8 +217,16 @@ window.NOVA_ROOMS.push(
   { id: "walk_bath", kind: "3d", scene: "bath", name: "3D bathroom", location: "indoor", photo: "/images/walk_bath.jpg",
     surfaces: { floor: [{}], wall: [{}] } },
   // 360° versions of the photo rooms (Ibrahim's own AI images, 2:1): look all around, the floor is found in the browser
+  // spots: one 360° picture per place you can stand. at = metres from the first spot, turn = how far (degrees) that
+  // picture is turned from the first one. Worked out from where the door, TV, armchair and console appear in each picture.
   { id: "pano_tvroom", kind: "pano", name: "TV lounge 360°", location: "indoor", photo: "/images/pano_tvroom.jpg", thumb: "/images/pano_tvroom_thumb.jpg",
-    from: "tvroom", width: 1600, height: 900, surfaces: { floor: [{}] } },
+    from: "tvroom", width: 1600, height: 900, surfaces: { floor: [{}], wall: [{}] },
+    spots: [
+      { name: "Middle of the room", photo: "/images/pano_tvroom.jpg", at: [0, 0], turn: 0 },
+      { name: "By the garden door", photo: "/images/pano_tvroom_door.jpg", at: [-0.65, 1.8], turn: 57.1 },
+      { name: "By the TV", photo: "/images/pano_tvroom_tv.jpg", at: [0.75, -0.55], turn: -54.2 },
+      { name: "Reading corner", photo: "/images/pano_tvroom_corner.jpg", at: [0.5, -1.65], turn: 0.3 },
+    ] },
 );
 // a photo room with a 360° version gets a "360° view" button instead of "Walk in 3D"
 for (const r of window.NOVA_ROOMS) { const p = window.NOVA_ROOMS.find(q => q.kind === "pano" && q.from === r.id); if (p) r.view360 = p.id; }

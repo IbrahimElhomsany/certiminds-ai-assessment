@@ -237,23 +237,53 @@ const PANO_VERT = `
   varying vec3 vDir; varying vec2 vUv;
   void main() { vUv = uv; vDir = normalize((modelMatrix * vec4(position, 1.0)).xyz); gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position, 1.0); }`;
 const PANO_FRAG = `
-  uniform sampler2D uPano, uMask, uTile; uniform float uHasTile, uCam, uMean, uRot; uniform vec2 uBlock;
+  uniform sampler2D uPano, uMask, uTile, uWTile; uniform float uHasTile, uHasWTile, uCam, uMean, uWMean, uRot, uAlpha, uHasRect, uHfov, uVfov;
+  uniform vec2 uBlock, uWBlock; uniform vec4 uRect;   // the room's walls, metres from the camera: x-, x+, z-, z+
+  uniform vec3 uHot[4];                                // places you can move to: floor x, z (metres), 1 when used
+  uniform float uNoMask;                               // 1 when the floor was not found: show the circles everywhere
   varying vec3 vDir; varying vec2 vUv;
+  vec3 lightIt(vec3 tile, vec3 photo, float mean) {
+    float lum = dot(photo, vec3(0.299, 0.587, 0.114));
+    return tile * clamp(mix(1.0, lum / max(mean, 0.05), 0.85), 0.25, 1.6);
+  }
   void main() {
     vec3 photo = texture2D(uPano, vUv).rgb;
-    float m = texture2D(uMask, vUv).r * uHasTile;
-    if (vDir.y > -0.02 || m < 0.01) { gl_FragColor = vec4(photo, 1.0); return; }
-    vec2 p = vDir.xz * (uCam / -vDir.y) * 100.0;                        // point on the floor, cm
-    float c = cos(uRot), s = sin(uRot); p = mat2(c, -s, s, c) * p;
-    vec3 tile = texture2D(uTile, p / uBlock).rgb;
-    float lum = dot(photo, vec3(0.299, 0.587, 0.114));
-    vec3 lit = tile * clamp(mix(1.0, lum / max(uMean, 0.05), 0.85), 0.25, 1.6);
-    float fade = smoothstep(-0.02, -0.08, vDir.y);                     // far away the floor melts into the photo
-    gl_FragColor = vec4(mix(photo, lit, m * fade), 1.0);
+    vec2 mk = texture2D(uMask, vUv).rg;
+    float mf = mk.r * uHasTile, mw = mk.g * uHasWTile * uHasRect;
+    // the direction of this pixel in the photo, turned so the room's walls run along x and z
+    float th = (vUv.x - 0.5) * uHfov, ph = (vUv.y - 0.5) * uVfov;
+    vec3 d0 = vec3(sin(th) * cos(ph), sin(ph), cos(th) * cos(ph));
+    float ca = cos(uAlpha), sa = sin(uAlpha);
+    vec3 d = vec3(d0.x * ca + d0.z * sa, d0.y, -d0.x * sa + d0.z * ca);
+    vec3 col = photo;
+    if (mf > 0.01 && d.y < -0.02) {
+      vec2 p = d.xz * (uCam / -d.y) * 100.0;                              // point on the floor, cm
+      float c = cos(uRot), s = sin(uRot); p = mat2(c, -s, s, c) * p;
+      float fade = smoothstep(-0.02, -0.08, d.y);                        // far away the floor melts into the photo
+      col = mix(col, lightIt(texture2D(uTile, p / uBlock).rgb, photo, uMean), mf * fade);
+    }
+    if (mw > 0.01) {
+      float tx = d.x > 0.0 ? uRect.y / d.x : d.x < 0.0 ? uRect.x / d.x : 1e9;
+      float tz = d.z > 0.0 ? uRect.w / d.z : d.z < 0.0 ? uRect.z / d.z : 1e9;
+      float t = min(tx, tz); vec3 h = d * t;
+      vec2 q = vec2(tx < tz ? h.z : h.x, h.y + uCam) * 100.0;           // along the wall and up from the floor, cm
+      if (q.y > 0.0) col = mix(col, lightIt(texture2D(uWTile, q / uWBlock).rgb, photo, uWMean), mw);
+    }
+    if (d0.y < -0.05) {                                 // circles on the floor where you can move to
+      vec2 f = d0.xz * (uCam / -d0.y);
+      for (int i = 0; i < 4; i++) {
+        if (uHot[i].z < 0.5) continue;
+        float r = length(f - uHot[i].xy);
+        float ring = smoothstep(0.30, 0.27, r) * smoothstep(0.20, 0.23, r);
+        float seen = max(smoothstep(0.3, 0.7, mk.r), uNoMask);          // hidden behind furniture
+        col = mix(col, vec3(1.0), (ring * 0.95 + smoothstep(0.23, 0.18, r) * 0.22) * seen);
+      }
+    }
+    gl_FragColor = vec4(col, 1.0);
   }`;
 
 // ------------------------------------------------------------------ the viewer
-export function create(canvas, { onPick } = {}) {
+export function create(canvas, { onPick, onJump } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -293,12 +323,18 @@ export function create(canvas, { onPick } = {}) {
       panoMat = new THREE.ShaderMaterial({
         vertexShader: PANO_VERT, fragmentShader: PANO_FRAG,
         uniforms: { uPano: { value: tex }, uMask: { value: r.mask || blackTex() }, uTile: { value: blackTex() }, uHasTile: { value: 0 },
-                    uCam: { value: PANO_CAMERA }, uMean: { value: r.floorMean || 0.5 }, uRot: { value: 0 }, uBlock: { value: new THREE.Vector2(60, 60) } },
+                    uWTile: { value: blackTex() }, uHasWTile: { value: 0 }, uWBlock: { value: new THREE.Vector2(60, 60) },
+                    uCam: { value: PANO_CAMERA }, uMean: { value: r.floorMean || 0.5 }, uWMean: { value: r.wallMean || 0.7 }, uRot: { value: 0 },
+                    uBlock: { value: new THREE.Vector2(60, 60) }, uHfov: { value: hfov }, uVfov: { value: vfov },
+                    uAlpha: { value: r.rect ? r.rect.a : 0 }, uHasRect: { value: r.rect ? 1 : 0 },
+                    uNoMask: { value: r.mask ? 0 : 1 },
+                    uHot: { value: [0, 1, 2, 3].map(i => r.hot && r.hot[i] ? new THREE.Vector3(r.hot[i][0], r.hot[i][1], 1) : new THREE.Vector3()) },
+                    uRect: { value: r.rect ? new THREE.Vector4(r.rect.x0, r.rect.x1, r.rect.z0, r.rect.z1) : new THREE.Vector4(-3, 3, -3, 3) } },
         toneMapped: false,
       });
       root.add(new THREE.Mesh(geo, panoMat));
       scene.background = new THREE.Color(0x222222);
-      built = null; camera.fov = 75; camera.position.set(0, 0, 0); yaw = 0; pitch = -0.35;
+      built = null; camera.fov = 75; camera.position.set(0, 0, 0); yaw = r.startYaw != null ? r.startYaw : 0; pitch = -0.35;
     }
     camera.updateProjectionMatrix(); aim(); resize();
     for (const s of Object.keys(chosen)) await applyTile(s);
@@ -323,10 +359,9 @@ export function create(canvas, { onPick } = {}) {
     if (!scene) return;
     const made = texFor(surface);
     if (kind === "pano") {
-      if (surface !== "floor") return;
-      const u = panoMat.uniforms;
-      u.uHasTile.value = made ? 1 : 0;
-      if (made) { made.tex.colorSpace = THREE.NoColorSpace; u.uTile.value = made.tex; u.uBlock.value.set(made.b.bw, made.b.bh); }
+      const u = panoMat.uniforms, w = surface === "wall";
+      u[w ? "uHasWTile" : "uHasTile"].value = made ? 1 : 0;
+      if (made) { made.tex.colorSpace = THREE.NoColorSpace; u[w ? "uWTile" : "uTile"].value = made.tex; u[w ? "uWBlock" : "uBlock"].value.set(made.b.bw, made.b.bh); }
       dirty = true; return;
     }
     if (!built) return;
@@ -359,8 +394,20 @@ export function create(canvas, { onPick } = {}) {
     !built.block.some(([a, b, c, d]) => x > a - 0.25 && x < c + 0.25 && z > b - 0.25 && z < d + 0.25);
   let down = null;
   canvas.addEventListener("pointerdown", e => { down = { x: e.clientX, y: e.clientY, yaw, pitch, moved: false }; canvas.setPointerCapture(e.pointerId); });
+  // which circle on the floor of a 360° room is under the pointer
+  function hotAt(e) {
+    if (kind !== "pano" || !room || !room.hot || !room.hot.length) return null;
+    const b = canvas.getBoundingClientRect(); v2.set((e.clientX - b.left) / b.width * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1);
+    ray.setFromCamera(v2, camera);
+    const w = ray.ray.direction, th = Math.atan2(w.x, -w.z), dy = w.y;
+    if (dy > -0.05) return null;
+    const k = PANO_CAMERA / -dy, fx = Math.sin(th) * Math.hypot(w.x, w.z) * k, fz = Math.cos(th) * Math.hypot(w.x, w.z) * k;
+    let best = null;
+    for (const [x, z, j] of room.hot) { const r = Math.hypot(fx - x, fz - z); if (r < 0.42 && (!best || r < best.r)) best = { r, j, th }; }
+    return best;
+  }
   canvas.addEventListener("pointermove", e => {
-    if (!down) return;
+    if (!down) { if (kind === "pano") canvas.style.cursor = hotAt(e) ? "pointer" : ""; return; }
     const dx = e.clientX - down.x, dy = e.clientY - down.y;
     if (Math.abs(dx) + Math.abs(dy) > 5) down.moved = true;
     const k = (camera.fov / 68) * 0.005;
@@ -368,6 +415,7 @@ export function create(canvas, { onPick } = {}) {
   });
   canvas.addEventListener("pointerup", e => {
     const wasClick = down && !down.moved; down = null;
+    if (wasClick && kind === "pano") { const h = hotAt(e); if (h && onJump) onJump(h.j, h.th); return; }
     if (!wasClick || kind !== "3d") return;
     const h = hit(e); if (!h) return;
     if (h.surface && onPick) onPick(h.surface);
@@ -416,83 +464,199 @@ export function create(canvas, { onPick } = {}) {
            get state() { return { kind, chosen: Object.keys(chosen), floorMap: !!(built && built.floor.material.map) }; } };
 }
 
-/** Floor mask for a 360° photo. The room detector was trained on ordinary photos, and a stretched
- *  360° picture confuses it, so we cut the sphere into ordinary views (looking down at the floor all
- *  around, plus one straight down), find the floor in each, and vote the answers back onto the photo.
- *  Returns { mask: DataTexture, mean, share }. onStep(n, total) reports progress. */
+/** Floor and walls of a 360° photo. The room detector was trained on ordinary photos, and a stretched
+ *  360° picture confuses it, so we cut the sphere into ordinary views (down at the floor all around,
+ *  level at the walls, one straight down), find the floor and walls in each, and vote the answers back.
+ *  The vote is then sharpened against the photo itself so the edges follow the furniture, and the room's
+ *  shape (a box) is worked out from where the floor meets the walls, so wall tiles can be laid on it.
+ *  Returns { mask: DataTexture (R floor, G wall), mean, wallMean, share, wallShare, rect }. */
 export async function panoFloor(url, onStep) {
   if (!window.NovaSegment) return null;
   const im = await loadImage(url), ratio = im.naturalWidth / im.naturalHeight;
   const full = ratio >= 1.95 && ratio <= 2.05;
   const hfov = full ? Math.PI * 2 : Math.min(Math.PI * 2, ratio * 67 * Math.PI / 180), vfov = full ? Math.PI : hfov / ratio;
-  // the photo's pixels, at most 2048 wide
   const sw = Math.min(2048, im.naturalWidth), sh = Math.round(sw / ratio);
   const sc = Object.assign(document.createElement("canvas"), { width: sw, height: sh }), sx = sc.getContext("2d", { willReadFrequently: true });
   sx.drawImage(im, 0, 0, sw, sh); const src = sx.getImageData(0, 0, sw, sh).data;
-  // the answer grid, in photo coordinates
-  const gw = 480, gh = Math.max(1, Math.round(gw / ratio)), floorV = new Uint16Array(gw * gh), allV = new Uint16Array(gw * gh);
-  const VW = 480, VH = 360, F = Math.tan(Math.PI / 4), FY = F * VH / VW, D = Math.PI / 180;
-  const views = [];
+  // 1. votes on a coarse grid
+  const cw = 480, ch = Math.max(1, Math.round(cw / ratio)), fV = new Uint16Array(cw * ch), wV = new Uint16Array(cw * ch), aV = new Uint16Array(cw * ch);
+  const VW = 480, VH = 360, D = Math.PI / 180, views = [];
   const span = Math.max(0, hfov - 80 * D), n = full ? 6 : Math.max(1, Math.ceil(span / (60 * D)) + 1);
-  for (let k = 0; k < n; k++) views.push({ yaw: full ? k * 60 * D : (n === 1 ? 0 : -span / 2 + k * span / (n - 1)), pitch: -40 * D });
-  if (full) views.push({ yaw: 0, pitch: -90 * D });
+  for (let k = 0; k < n; k++) views.push({ yaw: full ? k * 60 * D : (n === 1 ? 0 : -span / 2 + k * span / (n - 1)), pitch: -40 * D, f: 1 });
+  if (full) {
+    views.push({ yaw: 0, pitch: -90 * D, f: 1 });
+    for (let k = 0; k < 4; k++) views.push({ yaw: (45 + k * 90) * D, pitch: 5 * D, f: Math.tan(52 * D) });   // the walls, level
+  }
   const vc = Object.assign(document.createElement("canvas"), { width: VW, height: VH }), vx = vc.getContext("2d");
   for (let v = 0; v < views.length; v++) {
     onStep && onStep(v + 1, views.length);
-    const { yaw, pitch } = views[v], cp = Math.cos(pitch), sp = Math.sin(pitch), cy = Math.cos(yaw), sy = Math.sin(yaw);
-    const out = vx.createImageData(VW, VH), cell = new Int32Array(VW * VH).fill(-1);
+    const { yaw, pitch, f } = views[v], F = f, FY = f * VH / VW;
+    const cp = Math.cos(pitch), sp = Math.sin(pitch), cy = Math.cos(yaw), sy = Math.sin(yaw);
+    const out = vx.createImageData(VW, VH), cell = new Int32Array(VW * VH).fill(-1), below = new Uint8Array(VW * VH);
     for (let j = 0; j < VH; j++) for (let i = 0; i < VW; i++) {
       const x = (2 * (i + 0.5) / VW - 1) * F, y = -(2 * (j + 0.5) / VH - 1) * FY;
-      const y1 = y * cp + sp, z1 = -y * sp + cp;                 // tilt down, then turn
+      const y1 = y * cp + sp, z1 = -y * sp + cp;                 // tilt, then turn
       const dx = x * cy + z1 * sy, dz = -x * sy + z1 * cy;
       const th = Math.atan2(dx, dz), ph = Math.atan2(y1, Math.hypot(dx, dz));
       const u = 0.5 + th / hfov, w = 0.5 - ph / vfov, o = (j * VW + i) * 4;
-      if (u < 0 || u >= 1 || w < 0 || w >= 1) { out.data[o + 3] = 255; continue; }
+      out.data[o + 3] = 255;
+      if (u < 0 || u >= 1 || w < 0 || w >= 1) continue;
       const q = (Math.floor(w * sh) * sw + Math.floor(u * sw)) * 4;
-      out.data[o] = src[q]; out.data[o + 1] = src[q + 1]; out.data[o + 2] = src[q + 2]; out.data[o + 3] = 255;
-      if (ph < 0) cell[j * VW + i] = Math.floor(w * gh) * gw + Math.floor(u * gw);   // the floor is below eye level
+      out.data[o] = src[q]; out.data[o + 1] = src[q + 1]; out.data[o + 2] = src[q + 2];
+      cell[j * VW + i] = Math.floor(w * ch) * cw + Math.floor(u * cw); below[j * VW + i] = ph < 0 ? 1 : 0;
     }
     vx.putImageData(out, 0, 0);
-    const blob = await new Promise(ok => vc.toBlob(ok, "image/jpeg", 0.92)), burl = URL.createObjectURL(blob);
+    const burl = URL.createObjectURL(await new Promise(ok => vc.toBlob(ok, "image/jpeg", 0.92)));
     try {
       const seg = await window.NovaSegment.detect(burl);
       for (let j = 0; j < VH; j++) for (let i = 0; i < VW; i++) {
         const c = cell[j * VW + i]; if (c < 0) continue;
         const l = seg.lab[Math.min(seg.gh - 1, Math.floor(j * seg.gh / VH)) * seg.gw + Math.min(seg.gw - 1, Math.floor(i * seg.gw / VW))];
-        allV[c]++; if (l === 1) floorV[c]++;
+        aV[c]++; if (l === 1 && below[j * VW + i]) fV[c]++; else if (l === 2) wV[c]++;
       }
     } finally { URL.revokeObjectURL(burl); }
   }
-  const data = new Uint8Array(gw * gh);
-  for (let i = 0; i < gw * gh; i++) if (allV[i] && floorV[i] * 2 > allV[i]) data[i] = 255;
+  const pf = new Float32Array(cw * ch), pw = new Float32Array(cw * ch);
+  for (let i = 0; i < cw * ch; i++) if (aV[i]) { pf[i] = fV[i] / aV[i]; pw[i] = wV[i] / aV[i]; }
   // straight below the camera there is usually a tripod or a hand; when the floor runs all round it, fill it in
   if (full) {
-    const r0 = Math.floor(gh * (0.5 + 62 / 180)), r1 = Math.floor(gh * (0.5 + 72 / 180));
-    let f = 0, t = 0;
-    for (let y = r0; y < r1; y++) for (let x = 0; x < gw; x++) { t++; if (data[y * gw + x]) f++; }
-    if (t && f > 0.6 * t) data.fill(255, r1 * gw);
+    const r0 = Math.floor(ch * (0.5 + 62 / 180)), r1 = Math.floor(ch * (0.5 + 72 / 180));
+    let fl = 0, t = 0;
+    for (let y = r0; y < r1; y++) for (let x = 0; x < cw; x++) { t++; if (pf[y * cw + x] > 0.5) fl++; }
+    if (t && fl > 0.6 * t) pf.fill(1, r1 * cw);
   }
-  // close small gaps between views (a cell no view landed on takes its neighbours' answer)
-  for (let y = 1; y < gh - 1; y++) for (let x = 0; x < gw; x++) {
-    const i = y * gw + x; if (allV[i]) continue;
-    let s = 0, m = 0;
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const k = (y + dy) * gw + (x + dx + gw) % gw; if (allV[k]) { m++; if (data[k]) s++; } }
-    if (m && s * 2 > m) data[i] = 255;
+  // 2. sharpen on a finer grid, following the edges in the photo (a guided filter)
+  const gw = 1024, gh = Math.max(1, Math.round(gw / ratio)), N = gw * gh;
+  const gc = Object.assign(document.createElement("canvas"), { width: gw, height: gh }), gx = gc.getContext("2d", { willReadFrequently: true });
+  gx.drawImage(im, 0, 0, gw, gh); const px = gx.getImageData(0, 0, gw, gh).data, I = new Float32Array(N);
+  for (let i = 0; i < N; i++) I[i] = (0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2]) / 255;
+  const up = c => {                                              // coarse grid to fine grid, smoothly
+    const o = new Float32Array(N);
+    for (let y = 0; y < gh; y++) {
+      const fy = Math.max(0, Math.min(ch - 1, (y + 0.5) * ch / gh - 0.5)), y0 = Math.floor(fy), y1 = Math.min(ch - 1, y0 + 1), ty = fy - y0;
+      for (let x = 0; x < gw; x++) {
+        const fx = (x + 0.5) * cw / gw - 0.5, x0 = Math.floor(fx), tx = fx - x0, xa = (x0 + cw) % cw, xb = (x0 + 1) % cw;
+        o[y * gw + x] = (c[y0 * cw + xa] * (1 - tx) + c[y0 * cw + xb] * tx) * (1 - ty) + (c[y1 * cw + xa] * (1 - tx) + c[y1 * cw + xb] * tx) * ty;
+      }
+    }
+    return o;
+  };
+  const box = (a, r) => {                                        // mean over a (2r+1)² square
+    const S = new Float64Array((gw + 1) * (gh + 1)), o = new Float32Array(N), W1 = gw + 1;
+    for (let y = 0; y < gh; y++) { let row = 0; for (let x = 0; x < gw; x++) { row += a[y * gw + x]; S[(y + 1) * W1 + x + 1] = S[y * W1 + x + 1] + row; } }
+    for (let y = 0; y < gh; y++) {
+      const ya = Math.max(0, y - r), yb = Math.min(gh, y + r + 1);
+      for (let x = 0; x < gw; x++) {
+        const xa = Math.max(0, x - r), xb = Math.min(gw, x + r + 1);
+        o[y * gw + x] = (S[yb * W1 + xb] - S[ya * W1 + xb] - S[yb * W1 + xa] + S[ya * W1 + xa]) / ((yb - ya) * (xb - xa));
+      }
+    }
+    return o;
+  };
+  const R = 6, EPS = 0.002, mI = box(I, R), II = new Float32Array(N);
+  for (let i = 0; i < N; i++) II[i] = I[i] * I[i];
+  const vI = box(II, R); for (let i = 0; i < N; i++) vI[i] -= mI[i] * mI[i];
+  const guided = p => {
+    const mp = box(p, R), Ip = new Float32Array(N); for (let i = 0; i < N; i++) Ip[i] = I[i] * p[i];
+    const cIp = box(Ip, R), A = new Float32Array(N), B = new Float32Array(N);
+    for (let i = 0; i < N; i++) { A[i] = (cIp[i] - mI[i] * mp[i]) / (vI[i] + EPS); B[i] = mp[i] - A[i] * mI[i]; }
+    const mA = box(A, R), mB = box(B, R), q = new Float32Array(N);
+    for (let i = 0; i < N; i++) { const v = mA[i] * I[i] + mB[i]; q[i] = Math.max(0, Math.min(1, (v - 0.35) / 0.3)); }
+    return q;
+  };
+  const qf = guided(up(pf)), qw = guided(up(pw));
+  for (let i = 0; i < N; i++) { if (qf[i] >= qw[i]) qw[i] = Math.min(qw[i], 1 - qf[i]); else qf[i] = Math.min(qf[i], 1 - qw[i]); }
+  for (let y = 0; y < gh; y++) if ((0.5 - (y + 0.5) / gh) * vfov > -0.02) qf.fill(0, y * gw, y * gw + gw);   // no floor at or above eye level
+  // 3. the room's shape: where the floor meets the walls, all the way round
+  let rect = null;
+  if (full) {
+    const pts = [];
+    for (let x = 0; x < gw; x += 2) {
+      for (let y = Math.ceil(gh * 0.52); y < gh - 4; y++) {
+        if (qf[y * gw + x] > 0.5 && qf[(y + 3) * gw + x] > 0.5) {
+          const ph = (0.5 - (y + 0.5) / gh) * vfov, th = ((x + 0.5) / gw - 0.5) * hfov;
+          const d = PANO_CAMERA / Math.tan(-ph);
+          if (d > 0.4 && d < 15) pts.push([d * Math.sin(th), d * Math.cos(th), d]);
+          break;
+        }
+      }
+    }
+    if (pts.length > 100) rect = fitRoom(pts);
   }
-  // soften the edge a little
-  const soft = new Uint8Array(gw * gh);
+  // 4. how bright the floor and the walls are, to light the tiles like the photo
+  let sf = 0, nf = 0, swl = 0, nw = 0;
+  for (let i = 0; i < N; i++) { if (qf[i] > 0.5) { sf += I[i]; nf++; } if (qw[i] > 0.5) { swl += I[i]; nw++; } }
+  const data = new Uint8Array(N * 2);                            // textures count rows from the bottom
   for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
-    let s = 0, n = 0;
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const yy = y + dy, xx = (x + dx + gw) % gw; if (yy < 0 || yy >= gh) continue; s += data[yy * gw + xx]; n++; }
-    soft[y * gw + x] = s / n;
+    const i = y * gw + x, o = ((gh - 1 - y) * gw + x) * 2;
+    data[o] = Math.round(qf[i] * 255); data[o + 1] = Math.round(qw[i] * 255);
   }
-  const c = Object.assign(document.createElement("canvas"), { width: gw, height: gh }), x = c.getContext("2d", { willReadFrequently: true });
-  x.drawImage(im, 0, 0, gw, gh);
-  const px = x.getImageData(0, 0, gw, gh).data; let sum = 0, cnt = 0;
-  for (let i = 0; i < gw * gh; i++) if (data[i]) { sum += (0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2]) / 255; cnt++; }
-  const flipped = new Uint8Array(gw * gh);                       // textures count rows from the bottom
-  for (let y = 0; y < gh; y++) flipped.set(soft.subarray(y * gw, y * gw + gw), (gh - 1 - y) * gw);
-  const tex = new THREE.DataTexture(flipped, gw, gh, THREE.RedFormat); tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true;
-  return { mask: tex, mean: cnt ? sum / cnt : 0.5, share: cnt / (gw * gh) };
+  const tex = new THREE.DataTexture(data, gw, gh, THREE.RGFormat); tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true;
+  return { mask: tex, mean: nf ? sf / nf : 0.5, wallMean: nw ? swl / nw : 0.7, share: nf / N, wallShare: nw / N, rect };
+}
+
+/** A box-shaped room around the camera that fits where the floor meets the walls. Furniture hides some of
+ *  that line and makes it look closer, so each wall sits at the far side of the points facing it. */
+function fitRoom(pts) {
+  // try every turn of the box a degree apart, then tenths of a degree around the best one
+  const coarse = fitAt(pts, 0, 89, 1, 0.07);
+  if (!coarse) return null;
+  const c = coarse.a * 180 / Math.PI, fine = fitAt(pts, c - 1.5, c + 1.5, 0.1, 0.035) || coarse;
+  if (!(fine.score > pts.length * 0.15 || coarse.score > pts.length * 0.3)) return null;
+  return polish(pts, fine);
+}
+// line each wall up with the points lying on it (a straight-line fit per wall), then square the box up again
+function polish(pts, r) {
+  const ca = Math.cos(r.a), sa = Math.sin(r.a), groups = [[], [], [], []];
+  for (const [x, z] of pts) {
+    const xr = x * ca + z * sa, zr = -x * sa + z * ca;
+    const dists = [Math.abs(xr - r.x0), Math.abs(xr - r.x1), Math.abs(zr - r.z0), Math.abs(zr - r.z1)];
+    const k = dists.indexOf(Math.min(...dists)), off = k < 2 ? zr : xr, along = k < 2 ? xr : zr;
+    if (dists[k] < 0.06 * Math.hypot(xr, zr)) groups[k].push([off, along]);
+  }
+  let sx = 0, sy = 0;
+  for (const g of groups) {
+    if (g.length < 15) continue;
+    const mo = g.reduce((s, p) => s + p[0], 0) / g.length, ma = g.reduce((s, p) => s + p[1], 0) / g.length;
+    let soo = 0, soa = 0; for (const [o, a] of g) { soo += (o - mo) ** 2; soa += (o - mo) * (a - ma); }
+    const slope = soa / (soo || 1e-9), ang = Math.atan(slope) * 4;   // 4x so walls 90° apart agree
+    sx += Math.cos(ang) * g.length; sy += Math.sin(ang) * g.length;
+  }
+  if (!sx && !sy) return r;
+  // a wall running along z whose x grows with z means the box is turned the other way by atan(slope)
+  const a = r.a - Math.atan2(sy, sx) / 4, c2 = Math.cos(a), s2 = Math.sin(a), side = [[], [], [], []];
+  for (const [x, z] of pts) {
+    const xr = x * c2 + z * s2, zr = -x * s2 + z * c2;
+    const dists = [Math.abs(xr - r.x0), Math.abs(xr - r.x1), Math.abs(zr - r.z0), Math.abs(zr - r.z1)];
+    const k = dists.indexOf(Math.min(...dists));
+    if (dists[k] < 0.08 * Math.hypot(xr, zr)) side[k].push(k < 2 ? xr : zr);
+  }
+  const med = (v, d) => v.length < 10 ? d : v.slice().sort((p, q) => p - q)[v.length >> 1];
+  return { ...r, a, x0: med(side[0], r.x0), x1: med(side[1], r.x1), z0: med(side[2], r.z0), z1: med(side[3], r.z1) };
+}
+function fitAt(pts, from, to, step, tol) {
+  let best = null;
+  for (let deg = from; deg < to + 1e-6; deg += step) {
+    const a = deg * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
+    const side = [[], [], [], []];                               // x-, x+, z-, z+
+    const rp = pts.map(([x, z, d]) => {
+      const xr = x * ca + z * sa, zr = -x * sa + z * ca, psi = Math.atan2(xr, zr);
+      const k = Math.abs(psi) < Math.PI / 4 ? 3 : Math.abs(psi) > Math.PI * 3 / 4 ? 2 : psi > 0 ? 1 : 0;
+      side[k].push(k < 2 ? xr : zr);
+      return [xr, zr, d];
+    });
+    if (side.some(v => v.length < 12)) continue;
+    const pct = (v, q) => { const s = v.slice().sort((p, q) => p - q); return s[Math.min(s.length - 1, Math.floor(q * s.length))]; };
+    const r = { x0: pct(side[0], 0.15), x1: pct(side[1], 0.85), z0: pct(side[2], 0.15), z1: pct(side[3], 0.85) };
+    if (r.x0 > -0.3 || r.z0 > -0.3 || r.x1 < 0.3 || r.z1 < 0.3) continue;
+    let score = 0;
+    for (const [xr, zr, d] of rp) {
+      const ux = xr / d, uz = zr / d;
+      const tx = ux > 0 ? r.x1 / ux : ux < 0 ? r.x0 / ux : 1e9, tz = uz > 0 ? r.z1 / uz : uz < 0 ? r.z0 / uz : 1e9;
+      if (Math.abs(Math.log(d / Math.min(tx, tz))) < tol) score++;
+    }
+    if (!best || score > best.score) best = { ...r, a, score };
+  }
+  return best;
 }
 export { SCENES };          // for tests and tools (e.g. making a 360° picture of a room)

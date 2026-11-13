@@ -297,6 +297,9 @@
   #pMark .stagewrap { padding:24px 24px 72px; }
   #mbrush { opacity:.5; }
   .stage canvas.depth { touch-action:none; }
+  .spots { position:absolute; left:10px; top:10px; display:flex; gap:6px; flex-wrap:wrap; max-width:calc(100% - 20px); }
+  .spots button { border:0; border-radius:99px; padding:6px 11px; font-size:12px; font-weight:500; background:rgba(17,17,17,.62); color:#fff; cursor:pointer; }
+  .spots button.on { background:#fff; color:#111; }
   .stage canvas.walk { cursor:grab; touch-action:none; outline:none; } .stage canvas.walk:active { cursor:grabbing; }
   .walkhint { position:absolute; left:50%; bottom:12px; transform:translateX(-50%); background:rgba(17,17,17,.72); color:#fff; font-size:12px; padding:5px 12px; border-radius:99px; pointer-events:none; white-space:nowrap; max-width:calc(100% - 24px); overflow:hidden; text-overflow:ellipsis; }
   .room, .rcard { position:relative; }
@@ -540,6 +543,7 @@
           <canvas id="wcanvas" class="walk" aria-label="3D room with your tiles: drag to look around" hidden></canvas>
           <canvas id="dcanvas" class="depth" aria-label="Room with your tiles, with a 3D effect" hidden></canvas>
           <span class="walkhint" id="walkhint" hidden></span>
+          <div class="spots" id="vspots" hidden></div>
           <img class="before" id="before" alt="" hidden>
           <svg class="outline" id="vout" preserveAspectRatio="none" aria-hidden="true"></svg>
           <div class="handle" id="handle" hidden></div>

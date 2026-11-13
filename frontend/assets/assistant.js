@@ -204,19 +204,36 @@ function panoRoom() {
   const p = S.pano;
   if (!p || !p.photo) return null;
   return { id: "pano", kind: "pano", name: "Your 360° room", location: p.location || "indoor", photo: p.photo.url,
-           width: 1600, height: 900, surfaces: { floor: [{}] } };
+           width: 1600, height: 900, surfaces: { floor: [{}], wall: [{}] } };
 }
 const allRooms = () => [ownRoom(), panoRoom(), ...ROOMS].filter(Boolean);
 const is3d = r => r && (r.kind === "3d" || r.kind === "pano");
-const curRoom = () => allRooms().find(r => r.id === S.vis.room) || ROOMS[0];
-const roomKey = r => r.id === "own" ? "own:" + (S.own.rev || 0) : r.id === "pano" ? "pano:" + (S.pano.rev || 0) : r.id;
+const curRoom = () => atSpot(allRooms().find(r => r.id === S.vis.room) || ROOMS[0]);
+const roomKey = r => r.id === "own" ? "own:" + (S.own.rev || 0) : r.id === "pano" ? "pano:" + (S.pano.rev || 0) : r.spots ? r.id + ":" + (r.spot || 0) : r.id;
+// a 360° room you can move around in: the picture for the spot you stand on, and circles on the floor for the others
+function atSpot(r) {
+  if (!r || !r.spots) return r;
+  const k = Math.min(r.spots.length - 1, Math.max(0, S.vis.spot || 0)), me = r.spots[k], D = Math.PI / 180;
+  const hot = r.spots.map((s, j) => {
+    if (j === k) return null;
+    const dx = s.at[0] - me.at[0], dz = s.at[1] - me.at[1], th = Math.atan2(dx, dz) - me.turn * D, d = Math.hypot(dx, dz);
+    return [d * Math.sin(th), d * Math.cos(th), j];
+  }).filter(Boolean);
+  return { ...r, photo: me.photo, spot: k, spotName: me.name, hot, startYaw: S.vis.spotYaw };
+}
+function jumpTo(j, th) {                 // keep facing the way you walked
+  const r = allRooms().find(q => q.id === S.vis.room); if (!r || !r.spots) return;
+  const D = Math.PI / 180, from = r.spots[Math.min(r.spots.length - 1, S.vis.spot || 0)], to = r.spots[j];
+  const thNew = th + (from.turn - to.turn) * D;
+  S.vis.spot = j; S.vis.spotYaw = -thNew; save(); showVisual();
+}
 const roomDims = r => is3d(r) ? [1600, 900] : [r.width || SAMPLE_W, r.height || SAMPLE_H];
 // the 3D viewer (walk3d.js, with three.js) is only loaded when a 3D room or a 360° photo is opened
 let W3 = null, W3mod = null, panoFloorCache = {};
 async function walker() {
   if (!W3) {
     W3mod = await import("/assets/walk3d.js");
-    W3 = W3mod.create($("wcanvas"), { onPick: surf => {
+    W3 = W3mod.create($("wcanvas"), { onJump: jumpTo, onPick: surf => {
       if (curRoom().surfaces[surf] && surf !== S.vis.surface) { S.vis.surface = surf; save(); renderVisControls(); }
     } });
   }
@@ -269,8 +286,11 @@ async function showVisual() {
   $("vcanvas").hidden = three; $("wcanvas").hidden = !three; $("walkhint").hidden = !three;
   $("vcmp").hidden = three; if (three && cmp) setCompare(false);
   $("vdepth").hidden = three; if (three) hideDepth();
+  $("vspots").hidden = !room.spots;
+  if (room.spots) $("vspots").innerHTML = room.spots.map((sp, j) => `<button type="button" data-spot="${j}" class="${j === room.spot ? "on" : ""}">${esc(sp.name)}</button>`).join("");
   const touch = matchMedia("(pointer: coarse)").matches;
-  $("walkhint").textContent = room.kind === "pano" ? (touch ? "Drag to look all around" : "Drag to look all around · scroll to zoom")
+  $("walkhint").textContent = room.spots ? `${room.spotName} · drag to look around · ${touch ? "tap" : "click"} a circle on the floor to move there`
+    : room.kind === "pano" ? (touch ? "Drag to look all around" : "Drag to look all around · scroll to zoom")
     : touch ? "Drag to look around · tap the floor to walk there" : "Drag to look around · click the floor to walk there · arrow keys or WASD";
   if (three) {
     try { await walker(); } catch (e) { $("vfail").hidden = false; return; }
@@ -298,7 +318,8 @@ async function loadRoom(room) {
       if (!(key in panoFloorCache)) panoFloorCache[key] = await W3mod.panoFloor(room.photo, (n, t) => { $("vload").textContent = `Finding the floor in ${mine} (${n}/${t})…`; }).catch(() => null);
       const f = panoFloorCache[key];
       if (!f || f.share < 0.03) toast("We couldn't find the floor in this 360° photo, so it is shown without tiles.");
-      if (f) { room.mask = f.mask; room.floorMean = f.mean; }
+      else if (!f.rect && S.vis.surface === "wall") toast("We couldn't work out the walls in this 360° photo, so only the floor can be tiled.");
+      if (f) { room.mask = f.mask; room.floorMean = f.mean; room.wallMean = f.wallMean; room.rect = f.rect; }
     }
     await viewer().setRoom(room);
     if (token !== roomToken) return;
@@ -884,7 +905,7 @@ document.addEventListener("click", e => {
   else if (d.quote) send(`I'd like a quote for ${d.quote}.`);
   else if (d.swap) send(`Show me alternatives to ${d.swap}.`);
   else if (d.specs) showSpecs([d.specs]);
-  else if (d.room) { S.vis.room = d.room; S.vis.picked = true; save(); if (location.hash === "#/visual") showVisual(); else location.hash = "#/visual"; }
+  else if (d.room) { S.vis.room = d.room; S.vis.picked = true; S.vis.spot = 0; S.vis.spotYaw = null; save(); if (location.hash === "#/visual") showVisual(); else location.hash = "#/visual"; }
   else if (d.addproj) { if (addToProject(d.addproj)) { renderVisControls(); toast("Added to your project.", ["Open project", "#/project"]); } }
   else if (d.ms) { mtab = d.ms; renderMark(); }
   else if (d.ml) { S.own.location = d.ml; save(); renderMark(); }
@@ -914,6 +935,12 @@ document.addEventListener("input", e => { const d = e.target.dataset; if (d.area
 
 $("vrot").onclick = () => { const o = S.vis.opt[S.vis.surface]; o.rotate = !o.rotate; visChanged(); };
 $("vcmp").onclick = () => { if (!cmp && depthOn) { depthOn = false; $("vdepth").classList.remove("on"); hideDepth(); } setCompare(!cmp); };
+$("vspots").onclick = e => {
+  const b = e.target.closest("[data-spot]"); if (!b) return;
+  const j = +b.dataset.spot, r = curRoom(); if (j === r.spot) return;
+  const to = r.spots[j], dx = to.at[0] - r.spots[r.spot].at[0], dz = to.at[1] - r.spots[r.spot].at[1];
+  jumpTo(j, Math.atan2(dx, dz) - r.spots[r.spot].turn * Math.PI / 180);
+};
 $("vdepth").onclick = () => {
   depthOn = !depthOn;
   if (depthOn) {
@@ -925,7 +952,7 @@ $("vdepth").onclick = () => {
 };
 $("v3d").onclick = () => {                         // jump to the 3D room closest to the one on screen
   const r = curRoom(), want = r.view360 || (/bath|spa/.test(r.id) ? "walk_bath" : "walk_living");
-  S.vis.room = is3d(r) ? (r.from || "living") : want; S.vis.picked = true; save(); showVisual();
+  S.vis.room = is3d(r) ? (r.from || "living") : want; S.vis.picked = true; S.vis.spot = 0; S.vis.spotYaw = null; save(); showVisual();
 };
 $("vdl").onclick = downloadImage;
 $("vzoom").onclick = toggleZoom;

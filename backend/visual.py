@@ -39,6 +39,7 @@ STORE = _store_dir()
 PHOTO_DAYS, RENDER_DAYS, HANDOFF_MINUTES = 7, 30, 15
 MAX_BYTES = 12 * 1024 * 1024          # a phone photo is 2-6 MB; anything bigger is refused
 MAX_SIDE = 2000                       # stored size: enough for the visualiser, small on disk
+MAX_PANO_SIDE = 4096                  # a 360° photo is seen from up close, so it keeps more pixels
 VISITOR = re.compile(r"^USR-\d{3,10}$")
 FILE_ID = re.compile(r"^[a-f0-9]{32}$")
 CODE = re.compile(r"^[A-Za-z0-9_-]{16,40}$")
@@ -85,13 +86,14 @@ def save_image(data: bytes, owner: str, kind: str, extra: Optional[dict] = None)
         raise HTTPException(status_code=413, detail="That photo is too large (max 12 MB).")
     try:
         im = Image.open(io.BytesIO(data))
-        im.draft("RGB", (MAX_SIDE, MAX_SIDE))
+        im.draft("RGB", (MAX_PANO_SIDE, MAX_PANO_SIDE))
         im = ImageOps.exif_transpose(im).convert("RGB")      # phones store rotation in EXIF
     except (UnidentifiedImageError, OSError, Image.DecompressionBombError):
         raise HTTPException(status_code=422, detail="That file is not a photo we can read (use JPG, PNG or WebP).")
     if min(im.size) < 320:
         raise HTTPException(status_code=422, detail="That photo is too small. Please use one at least 640 pixels wide.")
-    im.thumbnail((MAX_SIDE, MAX_SIDE), Image.LANCZOS)
+    side = MAX_PANO_SIDE if im.width >= 1.9 * im.height else MAX_SIDE     # 360° photos keep more detail
+    im.thumbnail((side, side), Image.LANCZOS)
     STORE.mkdir(parents=True, exist_ok=True)
     fid = secrets.token_hex(16)
     im.save(STORE / f"{fid}.jpg", "JPEG", quality=86, optimize=True)

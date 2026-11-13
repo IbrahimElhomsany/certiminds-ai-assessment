@@ -296,6 +296,10 @@
   .stagewrap.fs .pbar, .stagewrap.fs .rooms, .stagewrap.fs .visnote { display:none; }
   #pMark .stagewrap { padding:24px 24px 72px; }
   #mbrush { opacity:.5; }
+  .stage canvas.walk { cursor:grab; touch-action:none; outline:none; } .stage canvas.walk:active { cursor:grabbing; }
+  .walkhint { position:absolute; left:50%; bottom:12px; transform:translateX(-50%); background:rgba(17,17,17,.72); color:#fff; font-size:12px; padding:5px 12px; border-radius:99px; pointer-events:none; white-space:nowrap; max-width:calc(100% - 24px); overflow:hidden; text-overflow:ellipsis; }
+  .room, .rcard { position:relative; }
+  .b3d { position:absolute; top:8px; left:8px; font-style:normal; font-size:10.5px; font-weight:600; letter-spacing:.04em; background:#111; color:#fff; padding:2px 8px; border-radius:99px; }
   .auto { display:flex; align-items:center; flex-wrap:wrap; gap:6px 8px; margin-top:10px; font-size:12.5px; color:var(--muted); background:#f4f6fb; border-radius:10px; padding:8px 10px; }
   .auto.ok { background:#eef8f1; color:#24704a; } .auto.bad { background:#fff7e8; color:var(--amber); }
   .auto .spin { width:13px; height:13px; border-radius:50%; border:2px solid #c9d3ea; border-top-color:#3d6fd8; animation:spin .8s linear infinite; flex:none; }
@@ -521,6 +525,7 @@
       <div class="vtool">
         <a class="tb" href="#/rooms"><svg class="ico" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg><span>Rooms</span></a>
         <span class="vtitle" id="vtitle"></span>
+        <button class="tb" type="button" id="v3d"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3zM12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span>Walk in 3D</span></button>
         <button class="tb" type="button" id="vcmp"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3v18M4 5h16v14H4z"/></svg><span>Compare</span></button>
         <button class="tb" type="button" id="vzoom"><svg class="ico" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span>Zoom</span></button>
         <button class="tb" type="button" id="vshare"><svg class="ico" viewBox="0 0 24 24"><path d="M18 8a3 3 0 100-6 3 3 0 000 6zM6 15a3 3 0 100-6 3 3 0 000 6zM18 22a3 3 0 100-6 3 3 0 000 6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg><span>Share</span></button>
@@ -530,6 +535,8 @@
       <div class="stagebox" id="stagebox">
         <div class="stage" id="stage">
           <canvas id="vcanvas" aria-label="Room with your tiles"></canvas>
+          <canvas id="wcanvas" class="walk" aria-label="3D room with your tiles: drag to look around" hidden></canvas>
+          <span class="walkhint" id="walkhint" hidden></span>
           <img class="before" id="before" alt="" hidden>
           <svg class="outline" id="vout" preserveAspectRatio="none" aria-hidden="true"></svg>
           <div class="handle" id="handle" hidden></div>

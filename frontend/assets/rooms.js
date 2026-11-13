@@ -210,6 +210,14 @@ window.NOVA_ROOMS = [
   },
 ];
 
+// 3D rooms (frontend/assets/walk3d.js): built in the browser, so customers can walk through them with the tiles they choose
+window.NOVA_ROOMS.push(
+  { id: "walk_living", kind: "3d", scene: "living", name: "3D living room", location: "indoor", photo: "/images/walk_living.jpg",
+    surfaces: { floor: [{}], wall: [{}] } },
+  { id: "walk_bath", kind: "3d", scene: "bath", name: "3D bathroom", location: "indoor", photo: "/images/walk_bath.jpg",
+    surfaces: { floor: [{}], wall: [{}] } },
+);
+
 /* Product photos that already show several small tiles (mosaic, subway, herringbone brick...):
  * they are repeated as a patch of this many cm instead of being cut into single tiles. */
 window.NOVA_TILE_PATCHES = { CN007: [120, 120], CN008: [150, 150], CN009: [120, 120], CN010: [75, 75], CN013: [60, 60] };

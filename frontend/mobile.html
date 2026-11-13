@@ -69,7 +69,8 @@ async function shrink(file) {
   const url = URL.createObjectURL(file);
   try {
     const im = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = url; });
-    const k = Math.min(1, 2000 / Math.max(im.naturalWidth, im.naturalHeight));
+    const side = im.naturalWidth / im.naturalHeight >= 1.9 ? 4096 : 2000;   // 360° photos keep more detail
+    const k = Math.min(1, side / Math.max(im.naturalWidth, im.naturalHeight));
     const c = document.createElement("canvas"); c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
     c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
     return await new Promise(ok => c.toBlob(ok, "image/jpeg", 0.88));

@@ -199,10 +199,30 @@ function ownRoom() {
   return { id: "own", name: "Your room", location: o.location || "indoor", photo: o.photo.url,
            width: o.photo.width, height: o.photo.height, surfaces, keepMask: o.keep || null };
 }
-const allRooms = () => { const own = ownRoom(); return own ? [own, ...ROOMS] : ROOMS; };
+// the customer's 360° photo: looked at from the inside, with tiles on the floor
+function panoRoom() {
+  const p = S.pano;
+  if (!p || !p.photo) return null;
+  return { id: "pano", kind: "pano", name: "Your 360° room", location: p.location || "indoor", photo: p.photo.url,
+           width: 1600, height: 900, surfaces: { floor: [{}] } };
+}
+const allRooms = () => [ownRoom(), panoRoom(), ...ROOMS].filter(Boolean);
+const is3d = r => r && (r.kind === "3d" || r.kind === "pano");
 const curRoom = () => allRooms().find(r => r.id === S.vis.room) || ROOMS[0];
-const roomKey = r => r.id === "own" ? "own:" + (S.own.rev || 0) : r.id;
-const roomDims = r => [r.width || SAMPLE_W, r.height || SAMPLE_H];
+const roomKey = r => r.id === "own" ? "own:" + (S.own.rev || 0) : r.id === "pano" ? "pano:" + (S.pano.rev || 0) : r.id;
+const roomDims = r => is3d(r) ? [1600, 900] : [r.width || SAMPLE_W, r.height || SAMPLE_H];
+// the 3D viewer (walk3d.js, with three.js) is only loaded when a 3D room or a 360° photo is opened
+let W3 = null, W3mod = null, panoFloorCache = {};
+async function walker() {
+  if (!W3) {
+    W3mod = await import("/assets/walk3d.js");
+    W3 = W3mod.create($("wcanvas"), { onPick: surf => {
+      if (curRoom().surfaces[surf] && surf !== S.vis.surface) { S.vis.surface = surf; save(); renderVisControls(); }
+    } });
+  }
+  return W3;
+}
+const viewer = () => is3d(curRoom()) ? W3 : V;
 const tileOkInRoom = (sku, room) => (BY[sku].locations || []).includes(room.location);
 function tileSpec(sku) {
   const p = BY[sku]; const [w, h] = String(p.size_cm).split("x").map(Number);
@@ -215,6 +235,17 @@ async function showVisual() {
   const room = curRoom();
   if (!room.surfaces[S.vis.surface]) S.vis.surface = room.surfaces.floor ? "floor" : "wall";
   renderVisControls(); sizeStage();
+  const three = is3d(room);
+  $("vcanvas").hidden = three; $("wcanvas").hidden = !three; $("walkhint").hidden = !three;
+  $("vcmp").hidden = three; if (three && cmp) setCompare(false);
+  const touch = matchMedia("(pointer: coarse)").matches;
+  $("walkhint").textContent = room.kind === "pano" ? (touch ? "Drag to look all around" : "Drag to look all around · scroll to zoom")
+    : touch ? "Drag to look around · tap the floor to walk there" : "Drag to look around · click the floor to walk there · arrow keys or WASD";
+  if (three) {
+    try { await walker(); } catch (e) { $("vfail").hidden = false; return; }
+    if (loadedKey !== roomKey(room)) await loadRoom(room); else await applyTiles();
+    return;
+  }
   if (!V && !vReady) {
     vReady = true;
     try { V = window.NovaVisualiser && NovaVisualiser.create($("vcanvas")); } catch (e) { V = null; }
@@ -226,21 +257,29 @@ async function showVisual() {
 }
 async function loadRoom(room) {
   const token = ++roomToken; $("vload").hidden = false; loadedKey = null;
-  $("before").src = room.photo;
+  if (!is3d(room)) $("before").src = room.photo;
   try {
-    await V.setRoom(room);
+    if (room.kind === "pano") {                   // find the floor in the 360° photo (once per photo)
+      $("vload").textContent = "Finding the floor in your 360° photo…";
+      const key = roomKey(room);
+      if (!(key in panoFloorCache)) panoFloorCache[key] = await W3mod.panoFloor(room.photo).catch(() => null);
+      const f = panoFloorCache[key];
+      if (!f || f.share < 0.03) toast("We couldn't find the floor in this 360° photo, so it is shown without tiles.");
+      if (f) { room.mask = f.mask; room.floorMean = f.mean; }
+    }
+    await viewer().setRoom(room);
     if (token !== roomToken) return;
     loadedKey = roomKey(room);
     await applyTiles();
   } catch (e) { toast(room.id === "own" ? "Your photo could not be loaded. It may have expired: please upload it again." : "Sorry, this room could not be loaded."); }
-  finally { if (token === roomToken) $("vload").hidden = true; }
+  finally { if (token === roomToken) { $("vload").hidden = true; $("vload").textContent = "Loading the room…"; } }
 }
 async function applyTiles() {
-  const room = curRoom();
-  V.setOptions({ grout: S.vis.grout, groutColor: S.vis.groutColor, floor: S.vis.opt.floor, wall: S.vis.opt.wall });
+  const room = curRoom(), R = viewer(); if (!R) return;
+  R.setOptions({ grout: S.vis.grout, groutColor: S.vis.groutColor, floor: S.vis.opt.floor, wall: S.vis.opt.wall });
   for (const surf of ["floor", "wall"]) {
     const sku = room.surfaces[surf] && fits(S.vis[surf], surf) && tileOkInRoom(S.vis[surf], room) ? S.vis[surf] : null;
-    await V.setTile(surf, sku ? tileSpec(sku) : null);
+    await R.setTile(surf, sku ? tileSpec(sku) : null);
   }
 }
 // the photo keeps its own shape: as wide as the column allows, never taller than most of the screen
@@ -256,10 +295,15 @@ function sizeStage() {
 function renderVisControls() {
   const room = curRoom(), surf = S.vis.surface;
   $("vtitle").textContent = room.name;
+  $("v3d").querySelector("span").textContent = is3d(room) ? "Photo rooms" : "Walk in 3D";
   $("rooms").innerHTML = allRooms().map(r => `<button type="button" class="room ${r.id === room.id ? "on" : ""}" data-room="${r.id}">
-      <img src="${r.photo}" alt="" loading="lazy"><span>${esc(r.name)}</span></button>`).join("") +
+      <img src="${r.photo}" alt="" loading="lazy"><span>${esc(r.name)}</span>${is3d(r) ? `<i class="b3d">${r.kind === "pano" ? "360°" : "3D"}</i>` : ""}</button>`).join("") +
     `<a class="room" href="#/rooms" style="display:grid;place-items:center;text-decoration:none;color:var(--ink);border:1.5px dashed #ccc;min-height:92px"><span style="text-align:center">+ Your own<br>photo</span></a>`;
-  $("visnote").innerHTML = room.id === "own"
+  $("visnote").innerHTML = room.kind === "3d"
+    ? "A 3D room made by Ceramica Nova. Walk around to see your tiles from every side, at their real size. Colours on screen can look slightly different from the real tile."
+    : room.kind === "pano"
+    ? "Your 360° photo, with the tiles laid on a flat floor about 1.5 m below the camera. Look all around; measure your room before you order."
+    : room.id === "own"
     ? `Your photo. The tiles follow the dots you placed${S.own.areaM2 ? `, and your floor is about <b>${S.own.areaM2.toFixed(1)} m²</b>` : ""}. <a href="#/mark">Adjust the dots</a>. Measure your room before you order.`
     : "Sample room. Tiles are drawn at their real size and follow the room's light, but colours on screen can look slightly different from the real tile. Ask for a sample in the showroom before you order.";
   document.querySelectorAll("#vsurf button").forEach(b => { b.disabled = !room.surfaces[b.dataset.s]; b.classList.toggle("on", b.dataset.s === surf); });
@@ -301,7 +345,7 @@ function addToProject(surf) {
   if (curRoom().id === "own" && surf === "wall" && S.own.wallM2 && !S.proj.wall.area) S.proj.wall.area = Math.round(S.own.wallM2 * 10) / 10;
   save(); return true;
 }
-function visChanged() { save(); renderVisControls(); renderSteps(); if (V && loadedKey === roomKey(curRoom())) applyTiles(); }
+function visChanged() { save(); renderVisControls(); renderSteps(); if (viewer() && loadedKey === roomKey(curRoom())) applyTiles(); }
 
 // hover a surface to see its outline, click it to choose it
 function outlinePath(room, surf) {
@@ -311,7 +355,7 @@ function wirePicking() {
   const st = $("stage"); let last = null;
   const clear = () => { $("vout").innerHTML = ""; $("vhl").hidden = true; st.classList.remove("pick"); last = null; };
   st.addEventListener("pointermove", e => {
-    if (cmp || !V || !loadedKey || e.pointerType === "touch") return;
+    if (cmp || !V || !loadedKey || e.pointerType === "touch" || is3d(curRoom())) return;
     const b = st.getBoundingClientRect(), u = (e.clientX - b.left) / b.width, v = (e.clientY - b.top) / b.height;
     const surf = V.surfaceAt(u, v), room = curRoom();
     if (!surf || !room.surfaces[surf]) { clear(); return; }
@@ -322,7 +366,7 @@ function wirePicking() {
   });
   st.addEventListener("pointerleave", clear);
   st.addEventListener("click", e => {
-    if (cmp || !V || !loadedKey) return;
+    if (cmp || !V || !loadedKey || is3d(curRoom())) return;
     const b = st.getBoundingClientRect(), surf = V.surfaceAt((e.clientX - b.left) / b.width, (e.clientY - b.top) / b.height);
     if (surf && curRoom().surfaces[surf] && surf !== S.vis.surface) {
       S.vis.surface = surf; save(); renderVisControls();
@@ -358,14 +402,14 @@ function toggleZoom() {
   else if (w.requestFullscreen && !w.classList.contains("fs")) w.requestFullscreen().catch(() => { w.classList.add("fs"); sizeStage(); });
   else { w.classList.toggle("fs"); sizeStage(); }
 }
-const canvasBlob = () => new Promise(ok => { V.render(); $("vcanvas").toBlob(ok, "image/jpeg", 0.9); });
+const canvasBlob = () => is3d(curRoom()) ? W3.snapshot() : new Promise(ok => { V.render(); $("vcanvas").toBlob(ok, "image/jpeg", 0.9); });
 function tilesText() {
   const room = curRoom();
   return ["floor", "wall"].filter(s => room.surfaces[s] && fits(S.vis[s], s) && tileOkInRoom(S.vis[s], room))
     .map(s => `${BY[S.vis[s]].name} on the ${s}`).join(" and ");
 }
 async function downloadImage() {
-  if (!V || !loadedKey) { toast("The room is still loading."); return; }
+  if (!viewer() || !loadedKey) { toast("The room is still loading."); return; }
   const b = await canvasBlob();
   if (!b) { toast("Sorry, the image could not be saved."); return; }
   const url = URL.createObjectURL(b);
@@ -374,7 +418,7 @@ async function downloadImage() {
 }
 // Share: the picture is saved on the server (30 days) so it has a link, and goes on the customer's lead.
 async function shareRoom() {
-  if (!V || !loadedKey) { toast("The room is still loading."); return; }
+  if (!viewer() || !loadedKey) { toast("The room is still loading."); return; }
   const tiles = tilesText();
   if (!tiles) { toast("Choose a tile first, then share your room."); return; }
   const btn = $("vshare"); btn.disabled = true;
@@ -399,16 +443,19 @@ async function shareRoom() {
 // ---------------------------------------------------------------- 2a. choose a room, or upload your own photo
 function renderRoomsPage() {
   const own = ownRoom();
+  const pano = panoRoom();
   const card = (r, note) => `<button type="button" class="rcard" data-room="${r.id}"><img src="${r.photo}" alt="" loading="lazy">
+    ${is3d(r) ? `<i class="b3d">${r.kind === "pano" ? "360°" : "Walk in 3D"}</i>` : ""}
     <span>${esc(r.name)}</span><small>${note || (r.surfaces.wall ? "Floor and wall" : "Floor")}${r.location === "outdoor" ? " · outdoor" : ""}</small></button>`;
-  $("rgrid").innerHTML = (own ? card(own, "Your photo") : "") + ROOMS.map(r => card(r)).join("");
+  $("rgrid").innerHTML = (own ? card(own, "Your photo") : "") + (pano ? card(pano, "Your 360° photo") : "") + ROOMS.map(r => card(r)).join("");
   startHandoff();
 }
 async function shrinkImage(file) {                  // big phone photos: smaller and faster to send
   const url = URL.createObjectURL(file);
   try {
     const im = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = url; });
-    const k = Math.min(1, 2000 / Math.max(im.naturalWidth, im.naturalHeight));
+    const side = im.naturalWidth / im.naturalHeight >= 1.9 ? 4096 : 2000;      // 360° photos keep more detail
+    const k = Math.min(1, side / Math.max(im.naturalWidth, im.naturalHeight));
     const c = document.createElement("canvas"); c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
     c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
     return await new Promise(ok => c.toBlob(ok, "image/jpeg", 0.88));
@@ -422,9 +469,17 @@ async function uploadPhoto(file) {
     const r = await fetch("/api/v1/visual/photos", { method: "POST", headers: { "Content-Type": body.type || "image/jpeg", "X-User-Id": USER_ID }, body });
     const d = await r.json();
     if (!r.ok) throw new Error(typeof d.detail === "string" ? d.detail : "Sorry, that photo could not be used.");
-    newOwn(d);
+    gotPhoto(d);
   } catch (e) { toast(e.message); }
   finally { $("drop").classList.remove("busy"); $("file").value = ""; }
+}
+// a photo at least twice as wide as high is a 360° photo or a panorama: it opens in the 360° viewer
+const isPano = photo => photo.width / photo.height >= 1.9;
+function gotPhoto(photo) { if (isPano(photo)) newPano(photo); else newOwn(photo); }
+function newPano(photo) {
+  S.pano = { photo, rev: ((S.pano && S.pano.rev) || 0) + 1, location: "indoor" };
+  S.vis.room = "pano"; S.vis.picked = true; S.vis.surface = "floor";
+  save(); location.hash = "#/visual";
 }
 function newOwn(photo) {
   const W = photo.width, H = photo.height;
@@ -453,7 +508,7 @@ async function pollHandoff() {
   try {
     const r = await fetch(`/api/v1/visual/handoff/${encodeURIComponent(hand.code)}`, { headers: { "X-User-Id": USER_ID } });
     const d = await r.json();
-    if (r.ok && d.status === "done") { hand = null; toast("Photo received from your phone."); newOwn(d.photo); return; }
+    if (r.ok && d.status === "done") { hand = null; toast("Photo received from your phone."); gotPhoto(d.photo); return; }
     if (!r.ok || d.status === "expired") { hand = null; $("qrWait").hidden = false; $("qrWait").textContent = "This code has expired."; $("qrState").textContent = ""; return; }
     $("qrState").textContent = `Waiting for your photo · code valid ${Math.max(1, Math.ceil(d.seconds_left / 60))} more min`;
   } catch {}
@@ -823,6 +878,10 @@ document.addEventListener("input", e => { const d = e.target.dataset; if (d.area
 
 $("vrot").onclick = () => { const o = S.vis.opt[S.vis.surface]; o.rotate = !o.rotate; visChanged(); };
 $("vcmp").onclick = () => setCompare(!cmp);
+$("v3d").onclick = () => {                         // jump to the 3D room closest to the one on screen
+  const r = curRoom(), want = /bath|spa/.test(r.id) ? "walk_bath" : "walk_living";
+  S.vis.room = is3d(r) ? "living" : want; S.vis.picked = true; save(); showVisual();
+};
 $("vdl").onclick = downloadImage;
 $("vzoom").onclick = toggleZoom;
 $("vshare").onclick = shareRoom;

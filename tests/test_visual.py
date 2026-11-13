@@ -128,3 +128,15 @@ def test_saved_preview_goes_on_the_customers_lead():
 def test_scripts_are_revalidated_after_a_deploy():
     r = client.get("/assets/segment.js")
     assert r.status_code == 200 and r.headers["cache-control"] == "no-cache" and "NovaSegment" in r.text
+
+
+def test_a_360_photo_keeps_more_detail():
+    d = upload(jpeg(6000, 3000)).json()
+    assert d["width"] == 4096 and d["height"] == 2048          # a normal photo would be cut to 2000 px
+
+
+def test_3d_viewer_files_are_served():
+    for f in ("walk3d.js", "vendor/three.module.min.js", "vendor/RoomEnvironment.js"):
+        assert client.get("/assets/" + f).status_code == 200
+    for img in ("walk_living.jpg", "walk_bath.jpg"):
+        assert client.get("/images/" + img).status_code == 200

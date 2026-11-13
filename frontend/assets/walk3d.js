@@ -465,6 +465,13 @@ export async function panoFloor(url, onStep) {
   }
   const data = new Uint8Array(gw * gh);
   for (let i = 0; i < gw * gh; i++) if (allV[i] && floorV[i] * 2 > allV[i]) data[i] = 255;
+  // straight below the camera there is usually a tripod or a hand; when the floor runs all round it, fill it in
+  if (full) {
+    const r0 = Math.floor(gh * (0.5 + 62 / 180)), r1 = Math.floor(gh * (0.5 + 72 / 180));
+    let f = 0, t = 0;
+    for (let y = r0; y < r1; y++) for (let x = 0; x < gw; x++) { t++; if (data[y * gw + x]) f++; }
+    if (t && f > 0.6 * t) data.fill(255, r1 * gw);
+  }
   // close small gaps between views (a cell no view landed on takes its neighbours' answer)
   for (let y = 1; y < gh - 1; y++) for (let x = 0; x < gw; x++) {
     const i = y * gw + x; if (allV[i]) continue;

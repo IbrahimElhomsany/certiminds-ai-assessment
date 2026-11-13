@@ -42,9 +42,23 @@
     return pipeP;
   }
 
+  async function shrink(url, side) {
+    const im = await new Promise((ok, bad) => { const i = new Image(); i.crossOrigin = "anonymous"; i.onload = () => ok(i); i.onerror = bad; i.src = url; });
+    const k = Math.min(1, side / Math.max(im.naturalWidth, im.naturalHeight));
+    if (k === 1) return url;
+    const c = Object.assign(document.createElement("canvas"), { width: Math.round(im.naturalWidth * k), height: Math.round(im.naturalHeight * k) });
+    c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+    const blob = await new Promise(ok => c.toBlob(ok, "image/jpeg", 0.92));
+    return URL.createObjectURL(blob);
+  }
+
   async function detect(url, onProgress) {
     const seg = await loadModel(onProgress);
-    const out = await seg(url);
+    // the model's answer is scaled back to the size of the picture it was given (150 numbers per pixel),
+    // so it gets a small copy: about 140 MB of working memory instead of several GB for a big photo
+    const small = await shrink(url, 640);
+    let out;
+    try { out = await seg(small); } finally { if (small !== url) URL.revokeObjectURL(small); }
     if (!out || !out.length) throw new Error("no result");
     const mw = out[0].mask.width, mh = out[0].mask.height;
     const gw = GRID, gh = Math.max(1, Math.round(mh * GRID / mw)), lab = new Uint8Array(gw * gh);

@@ -310,16 +310,23 @@ async function splatRoom(world, root, scene) {
   const x0 = pct(fx, 0.01) - 0.3, x1 = pct(fx, 0.99) + 0.3, z0 = pct(fz, 0.01) - 0.3, z1 = pct(fz, 0.99) + 0.3;
   const gw = Math.max(1, Math.ceil((x1 - x0) / C)), gd = Math.max(1, Math.ceil((z1 - z0) / C));
   const floorN = new Uint16Array(gw * gd), solid = new Uint16Array(gw * gd);
+  const isFloor = new Uint8Array(ps.numSplats), floorOp = new Float32Array(ps.numSplats);
   const cell = (x, z) => { const i = Math.floor((x - x0) / C), j = Math.floor((z - z0) / C); return i < 0 || j < 0 || i >= gw || j >= gd ? -1 : j * gw + i; };
   ps.forEachSplat((i, c, sc, q, op, col) => {
     if (op < 0.3) return;
     const wx = s * c.x, wy = off - s * c.y, wz = -s * c.z, k = cell(wx, wz); if (k < 0) return;
     if (Math.abs(wy) < 0.06) {
       if (floorN[k] < 65535) floorN[k]++;
-      ps.setSplat(i, c, sc, q, 0, col);                        // hide the floor splats: the tiled floor takes their place
+      isFloor[i] = 1; floorOp[i] = op;                         // hidden only while a tile is laid (see showFloor)
     } else if (wy > 0.15 && wy < 1.3 && solid[k] < 65535) solid[k]++;
   });
-  ps.needsUpdate = true;
+  // the room's own floor shows until a tile is chosen; then its splats are hidden and the tiled plane takes their place
+  let floorShown = true;
+  const showFloor = on => {
+    if (on === floorShown) return; floorShown = on;
+    ps.forEachSplat((i, c, sc, q, op, col) => { if (isFloor[i]) ps.setSplat(i, c, sc, q, on ? floorOp[i] : 0, col); });
+    ps.needsUpdate = true;
+  };
   // a cell you can stand on: floor was seen there and nothing stands within 30 cm
   const R = 3, walk = new Uint8Array(gw * gd);
   for (let j = 0; j < gd; j++) for (let i = 0; i < gw; i++) {
@@ -342,7 +349,7 @@ async function splatRoom(world, root, scene) {
   let start = [0, 0];
   if (!free(0, 0)) { let best = 1e9; for (let j = 0; j < gd; j++) for (let i = 0; i < gw; i++) if (walk[j * gw + i]) { const x = x0 + (i + 0.5) * C, z = z0 + (j + 0.5) * C, d = x * x + z * z; if (d < best) { best = d; start = [x, z]; } } }
   const light = Math.max(0.55, Math.min(1.05, nl ? (lum / nl) / 0.72 : 0.9));
-  return { floor, walls: {}, tiledWalls: [], free, start, yaw: 0, eye: Math.max(1.3, Math.min(1.75, off || EYE)), light,
+  return { floor, walls: {}, tiledWalls: [], free, start, yaw: 0, eye: Math.max(1.3, Math.min(1.75, off || EYE)), light, showFloor,
            size: [x1 - x0, z1 - z0], splats: ps.numSplats };
 }
 
@@ -440,7 +447,10 @@ export function create(canvas, { onPick, onJump } = {}) {
         made.tex.repeat.set(100 / made.b.bw, 100 / made.b.bh);
         m.material = new THREE.MeshBasicMaterial({ map: made.tex.clone(), color: new THREE.Color().setScalar(built.light), toneMapped: false });
         m.material.map.needsUpdate = true; m.visible = true;
-      } else if (kind === "splat") { m.visible = false; }          // no tile chosen: the room's own floor shows
+        if (surface === "floor") built.showFloor(false);
+      } else if (kind === "splat") {                              // no tile chosen: the room's own floor shows
+        m.visible = false; if (surface === "floor") built.showFloor(true);
+      }
       else if (made) {
         made.tex.repeat.set(100 / made.b.bw, 100 / made.b.bh);    // geometry is in metres, the block in cm
         m.material = new THREE.MeshStandardMaterial({ map: made.tex.clone(), roughness: Math.max(0.08, 0.85 - (made.t.gloss || 0) * 1.5),

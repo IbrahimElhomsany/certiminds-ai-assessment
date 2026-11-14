@@ -595,6 +595,37 @@ export async function panoFloor(url, onStep) {
   return { mask: tex, mean: nf ? sf / nf : 0.5, wallMean: nw ? swl / nw : 0.7, share: nf / N, wallShare: nw / N, rect };
 }
 
+/** The saved answer of panoFloor for one of our own 360° rooms, so customers don't wait for the AI:
+ *  <base>.mask.png (red = floor, green = wall) and <base>.layout.json (room shape and brightness). */
+export async function panoLayout(base) {
+  const [meta, im] = await Promise.all([
+    fetch(base + ".layout.json").then(r => { if (!r.ok) throw new Error("no saved layout"); return r.json(); }),
+    loadImage(base + ".mask.png"),
+  ]);
+  const w = im.naturalWidth, h = im.naturalHeight;
+  const c = Object.assign(document.createElement("canvas"), { width: w, height: h }), x = c.getContext("2d", { willReadFrequently: true });
+  x.drawImage(im, 0, 0); const px = x.getImageData(0, 0, w, h).data, data = new Uint8Array(w * h * 2);
+  for (let y = 0; y < h; y++) for (let i = 0; i < w; i++) {
+    const s = (y * w + i) * 4, o = ((h - 1 - y) * w + i) * 2;             // textures count rows from the bottom
+    data[o] = px[s]; data[o + 1] = px[s + 1];
+  }
+  const tex = new THREE.DataTexture(data, w, h, THREE.RGFormat); tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true;
+  return { mask: tex, ...meta };
+}
+/** Turns a panoFloor answer into the two files panoLayout reads (used once, when a room is added). */
+export function layoutFiles(f) {
+  const { width: w, height: h, data } = f.mask.image;
+  const c = Object.assign(document.createElement("canvas"), { width: w, height: h }), x = c.getContext("2d"), im = x.createImageData(w, h);
+  for (let y = 0; y < h; y++) for (let i = 0; i < w; i++) {
+    const s = ((h - 1 - y) * w + i) * 2, o = (y * w + i) * 4;
+    im.data[o] = data[s]; im.data[o + 1] = data[s + 1]; im.data[o + 3] = 255;
+  }
+  x.putImageData(im, 0, 0);
+  const r = v => Math.round(v * 1000) / 1000;
+  return { png: c.toDataURL("image/png"), json: { mean: r(f.mean), wallMean: r(f.wallMean), share: r(f.share), wallShare: r(f.wallShare),
+    rect: f.rect && { a: r(f.rect.a), x0: r(f.rect.x0), x1: r(f.rect.x1), z0: r(f.rect.z0), z1: r(f.rect.z1) } } };
+}
+
 /** A box-shaped room around the camera that fits where the floor meets the walls. Furniture hides some of
  *  that line and makes it look closer, so each wall sits at the far side of the points facing it. */
 function fitRoom(pts) {

@@ -257,7 +257,7 @@ async function showDepth() {
     if (!D) { Dmod = await import("/assets/depth3d.js"); D = Dmod.create($("dcanvas")); }
     if (!depthCache[key]) {
       $("vload").hidden = false; $("vload").textContent = "Getting the 3D effect ready…";
-      depthCache[key] = Dmod.estimate(room.photo, f => { if (tok === depthToken) $("vload").textContent = `Getting the 3D effect ready… ${Math.round(f * 100)}%`; });
+      depthCache[key] = Dmod.saved(room.photo).then(d => d || Dmod.estimate(room.photo, f => { if (tok === depthToken) $("vload").textContent = `Getting the 3D effect ready… ${Math.round(f * 100)}%`; }));
       depthCache[key].catch(() => { delete depthCache[key]; });
     }
     const depth = await depthCache[key];
@@ -315,7 +315,10 @@ async function loadRoom(room) {
       const mine = room.id === "pano" ? "your 360° photo" : "the 360° room";
       $("vload").textContent = `Finding the floor in ${mine}…`;
       const key = roomKey(room);
-      if (!(key in panoFloorCache)) panoFloorCache[key] = await W3mod.panoFloor(room.photo, (n, t) => { $("vload").textContent = `Finding the floor in ${mine} (${n}/${t})…`; }).catch(() => null);
+      // our own 360° rooms come with the answer saved next to the picture; a customer's photo is worked out here
+      if (!(key in panoFloorCache) && room.id !== "pano")
+        panoFloorCache[key] = await W3mod.panoLayout(room.photo.replace(/\.jpg$/, "")).catch(() => undefined);
+      if (!panoFloorCache[key]) panoFloorCache[key] = await W3mod.panoFloor(room.photo, (n, t) => { $("vload").textContent = `Finding the floor in ${mine} (${n}/${t})…`; }).catch(() => null);
       const f = panoFloorCache[key];
       if (!f || f.share < 0.03) toast("We couldn't find the floor in this 360° photo, so it is shown without tiles.");
       else if (!f.rect && S.vis.surface === "wall") toast("We couldn't work out the walls in this 360° photo, so only the floor can be tiled.");

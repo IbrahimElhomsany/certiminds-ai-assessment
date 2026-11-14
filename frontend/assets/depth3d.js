@@ -70,6 +70,25 @@ export async function estimate(url, onProgress) {
   return { w, h, data };
 }
 
+/** A depth answer saved next to one of our own room photos (<photo>.depth.png), so customers don't wait. */
+export async function saved(url) {
+  if (!/^\/images\/[\w-]+\.jpg$/.test(url)) return null;
+  try {
+    const im = await loadImage(url.replace(/\.jpg$/, ".depth.png"));
+    const w = im.naturalWidth, h = im.naturalHeight, c = Object.assign(document.createElement("canvas"), { width: w, height: h });
+    const x = c.getContext("2d", { willReadFrequently: true }); x.drawImage(im, 0, 0);
+    const px = x.getImageData(0, 0, w, h).data, data = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) data[i] = px[i * 4];
+    return { w, h, data };
+  } catch (e) { return null; }
+}
+/** The depth answer as a grey PNG (used once, when a room is added). */
+export function toPng(d) {
+  const c = Object.assign(document.createElement("canvas"), { width: d.w, height: d.h }), x = c.getContext("2d"), im = x.createImageData(d.w, d.h);
+  for (let i = 0; i < d.w * d.h; i++) { im.data[i * 4] = im.data[i * 4 + 1] = im.data[i * 4 + 2] = d.data[i]; im.data[i * 4 + 3] = 255; }
+  x.putImageData(im, 0, 0); return c.toDataURL("image/png");
+}
+
 const VERT = "varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }";
 const FRAG = `
 precision highp float;

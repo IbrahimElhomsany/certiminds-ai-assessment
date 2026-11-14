@@ -19,7 +19,9 @@ const PANO_CAMERA = 1.5;                  // a phone held for a 360° photo, m a
 const imgCache = new Map();
 function loadImage(url) {
   if (!imgCache.has(url)) imgCache.set(url, new Promise((ok, bad) => {
-    const im = new Image(); im.crossOrigin = "anonymous"; im.onload = () => ok(im); im.onerror = bad; im.src = url;
+    const im = new Image(); im.crossOrigin = "anonymous"; im.onload = () => ok(im);
+    im.onerror = e => { imgCache.delete(url); bad(e); };                // a failed load can be tried again
+    im.src = url;
   }));
   return imgCache.get(url);
 }

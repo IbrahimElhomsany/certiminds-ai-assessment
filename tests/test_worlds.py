@@ -1,5 +1,6 @@
 """World Labs walkable rooms: only the owner can start one, only with confirm, never twice, and the
 finished splats are downloaded once and served from our own disk. World Labs itself is faked here."""
+import base64
 import json
 
 import httpx
@@ -92,7 +93,9 @@ def test_generate_poll_download_and_never_twice(wl):
     method, url, key, body = wl.calls[0]
     sent = json.loads(body)
     assert url.endswith("/marble/v1/worlds:generate") and key == "test-key"
-    assert sent["world_prompt"]["image_prompt"]["uri"] == "https://nova.test/images/pano_tvroom.jpg"
+    pic = sent["world_prompt"]["image_prompt"]
+    assert pic["source"] == "data_base64" and pic["extension"] == "jpg"
+    assert base64.b64decode(pic["data_base64"]) == (worlds.ROOT / "images" / "pano_tvroom.jpg").read_bytes()
     assert sent["world_prompt"]["is_pano"] is True and sent["model"] == "marble-1.1"
     # asking again while it is being made does not start (or pay for) a second one
     client.post("/api/admin/worlds/tvroom/generate", json={"confirm": True}, headers=owner)
@@ -129,7 +132,7 @@ def test_auto_start_on_the_live_site_once(wl, monkeypatch):
     monkeypatch.setenv("RENDER_EXTERNAL_URL", "https://nova.example.com")
     worlds.start_auto_worlds()
     posts = [c for c in wl.calls if c[0] == "POST"]
-    assert len(posts) == 1 and json.loads(posts[0][3])["world_prompt"]["image_prompt"]["uri"] == "https://nova.example.com/images/pano_tvroom.jpg"
+    assert len(posts) == 1 and json.loads(posts[0][3])["world_prompt"]["image_prompt"]["source"] == "data_base64"
     assert client.get("/api/worlds").json()[0]["status"] == "ready"   # it kept checking until the room was saved
     worlds.start_auto_worlds()                                    # a restart never makes it again
     assert len([c for c in wl.calls if c[0] == "POST"]) == 1
@@ -141,3 +144,14 @@ def test_auto_start_does_not_retry_a_failed_room(wl, monkeypatch):
     worlds._write("tvroom", {"status": "failed", "error": "x"})
     worlds.start_auto_worlds()
     assert wl.calls == []
+
+
+def test_auto_start_retries_a_refusal(wl, monkeypatch):
+    """World Labs saying no up front costs nothing, so the next start tries again (the live site hit this)."""
+    monkeypatch.setattr(worlds.threading, "Thread", SyncThread)
+    monkeypatch.setattr(worlds.time, "sleep", lambda s: setattr(wl, "done", True))
+    monkeypatch.setenv("RENDER_EXTERNAL_URL", "https://nova.example.com")
+    worlds._write("tvroom", {"status": "failed", "error": "World Labs said no (400): Failed to download asset"})
+    worlds.start_auto_worlds()
+    assert len([c for c in wl.calls if c[0] == "POST"]) == 1
+    assert client.get("/api/worlds/tvroom").json()["status"] == "ready"

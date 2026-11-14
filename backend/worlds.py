@@ -13,6 +13,7 @@ API: https://docs.worldlabs.ai/api (POST /marble/v1/worlds:generate, GET /marble
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -27,7 +28,7 @@ from pydantic import BaseModel
 
 from backend.auth import require
 from backend.observability import log_event
-from backend.visual import STORE
+from backend.visual import ROOT, STORE
 
 API = "https://api.worldlabs.ai/marble/v1"
 MODEL = "marble-1.1"
@@ -166,12 +167,18 @@ class GenerateRequest(BaseModel):
     confirm: bool = False            # spending credits is never the default
 
 
+def _picture(key: str) -> dict:
+    """The 360° picture itself, sent along with the request. (Sending a link instead failed once: World Labs
+    could not download it from our server.)"""
+    f = ROOT / SAMPLES[key]["pano"].lstrip("/")
+    return {"source": "data_base64", "data_base64": base64.b64encode(f.read_bytes()).decode(), "extension": f.suffix.lstrip(".")}
+
+
 def _start(key: str, base: str, by: str | None) -> dict:
     """Ask World Labs to make one room. Never twice: a room already made or being made is left alone."""
     body = {"display_name": f"Nova Studio {SAMPLES[key]['name']}"[:64], "model": MODEL, "tags": ["nova-studio"],
             "permission": {"public": False},
-            "world_prompt": {"type": "image", "is_pano": True,
-                             "image_prompt": {"source": "uri", "uri": base + SAMPLES[key]["pano"]}}}
+            "world_prompt": {"type": "image", "is_pano": True, "image_prompt": _picture(key)}}
     with _lock:
         meta = _read(key)
         if meta.get("status") in ("pending", "ready"):
@@ -182,8 +189,9 @@ def _start(key: str, base: str, by: str | None) -> dict:
         except httpx.HTTPError as e:
             raise HTTPException(status_code=502, detail=f"Could not reach World Labs ({type(e).__name__}).")
         if r.status_code >= 400:
+            # refused before anything was made, so no credits were used: the next start may try again
             log_event("world_generate_refused", key=key, status=r.status_code)
-            meta = {"status": "failed", "error": f"World Labs said no ({r.status_code}): {r.text[:200]}"}
+            meta = {"status": "failed", "refused": True, "error": f"World Labs said no ({r.status_code}): {r.text[:200]}"}
             _write(key, meta)
             raise HTTPException(status_code=502, detail=meta["error"])
         meta = {"status": "pending", "operation_id": r.json()["operation_id"], "started": time.time(),
@@ -214,11 +222,17 @@ def world_generate(key: str, req: GenerateRequest, request: Request, user=Depend
     return _public(_start(key, base.rstrip("/"), getattr(user, "email", None)), key)
 
 
+def _refused(meta: dict) -> bool:
+    """World Labs said no before making anything (nothing was paid), as opposed to a room that failed while being made."""
+    return bool(meta.get("refused")) or str(meta.get("error", "")).startswith("World Labs said no")
+
+
 def start_auto_worlds() -> None:
     """On the live site (Render sets RENDER_EXTERNAL_URL), make the rooms listed in WORLDS_AUTO once, by
     themselves, and keep checking until they are downloaded, so nobody has to press anything or open a page.
-    Default list on Render: the TV lounge. A room that failed is NOT tried again on its own (that could spend
-    credits over and over); the owner can retry it from Admin -> 3D rooms."""
+    Default list on Render: the TV lounge. A room that failed while being made is NOT tried again on its own (that
+    could spend credits over and over); the owner can retry it from Admin -> 3D rooms. A request World Labs refused
+    outright cost nothing, so that one is tried again at the next start."""
     base = os.getenv("PUBLIC_BASE_URL") or os.getenv("RENDER_EXTERNAL_URL") or ""
     keys = [k for k in os.getenv("WORLDS_AUTO", "tvroom" if base else "").split(",") if k.strip() in SAMPLES]
     if not (keys and base.startswith("https://") and os.getenv("WORLDLABS_API_KEY")):
@@ -227,7 +241,8 @@ def start_auto_worlds() -> None:
     def run():
         for k in keys:
             try:
-                if _read(k).get("status") in (None, "none"):
+                m = _read(k)
+                if m.get("status") in (None, "none") or (m.get("status") == "failed" and _refused(m)):
                     _start(k, base.rstrip("/"), None)
             except Exception as e:                             # never take the site down over this
                 log_event("world_auto_failed", key=k, error=type(e).__name__)

@@ -309,24 +309,17 @@ async function splatRoom(world, root, scene) {
   const pct = (v, q) => { const a = Float32Array.from(v).sort(); return a.length ? a[Math.min(a.length - 1, Math.floor(q * a.length))] : 0; };
   const x0 = pct(fx, 0.01) - 0.3, x1 = pct(fx, 0.99) + 0.3, z0 = pct(fz, 0.01) - 0.3, z1 = pct(fz, 0.99) + 0.3;
   const gw = Math.max(1, Math.ceil((x1 - x0) / C)), gd = Math.max(1, Math.ceil((z1 - z0) / C));
-  const floorN = new Uint16Array(gw * gd), solid = new Uint16Array(gw * gd);
-  const isFloor = new Uint8Array(ps.numSplats), floorOp = new Float32Array(ps.numSplats);
-  const cell = (x, z) => { const i = Math.floor((x - x0) / C), j = Math.floor((z - z0) / C); return i < 0 || j < 0 || i >= gw || j >= gd ? -1 : j * gw + i; };
+  const floorN = new Uint16Array(gw * gd), solid = new Uint16Array(gw * gd), tall = new Uint16Array(gw * gd);
+  const cellOf = new Int32Array(ps.numSplats).fill(-1), floorOp = new Float32Array(ps.numSplats);
   ps.forEachSplat((i, c, sc, q, op, col) => {
     if (op < 0.3) return;
     const wx = s * c.x, wy = off - s * c.y, wz = -s * c.z, k = cell(wx, wz); if (k < 0) return;
     if (Math.abs(wy) < 0.06) {
       if (floorN[k] < 65535) floorN[k]++;
-      isFloor[i] = 1; floorOp[i] = op;                         // hidden only while a tile is laid (see showFloor)
-    } else if (wy > 0.15 && wy < 1.3 && solid[k] < 65535) solid[k]++;
+      cellOf[i] = k; floorOp[i] = op;
+    } else if (wy > 0.15 && wy < 1.3) { if (solid[k] < 65535) solid[k]++; }
+    else if (wy > 1.4 && wy < 2.2 && tall[k] < 65535) tall[k]++;   // above the furniture: walls, curtains, door frames
   });
-  // the room's own floor shows until a tile is chosen; then its splats are hidden and the tiled plane takes their place
-  let floorShown = true;
-  const showFloor = on => {
-    if (on === floorShown) return; floorShown = on;
-    ps.forEachSplat((i, c, sc, q, op, col) => { if (isFloor[i]) ps.setSplat(i, c, sc, q, on ? floorOp[i] : 0, col); });
-    ps.needsUpdate = true;
-  };
   // a cell you can stand on: floor was seen there and nothing stands within 30 cm
   const R = 3, walk = new Uint8Array(gw * gd);
   for (let j = 0; j < gd; j++) for (let i = 0; i < gw; i++) {
@@ -338,16 +331,44 @@ async function splatRoom(world, root, scene) {
     }
     walk[j * gw + i] = ok;
   }
-  const free = (x, z) => { const k = cell(x, z); return k >= 0 && walk[k] === 1; };
-  // the floor: one flat plane over the room's outline, just above the hidden floor splats
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), new THREE.MeshBasicMaterial({ color: 0x777777 }));
-  floor.rotation.x = -Math.PI / 2; floor.position.set((x0 + x1) / 2, 0.01, (z0 + z1) / 2); floor.visible = false;
-  // texture in metres from the room's corner, like the other rooms
-  const uv = floor.geometry.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (x1 - x0), uv.getY(i) * (z1 - z0));
-  root.add(floor);
   // start where the 360° picture was taken (the middle), or the nearest free spot
   let start = [0, 0];
-  if (!free(0, 0)) { let best = 1e9; for (let j = 0; j < gd; j++) for (let i = 0; i < gw; i++) if (walk[j * gw + i]) { const x = x0 + (i + 0.5) * C, z = z0 + (j + 0.5) * C, d = x * x + z * z; if (d < best) { best = d; start = [x, z]; } } }
+  if (!(cell(0, 0) >= 0 && walk[cell(0, 0)])) { let best = 1e9; for (let j = 0; j < gd; j++) for (let i = 0; i < gw; i++) if (walk[j * gw + i]) { const x = x0 + (i + 0.5) * C, z = z0 + (j + 0.5) * C, d = x * x + z * z; if (d < best) { best = d; start = [x, z]; } } }
+  // the room itself: spread out from the start until the walls stop it, so the tile never runs out through a window
+  const inside = new Uint8Array(gw * gd), isWall = k => tall[k] >= 3, s0 = cell(start[0], start[1]);
+  if (s0 >= 0) {
+    const todo = [s0]; inside[s0] = 1;
+    while (todo.length) {
+      const k = todo.pop(), i = k % gw, j = (k - i) / gw;
+      for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const ii = i + a, jj = j + b, n = jj * gw + ii;
+        if (ii < 0 || jj < 0 || ii >= gw || jj >= gd || inside[n]) continue;
+        if (isWall(n)) { inside[n] = 2; continue; }                 // the foot of the wall is still floor
+        inside[n] = 1; todo.push(n);
+      }
+    }
+  } else inside.fill(1);
+  const free = (x, z) => { const k = cell(x, z); return k >= 0 && walk[k] === 1 && inside[k] === 1; };
+  // the room's own floor shows until a tile is chosen; then the floor splats inside the room are hidden and the tile takes their place
+  let floorShown = true;
+  const showFloor = on => {
+    if (on === floorShown) return; floorShown = on;
+    ps.forEachSplat((i, c, sc, q, op, col) => { const k = cellOf[i]; if (k >= 0 && inside[k]) ps.setSplat(i, c, sc, q, on ? floorOp[i] : 0, col); });
+    ps.needsUpdate = true;
+  };
+  // the floor: one 10 cm square per room cell, just above the floor splats, texture in metres like the other rooms
+  const pos = [], uvs = [], idx = [];
+  for (let j = 0; j < gd; j++) for (let i = 0; i < gw; i++) {
+    if (!inside[j * gw + i]) continue;
+    const xa = x0 + i * C, za = z0 + j * C, n = pos.length / 3;
+    for (const [dx, dz] of [[0, 0], [C, 0], [C, C], [0, C]]) { pos.push(xa + dx, 0.01, za + dz); uvs.push(xa + dx - x0, z1 - (za + dz)); }
+    idx.push(n, n + 2, n + 1, n, n + 3, n + 2);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setIndex(idx); geo.computeVertexNormals();
+  const floor = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x777777, side: THREE.DoubleSide })); floor.visible = false;
+  root.add(floor);
   const light = Math.max(0.55, Math.min(1.05, nl ? (lum / nl) / 0.72 : 0.9));
   return { floor, walls: {}, tiledWalls: [], free, start, yaw: 0, eye: Math.max(1.3, Math.min(1.75, off || EYE)), light, showFloor,
            size: [x1 - x0, z1 - z0], splats: ps.numSplats };

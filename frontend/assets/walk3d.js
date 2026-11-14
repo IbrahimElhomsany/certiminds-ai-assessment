@@ -311,6 +311,7 @@ async function splatRoom(world, root, scene) {
   const gw = Math.max(1, Math.ceil((x1 - x0) / C)), gd = Math.max(1, Math.ceil((z1 - z0) / C));
   const floorN = new Uint16Array(gw * gd), solid = new Uint16Array(gw * gd), tall = new Uint16Array(gw * gd);
   const cellOf = new Int32Array(ps.numSplats).fill(-1), floorOp = new Float32Array(ps.numSplats);
+  const cell = (x, z) => { const i = Math.floor((x - x0) / C), j = Math.floor((z - z0) / C); return i < 0 || j < 0 || i >= gw || j >= gd ? -1 : j * gw + i; };
   ps.forEachSplat((i, c, sc, q, op, col) => {
     if (op < 0.3) return;
     const wx = s * c.x, wy = off - s * c.y, wz = -s * c.z, k = cell(wx, wz); if (k < 0) return;
@@ -318,7 +319,7 @@ async function splatRoom(world, root, scene) {
       if (floorN[k] < 65535) floorN[k]++;
       cellOf[i] = k; floorOp[i] = op;
     } else if (wy > 0.15 && wy < 1.3) { if (solid[k] < 65535) solid[k]++; }
-    else if (wy > 1.4 && wy < 2.2 && tall[k] < 65535) tall[k]++;   // above the furniture: walls, curtains, door frames
+    if (wy > 0.6 && wy < 2.4 && tall[k] < 65535) tall[k]++;         // walls, curtains, door frames (and tall furniture)
   });
   // a cell you can stand on: floor was seen there and nothing stands within 30 cm
   const R = 3, walk = new Uint8Array(gw * gd);
@@ -334,20 +335,25 @@ async function splatRoom(world, root, scene) {
   // start where the 360° picture was taken (the middle), or the nearest free spot
   let start = [0, 0];
   if (!(cell(0, 0) >= 0 && walk[cell(0, 0)])) { let best = 1e9; for (let j = 0; j < gd; j++) for (let i = 0; i < gw; i++) if (walk[j * gw + i]) { const x = x0 + (i + 0.5) * C, z = z0 + (j + 0.5) * C, d = x * x + z * z; if (d < best) { best = d; start = [x, z]; } } }
-  // the room itself: spread out from the start until the walls stop it, so the tile never runs out through a window
-  const inside = new Uint8Array(gw * gd), isWall = k => tall[k] >= 3, s0 = cell(start[0], start[1]);
-  if (s0 >= 0) {
-    const todo = [s0]; inside[s0] = 1;
+  // the room itself: spread out from the start, with every wall made 30 cm thicker so it cannot slip out through an
+  // open door or window, then grown back by 30 cm to reach the walls. The tile never runs out onto the garden.
+  const D = 3, grow = src => { const out = new Uint8Array(gw * gd);
+    for (let j = 0; j < gd; j++) for (let i = 0; i < gw; i++) if (src[j * gw + i])
+      for (let b = Math.max(0, j - D); b <= Math.min(gd - 1, j + D); b++) for (let a = Math.max(0, i - D); a <= Math.min(gw - 1, i + D); a++) out[b * gw + a] = 1;
+    return out; };
+  const wall = grow(tall.map(v => v >= 2 ? 1 : 0)), room = new Uint8Array(gw * gd), s0 = cell(start[0], start[1]);
+  if (s0 >= 0 && !wall[s0]) {
+    const todo = [s0]; room[s0] = 1;
     while (todo.length) {
       const k = todo.pop(), i = k % gw, j = (k - i) / gw;
       for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const ii = i + a, jj = j + b, n = jj * gw + ii;
-        if (ii < 0 || jj < 0 || ii >= gw || jj >= gd || inside[n]) continue;
-        if (isWall(n)) { inside[n] = 2; continue; }                 // the foot of the wall is still floor
-        inside[n] = 1; todo.push(n);
+        if (ii < 0 || jj < 0 || ii >= gw || jj >= gd || room[n] || wall[n]) continue;
+        room[n] = 1; todo.push(n);
       }
     }
-  } else inside.fill(1);
+  } else room.fill(1);
+  const inside = grow(room);
   const free = (x, z) => { const k = cell(x, z); return k >= 0 && walk[k] === 1 && inside[k] === 1; };
   // the room's own floor shows until a tile is chosen; then the floor splats inside the room are hidden and the tile takes their place
   let floorShown = true;

@@ -296,7 +296,6 @@
   .stagewrap.fs .pbar, .stagewrap.fs .rooms, .stagewrap.fs .visnote { display:none; }
   #pMark .stagewrap { padding:24px 24px 72px; }
   #mbrush { opacity:.5; }
-  .stage canvas.depth { touch-action:none; }
   .spots { position:absolute; left:10px; top:10px; display:flex; gap:6px; flex-wrap:wrap; max-width:calc(100% - 20px); }
   .spots button { border:0; border-radius:99px; padding:6px 11px; font-size:12px; font-weight:500; background:rgba(17,17,17,.62); color:#fff; cursor:pointer; }
   .spots button.on { background:#fff; color:#111; }
@@ -530,7 +529,6 @@
         <a class="tb" href="#/rooms"><svg class="ico" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg><span>Rooms</span></a>
         <span class="vtitle" id="vtitle"></span>
         <button class="tb" type="button" id="v3d"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3zM12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span>Walk in 3D</span></button>
-        <button class="tb" type="button" id="vdepth" title="A 3D effect made by AI from the photo"><svg class="ico" viewBox="0 0 24 24"><path d="M3 8l9-5 9 5-9 5-9-5zM3 12.5l9 5 9-5M3 17l9 5 9-5"/></svg><span>3D effect</span></button>
         <button class="tb" type="button" id="vcmp"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3v18M4 5h16v14H4z"/></svg><span>Compare</span></button>
         <button class="tb" type="button" id="vzoom"><svg class="ico" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span>Zoom</span></button>
         <button class="tb" type="button" id="vshare"><svg class="ico" viewBox="0 0 24 24"><path d="M18 8a3 3 0 100-6 3 3 0 000 6zM6 15a3 3 0 100-6 3 3 0 000 6zM18 22a3 3 0 100-6 3 3 0 000 6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg><span>Share</span></button>
@@ -541,7 +539,6 @@
         <div class="stage" id="stage">
           <canvas id="vcanvas" aria-label="Room with your tiles"></canvas>
           <canvas id="wcanvas" class="walk" aria-label="3D room with your tiles: drag to look around" hidden></canvas>
-          <canvas id="dcanvas" class="depth" aria-label="Room with your tiles, with a 3D effect" hidden></canvas>
           <span class="walkhint" id="walkhint" hidden></span>
           <div class="spots" id="vspots" hidden></div>
           <img class="before" id="before" alt="" hidden>

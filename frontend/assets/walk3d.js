@@ -470,16 +470,19 @@ export function create(canvas, { onPick, onJump } = {}) {
  *  The vote is then sharpened against the photo itself so the edges follow the furniture, and the room's
  *  shape (a box) is worked out from where the floor meets the walls, so wall tiles can be laid on it.
  *  Returns { mask: DataTexture (R floor, G wall), mean, wallMean, share, wallShare, rect }. */
-export async function panoFloor(url, onStep) {
-  if (!window.NovaSegment) return null;
+export async function panoFloor(url, onStep, saved) {
+  if (!saved && !window.NovaSegment) return null;
   const im = await loadImage(url), ratio = im.naturalWidth / im.naturalHeight;
   const full = ratio >= 1.95 && ratio <= 2.05;
   const hfov = full ? Math.PI * 2 : Math.min(Math.PI * 2, ratio * 67 * Math.PI / 180), vfov = full ? Math.PI : hfov / ratio;
   const sw = Math.min(2048, im.naturalWidth), sh = Math.round(sw / ratio);
   const sc = Object.assign(document.createElement("canvas"), { width: sw, height: sh }), sx = sc.getContext("2d", { willReadFrequently: true });
   sx.drawImage(im, 0, 0, sw, sh); const src = sx.getImageData(0, 0, sw, sh).data;
-  // 1. votes on a coarse grid
-  const cw = 480, ch = Math.max(1, Math.round(cw / ratio)), fV = new Uint16Array(cw * ch), wV = new Uint16Array(cw * ch), aV = new Uint16Array(cw * ch);
+  // 1. votes on a coarse grid (or the votes saved with one of our own rooms)
+  const cw = saved ? saved.cw : 480, ch = saved ? saved.ch : Math.max(1, Math.round(cw / ratio));
+  let pf, pw;
+  if (saved) { pf = saved.pf; pw = saved.pw; } else {
+  const fV = new Uint16Array(cw * ch), wV = new Uint16Array(cw * ch), aV = new Uint16Array(cw * ch);
   const VW = 480, VH = 360, D = Math.PI / 180, views = [];
   const span = Math.max(0, hfov - 80 * D), n = full ? 6 : Math.max(1, Math.ceil(span / (60 * D)) + 1);
   for (let k = 0; k < n; k++) views.push({ yaw: full ? k * 60 * D : (n === 1 ? 0 : -span / 2 + k * span / (n - 1)), pitch: -40 * D, f: 1 });
@@ -516,8 +519,10 @@ export async function panoFloor(url, onStep) {
       }
     } finally { URL.revokeObjectURL(burl); }
   }
-  const pf = new Float32Array(cw * ch), pw = new Float32Array(cw * ch);
+  pf = new Float32Array(cw * ch); pw = new Float32Array(cw * ch);
   for (let i = 0; i < cw * ch; i++) if (aV[i]) { pf[i] = fV[i] / aV[i]; pw[i] = wV[i] / aV[i]; }
+  }
+  const votes = { cw, ch, pf: pf.slice(), pw: pw.slice() };
   // straight below the camera there is usually a tripod or a hand; when the floor runs all round it, fill it in
   if (full) {
     const r0 = Math.floor(ch * (0.5 + 62 / 180)), r1 = Math.floor(ch * (0.5 + 72 / 180));
@@ -567,6 +572,12 @@ export async function panoFloor(url, onStep) {
   const qf = guided(up(pf)), qw = guided(up(pw));
   for (let i = 0; i < N; i++) { if (qf[i] >= qw[i]) qw[i] = Math.min(qw[i], 1 - qf[i]); else qf[i] = Math.min(qf[i], 1 - qw[i]); }
   for (let y = 0; y < gh; y++) if ((0.5 - (y + 0.5) / gh) * vfov > -0.02) qf.fill(0, y * gw, y * gw + gw);   // no floor at or above eye level
+  // no wall below where the floor starts in each column (stray wall votes where the views meet)
+  for (let x = 0; x < gw; x++) {
+    let y = Math.ceil(gh * 0.5);
+    while (y < gh && qf[y * gw + x] < 0.5) y++;
+    for (y += 2; y < gh; y++) qw[y * gw + x] = 0;
+  }
   // 3. the room's shape: where the floor meets the walls, all the way round
   let rect = null;
   if (full) {
@@ -592,38 +603,30 @@ export async function panoFloor(url, onStep) {
     data[o] = Math.round(qf[i] * 255); data[o + 1] = Math.round(qw[i] * 255);
   }
   const tex = new THREE.DataTexture(data, gw, gh, THREE.RGFormat); tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true;
-  return { mask: tex, mean: nf ? sf / nf : 0.5, wallMean: nw ? swl / nw : 0.7, share: nf / N, wallShare: nw / N, rect };
+  return { mask: tex, mean: nf ? sf / nf : 0.5, wallMean: nw ? swl / nw : 0.7, share: nf / N, wallShare: nw / N, rect, votes };
 }
 
-/** The saved answer of panoFloor for one of our own 360° rooms, so customers don't wait for the AI:
- *  <base>.mask.png (red = floor, green = wall) and <base>.layout.json (room shape and brightness). */
-export async function panoLayout(base) {
-  const [meta, im] = await Promise.all([
-    fetch(base + ".layout.json").then(r => { if (!r.ok) throw new Error("no saved layout"); return r.json(); }),
-    loadImage(base + ".mask.png"),
-  ]);
-  const w = im.naturalWidth, h = im.naturalHeight;
-  const c = Object.assign(document.createElement("canvas"), { width: w, height: h }), x = c.getContext("2d", { willReadFrequently: true });
-  x.drawImage(im, 0, 0); const px = x.getImageData(0, 0, w, h).data, data = new Uint8Array(w * h * 2);
-  for (let y = 0; y < h; y++) for (let i = 0; i < w; i++) {
-    const s = (y * w + i) * 4, o = ((h - 1 - y) * w + i) * 2;             // textures count rows from the bottom
-    data[o] = px[s]; data[o + 1] = px[s + 1];
-  }
-  const tex = new THREE.DataTexture(data, w, h, THREE.RGFormat); tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true;
-  return { mask: tex, ...meta };
+/** Our own 360° rooms come with the room detector's votes saved next to the picture (<photo>.votes.png:
+ *  floor on top, walls below, grey = share of the views that saw floor or wall), so customers skip the slow
+ *  part; the quick part (sharpening the edges and working out the room's shape) still runs here. */
+export async function panoLayout(url) {
+  const im = await loadImage(url.replace(/\.jpg$/, ".votes.png"));
+  const cw = im.naturalWidth, ch = im.naturalHeight / 2;
+  const c = Object.assign(document.createElement("canvas"), { width: cw, height: ch * 2 }), x = c.getContext("2d", { willReadFrequently: true });
+  x.drawImage(im, 0, 0); const px = x.getImageData(0, 0, cw, ch * 2).data;
+  const pf = new Float32Array(cw * ch), pw = new Float32Array(cw * ch);
+  for (let i = 0; i < cw * ch; i++) { pf[i] = px[i * 4] / 255; pw[i] = px[(cw * ch + i) * 4] / 255; }
+  return panoFloor(url, null, { cw, ch, pf, pw });
 }
-/** Turns a panoFloor answer into the two files panoLayout reads (used once, when a room is added). */
-export function layoutFiles(f) {
-  const { width: w, height: h, data } = f.mask.image;
-  const c = Object.assign(document.createElement("canvas"), { width: w, height: h }), x = c.getContext("2d"), im = x.createImageData(w, h);
-  for (let y = 0; y < h; y++) for (let i = 0; i < w; i++) {
-    const s = ((h - 1 - y) * w + i) * 2, o = (y * w + i) * 4;
-    im.data[o] = data[s]; im.data[o + 1] = data[s + 1]; im.data[o + 3] = 255;
+/** The votes of a panoFloor answer as the picture panoLayout reads (made once, when a room is added). */
+export function votesImage(f) {
+  const { cw, ch, pf, pw } = f.votes;
+  const c = Object.assign(document.createElement("canvas"), { width: cw, height: ch * 2 }), x = c.getContext("2d"), im = x.createImageData(cw, ch * 2);
+  for (let i = 0; i < cw * ch; i++) {
+    const a = Math.round(pf[i] * 255), b = Math.round(pw[i] * 255);
+    im.data.set([a, a, a, 255], i * 4); im.data.set([b, b, b, 255], (cw * ch + i) * 4);
   }
-  x.putImageData(im, 0, 0);
-  const r = v => Math.round(v * 1000) / 1000;
-  return { png: c.toDataURL("image/png"), json: { mean: r(f.mean), wallMean: r(f.wallMean), share: r(f.share), wallShare: r(f.wallShare),
-    rect: f.rect && { a: r(f.rect.a), x0: r(f.rect.x0), x1: r(f.rect.x1), z0: r(f.rect.z0), z1: r(f.rect.z1) } } };
+  x.putImageData(im, 0, 0); return c.toDataURL("image/png");
 }
 
 /** A box-shaped room around the camera that fits where the floor meets the walls. Furniture hides some of

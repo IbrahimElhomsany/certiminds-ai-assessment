@@ -317,7 +317,7 @@ async function loadRoom(room) {
       const key = roomKey(room);
       // our own 360° rooms come with the answer saved next to the picture; a customer's photo is worked out here
       if (!(key in panoFloorCache) && room.id !== "pano")
-        panoFloorCache[key] = await W3mod.panoLayout(room.photo.replace(/\.jpg$/, "")).catch(() => undefined);
+        panoFloorCache[key] = await W3mod.panoLayout(room.photo).catch(() => undefined);
       if (!panoFloorCache[key]) panoFloorCache[key] = await W3mod.panoFloor(room.photo, (n, t) => { $("vload").textContent = `Finding the floor in ${mine} (${n}/${t})…`; }).catch(() => null);
       const f = panoFloorCache[key];
       if (!f || f.share < 0.03) toast("We couldn't find the floor in this 360° photo, so it is shown without tiles.");

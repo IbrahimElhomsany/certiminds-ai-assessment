@@ -166,6 +166,39 @@ class GenerateRequest(BaseModel):
     confirm: bool = False            # spending credits is never the default
 
 
+def _start(key: str, base: str, by: str | None) -> dict:
+    """Ask World Labs to make one room. Never twice: a room already made or being made is left alone."""
+    body = {"display_name": f"Nova Studio {SAMPLES[key]['name']}"[:64], "model": MODEL, "tags": ["nova-studio"],
+            "permission": {"public": False},
+            "world_prompt": {"type": "image", "is_pano": True,
+                             "image_prompt": {"source": "uri", "uri": base + SAMPLES[key]["pano"]}}}
+    with _lock:
+        meta = _read(key)
+        if meta.get("status") in ("pending", "ready"):
+            return meta
+        try:
+            with _client() as c:
+                r = c.post(f"{API}/worlds:generate", json=body)
+        except httpx.HTTPError as e:
+            raise HTTPException(status_code=502, detail=f"Could not reach World Labs ({type(e).__name__}).")
+        if r.status_code >= 400:
+            log_event("world_generate_refused", key=key, status=r.status_code)
+            meta = {"status": "failed", "error": f"World Labs said no ({r.status_code}): {r.text[:200]}"}
+            _write(key, meta)
+            raise HTTPException(status_code=502, detail=meta["error"])
+        meta = {"status": "pending", "operation_id": r.json()["operation_id"], "started": time.time(),
+                "checked": time.time(), "by": by}
+        _write(key, meta)
+        log_event("world_generate_started", key=key, by=by or "auto")
+    return meta
+
+
+@router.get("/api/worlds")
+def world_list() -> list[dict]:
+    """Every sample room that can be walked around in, and whether it has been made."""
+    return [_public(_check(k), k) for k in SAMPLES]
+
+
 @router.post("/api/admin/worlds/{key}/generate")
 def world_generate(key: str, req: GenerateRequest, request: Request, user=Depends(require("settings.manage"))) -> dict:
     """Owner only: ask World Labs to make this room. Does nothing if it is already made or being made."""
@@ -174,28 +207,38 @@ def world_generate(key: str, req: GenerateRequest, request: Request, user=Depend
         return _public(meta, key)
     if not req.confirm:
         raise HTTPException(status_code=400, detail="This uses about 1,500 World Labs credits. Send confirm: true to go ahead.")
-    base = os.getenv("PUBLIC_BASE_URL") or str(request.base_url).rstrip("/")
+    _api_key()
+    base = os.getenv("PUBLIC_BASE_URL") or os.getenv("RENDER_EXTERNAL_URL") or str(request.base_url).rstrip("/")
     if not base.startswith("https://"):
         raise HTTPException(status_code=400, detail="World Labs must be able to fetch the picture: run this on the live site.")
-    body = {"display_name": f"Nova Studio {SAMPLES[key]['name']}"[:64], "model": MODEL, "tags": ["nova-studio"],
-            "permission": {"public": False},
-            "world_prompt": {"type": "image", "is_pano": True,
-                             "image_prompt": {"source": "uri", "uri": base + SAMPLES[key]["pano"]}}}
-    with _lock:
-        meta = _read(key)
-        if meta.get("status") in ("pending", "ready"):
-            return _public(meta, key)
-        try:
-            with _client() as c:
-                r = c.post(f"{API}/worlds:generate", json=body)
-        except httpx.HTTPError as e:
-            raise HTTPException(status_code=502, detail=f"Could not reach World Labs ({type(e).__name__}).")
-        if r.status_code >= 400:
-            log_event("world_generate_refused", key=key, status=r.status_code)
-            raise HTTPException(status_code=502, detail=f"World Labs said no ({r.status_code}): {r.text[:300]}")
-        op = r.json()
-        meta = {"status": "pending", "operation_id": op["operation_id"], "started": time.time(), "checked": time.time(),
-                "by": getattr(user, "email", None)}
-        _write(key, meta)
-        log_event("world_generate_started", key=key)
-    return _public(meta, key)
+    return _public(_start(key, base.rstrip("/"), getattr(user, "email", None)), key)
+
+
+def start_auto_worlds() -> None:
+    """On the live site (Render sets RENDER_EXTERNAL_URL), make the rooms listed in WORLDS_AUTO once, by
+    themselves, and keep checking until they are downloaded, so nobody has to press anything or open a page.
+    Default list on Render: the TV lounge. A room that failed is NOT tried again on its own (that could spend
+    credits over and over); the owner can retry it from Admin -> 3D rooms."""
+    base = os.getenv("PUBLIC_BASE_URL") or os.getenv("RENDER_EXTERNAL_URL") or ""
+    keys = [k for k in os.getenv("WORLDS_AUTO", "tvroom" if base else "").split(",") if k.strip() in SAMPLES]
+    if not (keys and base.startswith("https://") and os.getenv("WORLDLABS_API_KEY")):
+        return
+
+    def run():
+        for k in keys:
+            try:
+                if _read(k).get("status") in (None, "none"):
+                    _start(k, base.rstrip("/"), None)
+            except Exception as e:                             # never take the site down over this
+                log_event("world_auto_failed", key=k, error=type(e).__name__)
+        for _ in range(180):                                  # check for up to an hour
+            if all(_read(k).get("status") != "pending" for k in keys):
+                return
+            for k in keys:
+                try:
+                    _check(k)
+                except Exception as e:
+                    log_event("world_auto_poll_failed", key=k, error=type(e).__name__)
+            time.sleep(POLL_EVERY)
+
+    threading.Thread(target=run, name="worlds-auto", daemon=True).start()

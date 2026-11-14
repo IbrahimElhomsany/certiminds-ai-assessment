@@ -114,3 +114,30 @@ def test_needs_the_key(wl, monkeypatch):
     monkeypatch.delenv("WORLDLABS_API_KEY")
     r = client.post("/api/admin/worlds/tvroom/generate", json={"confirm": True}, headers=auth("owner@ceramicanova.demo"))
     assert r.status_code == 503 and wl.calls == []
+
+
+class SyncThread:                                                 # run the auto start right away in the test
+    def __init__(self, target, **kw): self.target = target
+    def start(self): self.target()
+
+
+def test_auto_start_on_the_live_site_once(wl, monkeypatch):
+    monkeypatch.setattr(worlds.threading, "Thread", SyncThread)
+    monkeypatch.setattr(worlds.time, "sleep", lambda s: setattr(wl, "done", True))
+    worlds.start_auto_worlds()                                    # not on Render: does nothing
+    assert wl.calls == []
+    monkeypatch.setenv("RENDER_EXTERNAL_URL", "https://nova.example.com")
+    worlds.start_auto_worlds()
+    posts = [c for c in wl.calls if c[0] == "POST"]
+    assert len(posts) == 1 and json.loads(posts[0][3])["world_prompt"]["image_prompt"]["uri"] == "https://nova.example.com/images/pano_tvroom.jpg"
+    assert client.get("/api/worlds").json()[0]["status"] == "ready"   # it kept checking until the room was saved
+    worlds.start_auto_worlds()                                    # a restart never makes it again
+    assert len([c for c in wl.calls if c[0] == "POST"]) == 1
+
+
+def test_auto_start_does_not_retry_a_failed_room(wl, monkeypatch):
+    monkeypatch.setattr(worlds.threading, "Thread", SyncThread)
+    monkeypatch.setenv("RENDER_EXTERNAL_URL", "https://nova.example.com")
+    worlds._write("tvroom", {"status": "failed", "error": "x"})
+    worlds.start_auto_worlds()
+    assert wl.calls == []

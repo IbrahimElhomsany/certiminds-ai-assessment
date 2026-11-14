@@ -67,6 +67,8 @@ if use_claude():
     agent_client = BudgetedClient(anthropic.Anthropic(max_retries=2, timeout=60))   # daily cap on Claude calls
 agent = SalesAgent(gateway, client=agent_client)
 from backend.deploy import start_housekeeping  # noqa: E402
+from backend.worlds import start_auto_worlds  # noqa: E402
+start_auto_worlds()            # live site: make the walkable TV lounge once (World Labs), see backend/worlds.py
 start_housekeeping()           # demo hosting: seed an empty database, optional daily reset (env flags, off by default)
 rate_limiter = RateLimiter(max_requests=int(os.getenv("RATE_LIMIT_PER_MIN", "20")), window_seconds=60)
 

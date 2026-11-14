@@ -8,3 +8,6 @@ training/models/
 training/adapters/0*_adapters.safetensors
 data/*.db
 data/uploads/
+
+# World Labs rooms are downloaded at run time (backend/worlds.py), never committed
+data/worlds/

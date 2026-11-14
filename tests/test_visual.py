@@ -136,7 +136,7 @@ def test_a_360_photo_keeps_more_detail():
 
 
 def test_3d_viewer_files_are_served():
-    for f in ("walk3d.js", "depth3d.js", "vendor/three.module.min.js", "vendor/RoomEnvironment.js"):
+    for f in ("walk3d.js", "depth3d.js", "vendor/three.module.min.js", "vendor/RoomEnvironment.js", "vendor/spark.module.js"):
         assert client.get("/assets/" + f).status_code == 200
     for img in ("walk_living.jpg", "walk_bath.jpg"):
         assert client.get("/images/" + img).status_code == 200

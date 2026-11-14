@@ -227,6 +227,11 @@ window.NOVA_ROOMS.push(
       { name: "By the TV", photo: "/images/pano_tvroom_tv.jpg", at: [0.75, -0.55], turn: -54.2 },
       { name: "Reading corner", photo: "/images/pano_tvroom_corner.jpg", at: [0.5, -1.65], turn: 0.3 },
     ] },
+  // a walkable version of the TV lounge, made by World Labs from the 360° picture (backend/worlds.py). It is only
+  // listed once it has been made (GET /api/worlds/tvroom says "ready").
+  { id: "world_tvroom", kind: "splat", world: "tvroom", name: "TV lounge, walk around", location: "indoor",
+    photo: "/images/pano_tvroom_thumb.jpg", thumb: "/images/pano_tvroom_thumb.jpg", from: "tvroom", width: 1600, height: 900,
+    surfaces: { floor: [{}] } },
 );
 // a photo room with a 360° version gets a "360° view" button instead of "Walk in 3D"
 for (const r of window.NOVA_ROOMS) { const p = window.NOVA_ROOMS.find(q => q.kind === "pano" && q.from === r.id); if (p) r.view360 = p.id; }

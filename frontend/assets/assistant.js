@@ -206,12 +206,23 @@ function panoRoom() {
   return { id: "pano", kind: "pano", name: "Your 360° room", location: p.location || "indoor", photo: p.photo.url,
            width: 1600, height: 900, surfaces: { floor: [{}], wall: [{}] } };
 }
-const allRooms = () => [ownRoom(), panoRoom(), ...ROOMS].filter(Boolean);
-const is3d = r => r && (r.kind === "3d" || r.kind === "pano");
+// walkable rooms made by World Labs are listed only once they exist
+const worlds = {};
+for (const r of ROOMS) if (r.world && !(r.world in worlds)) {
+  worlds[r.world] = null;
+  fetch(`/api/worlds/${r.world}`).then(x => x.ok ? x.json() : null).then(w => {
+    worlds[r.world] = w && w.status === "ready" ? w : null;
+    if (worlds[r.world] && location.hash === "#/visual") renderVisControls();
+  }).catch(() => {});
+}
+const worldReady = key => !!worlds[key];
+const allRooms = () => [ownRoom(), panoRoom(), ...ROOMS.filter(r => !r.world || worldReady(r.world))].filter(Boolean);
+const is3d = r => r && (r.kind === "3d" || r.kind === "pano" || r.kind === "splat");
 const curRoom = () => atSpot(allRooms().find(r => r.id === S.vis.room) || ROOMS[0]);
 const roomKey = r => r.id === "own" ? "own:" + (S.own.rev || 0) : r.id === "pano" ? "pano:" + (S.pano.rev || 0) : r.spots ? r.id + ":" + (r.spot || 0) : r.id;
 // a 360° room you can move around in: the picture for the spot you stand on, and circles on the floor for the others
 function atSpot(r) {
+  if (r && r.world) return { ...r, worldData: worlds[r.world] };
   if (!r || !r.spots) return r;
   const k = Math.min(r.spots.length - 1, Math.max(0, S.vis.spot || 0)), me = r.spots[k], D = Math.PI / 180;
   const hot = r.spots.map((s, j) => {
@@ -286,10 +297,15 @@ async function showVisual() {
   $("vcanvas").hidden = three; $("wcanvas").hidden = !three; $("walkhint").hidden = !three;
   $("vcmp").hidden = three; if (three && cmp) setCompare(false);
   $("vdepth").hidden = three; if (three) hideDepth();
-  $("vspots").hidden = !room.spots;
-  if (room.spots) $("vspots").innerHTML = room.spots.map((sp, j) => `<button type="button" data-spot="${j}" class="${j === room.spot ? "on" : ""}">${esc(sp.name)}</button>`).join("");
+  const back360 = room.kind === "splat" && ROOMS.find(r => r.kind === "pano" && r.from === room.from);
+  $("vspots").hidden = !room.spots && !back360;
+  if (back360) $("vspots").innerHTML = `<button type="button" data-walk="${back360.id}">Back to the 360° view</button>`;
+  const walkable = ROOMS.find(r => r.world && r.from === room.from && worldReady(r.world));
+  if (room.spots) $("vspots").innerHTML = room.spots.map((sp, j) => `<button type="button" data-spot="${j}" class="${j === room.spot ? "on" : ""}">${esc(sp.name)}</button>`).join("") +
+    (walkable ? `<button type="button" data-walk="${walkable.id}">Walk around freely</button>` : "");
   const touch = matchMedia("(pointer: coarse)").matches;
-  $("walkhint").textContent = room.spots ? `${room.spotName} · drag to look around · ${touch ? "tap" : "click"} a circle on the floor to move there`
+  $("walkhint").textContent = room.kind === "splat" ? (touch ? "Made by AI from the 360° picture · drag to look · tap the floor to walk there" : "Made by AI from the 360° picture · drag to look · click the floor to walk there · arrow keys or WASD")
+    : room.spots ? `${room.spotName} · drag to look around · ${touch ? "tap" : "click"} a circle on the floor to move there`
     : room.kind === "pano" ? (touch ? "Drag to look all around" : "Drag to look all around · scroll to zoom")
     : touch ? "Drag to look around · tap the floor to walk there" : "Drag to look around · click the floor to walk there · arrow keys or WASD";
   if (three) {
@@ -355,9 +371,11 @@ function renderVisControls() {
   $("vtitle").textContent = room.name;
   $("v3d").querySelector("span").textContent = is3d(room) ? "Photo rooms" : room.view360 ? "360° view" : "Walk in 3D";
   $("rooms").innerHTML = allRooms().map(r => `<button type="button" class="room ${r.id === room.id ? "on" : ""}" data-room="${r.id}">
-      <img src="${r.thumb || r.photo}" alt="" loading="lazy"><span>${esc(r.name)}</span>${is3d(r) ? `<i class="b3d">${r.kind === "pano" ? "360°" : "3D"}</i>` : ""}</button>`).join("") +
+      <img src="${r.thumb || r.photo}" alt="" loading="lazy"><span>${esc(r.name)}</span>${is3d(r) ? `<i class="b3d">${r.kind === "pano" ? "360°" : r.kind === "splat" ? "Walk" : "3D"}</i>` : ""}</button>`).join("") +
     `<a class="room" href="#/rooms" style="display:grid;place-items:center;text-decoration:none;color:var(--ink);border:1.5px dashed #ccc;min-height:92px"><span style="text-align:center">+ Your own<br>photo</span></a>`;
-  $("visnote").innerHTML = room.kind === "3d"
+  $("visnote").innerHTML = room.kind === "splat"
+    ? "A walkable 3D version of this room, made by an AI (World Labs) from our 360° picture. Edges and corners the camera never saw can look soft or smeared. Your floor tile is laid over the floor; to tile the walls, use the 360° view."
+    : room.kind === "3d"
     ? "A 3D room made by Ceramica Nova. Walk around to see your tiles from every side, at their real size. Colours on screen can look slightly different from the real tile."
     : room.kind === "pano" && room.id !== "pano"
     ? "A 360° room by Ceramica Nova, with the tiles laid on the floor the AI found in the picture. Drag to look all around. Colours on screen can look slightly different from the real tile."
@@ -939,6 +957,8 @@ document.addEventListener("input", e => { const d = e.target.dataset; if (d.area
 $("vrot").onclick = () => { const o = S.vis.opt[S.vis.surface]; o.rotate = !o.rotate; visChanged(); };
 $("vcmp").onclick = () => { if (!cmp && depthOn) { depthOn = false; $("vdepth").classList.remove("on"); hideDepth(); } setCompare(!cmp); };
 $("vspots").onclick = e => {
+  const w = e.target.closest("[data-walk]");
+  if (w) { S.vis.room = w.dataset.walk; S.vis.picked = true; save(); showVisual(); return; }
   const b = e.target.closest("[data-spot]"); if (!b) return;
   const j = +b.dataset.spot, r = curRoom(); if (j === r.spot) return;
   const to = r.spots[j], dx = to.at[0] - r.spots[r.spot].at[0], dz = to.at[1] - r.spots[r.spot].at[1];

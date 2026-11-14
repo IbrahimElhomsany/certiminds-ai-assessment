@@ -7,6 +7,10 @@
  *                        tap the floor to walk there, or use the arrow keys / WASD.
  *  room.kind === "pano": the customer's 360° photo, shown on a sphere around the viewer. The floor is found by
  *                        the room detector (segment.js); tiles are laid on a flat floor 1.5 m below the camera.
+ *  room.kind === "splat": a walkable room made by World Labs Marble from one of our 360° pictures (backend/worlds.py):
+ *                        millions of small coloured blobs (Gaussian splats) drawn with Spark (MIT, vendor/spark.module.js).
+ *                        The splats lying on the floor are hidden and a flat tiled floor is put in their place; where
+ *                        you can walk is worked out from where the splats are.
  *
  *  three.js is MIT licensed (vendor/THREE-LICENSE.txt). */
 import * as THREE from "./vendor/three.module.min.js";
@@ -284,6 +288,64 @@ const PANO_FRAG = `
     gl_FragColor = vec4(col, 1.0);
   }`;
 
+// ------------------------------------------------------------------ a walkable room made by World Labs (Gaussian splats)
+/** world = { url, scale, offset } from /api/worlds/<key>. The splat file is in World Labs' raw camera frame
+ *  (y down, z forward): scale turns it into metres, offset puts the floor at y = 0, and a half turn about x
+ *  makes y point up (as World Labs' own viewer does). Returns what the viewer needs to walk and to tile. */
+async function splatRoom(world, root, scene) {
+  const { SplatMesh } = await import("./vendor/spark.module.js");
+  const s = world.scale || 1, off = world.offset || 0;
+  const mesh = new SplatMesh({ url: world.url });
+  mesh.quaternion.set(1, 0, 0, 0); mesh.scale.setScalar(s); mesh.position.y = off;
+  root.add(mesh); scene.background = new THREE.Color(0x1d1d1b);
+  await mesh.initialized;
+  // where the room is: the floor splats give its outline, splats between knee and chest height are furniture or walls
+  const ps = mesh.packedSplats, C = 0.1;                       // 10 cm cells
+  const fx = [], fz = []; let lum = 0, nl = 0;
+  ps.forEachSplat((i, c, sc, q, op, col) => {
+    const wy = off - s * c.y;
+    if (op > 0.3 && Math.abs(wy) < 0.06) { fx.push(s * c.x); fz.push(-s * c.z); lum += 0.299 * col.r + 0.587 * col.g + 0.114 * col.b; nl++; }
+  });
+  const pct = (v, q) => { const a = Float32Array.from(v).sort(); return a.length ? a[Math.min(a.length - 1, Math.floor(q * a.length))] : 0; };
+  const x0 = pct(fx, 0.01) - 0.3, x1 = pct(fx, 0.99) + 0.3, z0 = pct(fz, 0.01) - 0.3, z1 = pct(fz, 0.99) + 0.3;
+  const gw = Math.max(1, Math.ceil((x1 - x0) / C)), gd = Math.max(1, Math.ceil((z1 - z0) / C));
+  const floorN = new Uint16Array(gw * gd), solid = new Uint16Array(gw * gd);
+  const cell = (x, z) => { const i = Math.floor((x - x0) / C), j = Math.floor((z - z0) / C); return i < 0 || j < 0 || i >= gw || j >= gd ? -1 : j * gw + i; };
+  ps.forEachSplat((i, c, sc, q, op, col) => {
+    if (op < 0.3) return;
+    const wx = s * c.x, wy = off - s * c.y, wz = -s * c.z, k = cell(wx, wz); if (k < 0) return;
+    if (Math.abs(wy) < 0.06) {
+      if (floorN[k] < 65535) floorN[k]++;
+      ps.setSplat(i, c, sc, q, 0, col);                        // hide the floor splats: the tiled floor takes their place
+    } else if (wy > 0.15 && wy < 1.3 && solid[k] < 65535) solid[k]++;
+  });
+  ps.needsUpdate = true;
+  // a cell you can stand on: floor was seen there and nothing stands within 30 cm
+  const R = 3, walk = new Uint8Array(gw * gd);
+  for (let j = 0; j < gd; j++) for (let i = 0; i < gw; i++) {
+    if (floorN[j * gw + i] < 2) continue;
+    let ok = 1;
+    for (let b = -R; b <= R && ok; b++) for (let a = -R; a <= R && ok; a++) {
+      const ii = i + a, jj = j + b;
+      if (ii >= 0 && jj >= 0 && ii < gw && jj < gd && solid[jj * gw + ii] >= 4) ok = 0;
+    }
+    walk[j * gw + i] = ok;
+  }
+  const free = (x, z) => { const k = cell(x, z); return k >= 0 && walk[k] === 1; };
+  // the floor: one flat plane over the room's outline, just above the hidden floor splats
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), new THREE.MeshBasicMaterial({ color: 0x777777 }));
+  floor.rotation.x = -Math.PI / 2; floor.position.set((x0 + x1) / 2, 0.01, (z0 + z1) / 2); floor.visible = false;
+  // texture in metres from the room's corner, like the other rooms
+  const uv = floor.geometry.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (x1 - x0), uv.getY(i) * (z1 - z0));
+  root.add(floor);
+  // start where the 360° picture was taken (the middle), or the nearest free spot
+  let start = [0, 0];
+  if (!free(0, 0)) { let best = 1e9; for (let j = 0; j < gd; j++) for (let i = 0; i < gw; i++) if (walk[j * gw + i]) { const x = x0 + (i + 0.5) * C, z = z0 + (j + 0.5) * C, d = x * x + z * z; if (d < best) { best = d; start = [x, z]; } } }
+  const light = Math.max(0.55, Math.min(1.05, nl ? (lum / nl) / 0.72 : 0.9));
+  return { floor, walls: {}, tiledWalls: [], free, start, yaw: 0, eye: Math.max(1.3, Math.min(1.75, off || EYE)), light,
+           size: [x1 - x0, z1 - z0], splats: ps.numSplats };
+}
+
 // ------------------------------------------------------------------ the viewer
 export function create(canvas, { onPick, onJump } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
@@ -307,9 +369,13 @@ export function create(canvas, { onPick, onJump } = {}) {
 
   async function setRoom(r) {
     room = r; kind = r.kind; walkTo = null;
+    renderer.toneMapping = kind === "splat" ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;   // splats keep their own colours
     scene = new THREE.Scene(); scene.environment = envTex; scene.environmentIntensity = 0.35;
     const root = new THREE.Group(); scene.add(root);
-    if (kind === "3d") {
+    if (kind === "splat") {
+      built = await splatRoom(r.worldData, root, scene);
+      camera.fov = 70; camera.position.set(built.start[0], built.eye, built.start[1]); yaw = built.yaw; pitch = -0.2;
+    } else if (kind === "3d") {
       scene.add(new THREE.HemisphereLight(0xfffaf2, 0xb9ad9d, 0.55));
       built = SCENES[r.scene](root, scene);
       camera.fov = 68; camera.position.set(...built.start.pos); yaw = built.start.yaw; pitch = built.start.pitch;
@@ -370,7 +436,12 @@ export function create(canvas, { onPick, onJump } = {}) {
     const meshes = surface === "floor" ? [built.floor] : built.tiledWalls;
     for (const m of meshes) {
       if (m.material.map) m.material.map.dispose();
-      if (made) {
+      if (made && kind === "splat") {                             // unlit, toned to the room's own light
+        made.tex.repeat.set(100 / made.b.bw, 100 / made.b.bh);
+        m.material = new THREE.MeshBasicMaterial({ map: made.tex.clone(), color: new THREE.Color().setScalar(built.light), toneMapped: false });
+        m.material.map.needsUpdate = true; m.visible = true;
+      } else if (kind === "splat") { m.visible = false; }          // no tile chosen: the room's own floor shows
+      else if (made) {
         made.tex.repeat.set(100 / made.b.bw, 100 / made.b.bh);    // geometry is in metres, the block in cm
         m.material = new THREE.MeshStandardMaterial({ map: made.tex.clone(), roughness: Math.max(0.08, 0.85 - (made.t.gloss || 0) * 1.5),
                                                       metalness: 0, envMapIntensity: 0.4 + (made.t.gloss || 0) * 1.4 });
@@ -386,13 +457,17 @@ export function create(canvas, { onPick, onJump } = {}) {
     const b = canvas.getBoundingClientRect(); v2.set((e.clientX - b.left) / b.width * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1);
     ray.setFromCamera(v2, camera);
     if (!built) return null;
+    if (kind === "splat") {                                         // the floor is the flat plane y = 0
+      const t = ray.ray.direction.y < -0.02 ? -camera.position.y / ray.ray.direction.y : -1;
+      return t > 0 ? { surface: "floor", point: camera.position.clone().addScaledVector(ray.ray.direction, t) } : null;
+    }
     const list = [built.floor, ...Object.values(built.walls)], h = ray.intersectObjects(scene.children, true)[0];
     if (!h) return null;
     if (h.object === built.floor) return { surface: "floor", point: h.point };
     if (built.tiledWalls.includes(h.object)) return { surface: "wall", point: h.point };
     return list.includes(h.object) ? { surface: null, point: h.point } : { surface: null };
   }
-  const free = (x, z) => built && x > -built.W / 2 + 0.3 && x < built.W / 2 - 0.3 && z > -built.D / 2 + 0.3 && z < built.D / 2 - 0.3 &&
+  const free = (x, z) => built && built.free ? built.free(x, z) : built && x > -built.W / 2 + 0.3 && x < built.W / 2 - 0.3 && z > -built.D / 2 + 0.3 && z < built.D / 2 - 0.3 &&
     !built.block.some(([a, b, c, d]) => x > a - 0.25 && x < c + 0.25 && z > b - 0.25 && z < d + 0.25);
   let down = null;
   canvas.addEventListener("pointerdown", e => { down = { x: e.clientX, y: e.clientY, yaw, pitch, moved: false }; canvas.setPointerCapture(e.pointerId); });
@@ -418,13 +493,13 @@ export function create(canvas, { onPick, onJump } = {}) {
   canvas.addEventListener("pointerup", e => {
     const wasClick = down && !down.moved; down = null;
     if (wasClick && kind === "pano") { const h = hotAt(e); if (h && onJump) onJump(h.j, h.th); return; }
-    if (!wasClick || kind !== "3d") return;
+    if (!wasClick || (kind !== "3d" && kind !== "splat")) return;
     const h = hit(e); if (!h) return;
     if (h.surface && onPick) onPick(h.surface);
     if (h.surface === "floor") {
       let { x, z } = h.point;
       for (let i = 0; i < 12 && !free(x, z); i++) { x += (camera.position.x - x) * 0.25; z += (camera.position.z - z) * 0.25; }
-      if (free(x, z)) walkTo = new THREE.Vector3(x, EYE, z);
+      if (free(x, z)) walkTo = new THREE.Vector3(x, camera.position.y, z);
     }
   });
   canvas.addEventListener("pointercancel", () => { down = null; });
@@ -434,12 +509,12 @@ export function create(canvas, { onPick, onJump } = {}) {
   canvas.addEventListener("keyup", e => keys.delete(e.code));
   canvas.addEventListener("blur", () => keys.clear());
 
-  let last = 0;
+  let last = 0, settle = 0, drawn = 0;
   function loop(t = performance.now()) {
     cancelAnimationFrame(raf);
     const dt = Math.min(0.05, (t - (last || t)) / 1000); last = t;
     if (!canvas.isConnected || canvas.offsetParent === null) { last = 0; raf = requestAnimationFrame(loop); return; }  // hidden: idle cheaply
-    if (kind === "3d") {
+    if (kind === "3d" || kind === "splat") {
       const f = (keys.has("KeyW") || keys.has("ArrowUp") ? 1 : 0) - (keys.has("KeyS") || keys.has("ArrowDown") ? 1 : 0);
       const turn = (keys.has("ArrowLeft") ? 1 : 0) - (keys.has("ArrowRight") ? 1 : 0), side = (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0);
       if (turn) { yaw += turn * dt * 1.6; aim(); }
@@ -456,7 +531,11 @@ export function create(canvas, { onPick, onJump } = {}) {
         dirty = true;
       }
     }
-    if (dirty && scene) { renderer.render(scene, camera); dirty = false; }
+    if (dirty) settle = t;
+    // splats are sorted in the background after each move, so a splat room keeps drawing: every frame while you
+    // move, a few times a second when you stand still (cheap on a phone, and the finished sort still shows)
+    const splatDue = kind === "splat" && t - drawn > (t - settle < 1500 ? 0 : 250);
+    if ((dirty || splatDue) && scene) { renderer.render(scene, camera); dirty = false; drawn = t; }
     raf = requestAnimationFrame(loop);
   }
   function render() { if (scene) { renderer.render(scene, camera); dirty = false; } }

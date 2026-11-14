@@ -1108,7 +1108,30 @@ async function teamView() {
   const rows = await api("/users");
   $("#view").innerHTML = topbar("Team", "Staff accounts and their discount limits") + `
     <div class="card"><div class="tablewrap"><table><tr><th>Name</th><th>Email</th><th>Role</th><th class="right">Discount limit</th></tr>
-      ${rows.map(u => `<tr><td>${esc(u.name)}</td><td class="small">${esc(u.email)}</td><td><span class="tag">${label(u.role)}</span></td><td class="right">${u.discount_limit_pct}%</td></tr>`).join("")}</table></div></div>`;
+      ${rows.map(u => `<tr><td>${esc(u.name)}</td><td class="small">${esc(u.email)}</td><td><span class="tag">${label(u.role)}</span></td><td class="right">${u.discount_limit_pct}%</td></tr>`).join("")}</table></div></div>` +
+    (S.can.has("settings.manage") ? `<div class="card" id="worlds" style="margin-top:16px"><h3 style="margin:0 0 4px">Walkable 3D rooms</h3>
+      <p class="muted small" style="margin:0 0 10px">World Labs turns a 360° room picture into a room customers can walk around in. Each room is made once
+      (about 1,500 World Labs credits, about 5 minutes) and then kept on our server, so nothing is paid again.</p><div id="wl">…</div></div>` : "");
+  if (S.can.has("settings.manage")) worldsCard();
+}
+async function worldsCard() {
+  const el = $("#wl"); if (!el) return;
+  const w = await fetch("/api/worlds/tvroom", {cache: "no-store"}).then(r => r.json()).catch(() => null);
+  if (!w) { el.textContent = "Could not check."; return; }
+  const state = {none: "Not made yet", pending: "Being made by World Labs… (this page checks every 20 seconds)", ready: "Ready: customers see “Walk around freely” in the TV lounge 360° view", failed: "Failed: " + (w.error || "")}[w.status];
+  el.innerHTML = `<div class="crow"><b>${esc(w.name)}</b><span class="muted small">${esc(state)}</span>
+    ${w.status === "none" || w.status === "failed" ? `<button class="btn" id="wlgo">Make it</button>` : ""}
+    ${w.status === "ready" ? `<a class="btn ghost" href="/assistant#/visual" target="_blank">Open</a>` : ""}</div>`;
+  const go = $("#wlgo");
+  if (go) go.onclick = async () => {
+    const ok = await ask("Make the walkable TV lounge?", [], "Use the credits",
+      "This asks World Labs to make the room from the TV lounge 360° picture. It uses about 1,500 credits from the World Labs account (the free sign-up credits cover it) and takes about 5 minutes.");
+    if (!ok) return;
+    try { await api("/worlds/tvroom/generate", {method: "POST", body: {confirm: true}}); toast("Started. World Labs is making the room."); }
+    catch (e) { toast(e.message, "bad"); }
+    worldsCard();
+  };
+  if (w.status === "pending") setTimeout(() => { if ($("#wl")) worldsCard(); }, 20000);
 }
 
 /* ------------------------------------------------------------------ router */

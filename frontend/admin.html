@@ -254,6 +254,13 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
   details.data { margin-top:10px; font-size:12px; } details.data summary { cursor:pointer; color:var(--muted); }
   details.data table { margin-top:6px; } details.data td, details.data th { padding:5px 8px; font-size:11.5px; }
   textarea.draft { width:100%; min-height:190px; line-height:1.55; }
+  .win { display:inline-flex; align-items:center; gap:6px; font-weight:600; font-size:12px; white-space:nowrap; }
+  .win i { display:inline-block; width:38px; height:6px; border-radius:3px; background:var(--grid); overflow:hidden; position:relative; }
+  .win i b { position:absolute; inset:0 auto 0 0; border-radius:3px; }
+  .win.hi i b { background:var(--ok); } .win.mid i b { background:var(--warn); } .win.lo i b { background:var(--bad); }
+  .why { list-style:none; margin:8px 0 0; padding:0; font-size:12.5px; } .why li { padding:2px 0; }
+  .why .up { color:var(--ok); font-weight:700; } .why .dn { color:var(--bad); font-weight:700; }
+  .bigwin { font-size:30px; font-weight:700; color:var(--ink); line-height:1; }
   .notice { background:var(--accent-soft); border:1px solid var(--accent); border-radius:10px; padding:9px 12px; font-size:12.5px; }
   .notice.warn { background:var(--warn-soft); border-color:var(--warn); }
   .notice.bad { background:var(--bad-soft); border-color:var(--bad); }
@@ -683,10 +690,25 @@ function bindChart(rows) {
 const STAGES = ["new", "qualified", "quote_sent", "negotiation", "won", "lost"];
 const LOST = ["price", "stock", "competitor", "timing", "no_response"];
 const SOURCES = {showroom_chat: "Ceramica Nova AI chat", shop: "Online shop", walk_in: "Walk-in", phone: "Phone", referral: "Referral"};
+const winCls = p => p >= 60 ? "hi" : p >= 40 ? "mid" : "lo";
+const winBar = w => w ? `<span class="win ${winCls(w.pct)}" title="Win chance, learned from this company's won and lost leads"><i><b style="width:${w.pct}%"></b></i>${w.pct}%</span>` : `<span class="muted small">-</span>`;
+const winWhy = w => w && w.reasons.length ? `<ul class="why">${w.reasons.map(r => `<li><span class="${r.up ? "up" : "dn"}">${r.up ? "▲" : "▼"}</span> ${esc(r.text)}</li>`).join("")}</ul>` : "";
+async function winCard() {
+  const c = await api("/winchance");
+  if (!c.ready) return `<div class="notice small">Win chance needs at least ${c.min_closed} won or lost leads to learn from. So far: ${num(c.closed)}.</div>`;
+  const row = (title, m) => m ? `<div><b>${title}</b><div class="small" style="margin:4px 0">Learned from ${num(m.trained_on)} closed leads (${num(m.won)} won).
+      Tested on leads it had not seen: the ones it called likely (60%+) bought <b>${m.check.likely_won ?? "-"}%</b> of the time,
+      the unlikely ones (under 40%) <b>${m.check.unlikely_won ?? "-"}%</b>, against ${m.check.base_rate}% overall.</div>
+      <div class="small muted">What it learned matters most:</div>${winWhy({reasons: m.top.slice(0, 4)})}</div>` : "";
+  return `<div class="card"><div class="head"><h2 class="grow">How win chance works</h2>${c.demo ? `<span class="tag pending">Learned from demo data</span>` : ""}</div>
+    <p class="small" style="margin:0 0 10px">A small machine-learning model (logistic regression) learns from this company's own won and lost leads which facts go with a sale.
+    It updates by itself every time a lead is won or lost. It is a guide for who to call first, not a promise. Nothing is sent outside Nova Studio.</p>
+    <div class="grid row2">${row("Before a quotation", c.early)}${row("After a quotation is sent", c.quoted)}</div></div>`;
+}
 async function leadsView(p) {
   shell("leads", topbar("Leads & CRM", S.can.has("leads.view_all") ? "All salespeople" : "Your leads") + loading());
   const page = +(p.page || 0), qs = new URLSearchParams({offset: page * 25, limit: 25});
-  ["stage", "q", "source", "owner_id"].forEach(k => p[k] && qs.set(k, p[k]));
+  ["stage", "q", "source", "owner_id", "sort"].forEach(k => p[k] && qs.set(k, p[k]));
   if (p.stalled) qs.set("stalled", "true");
   const [r, staff] = await Promise.all([api("/leads/search?" + qs), S.can.has("leads.view_all") ? api("/staff") : []]);
   const link = ch => "#/leads?" + new URLSearchParams(Object.fromEntries(Object.entries({...p, page: "", ...ch}).filter(([, v]) => v)));
@@ -695,21 +717,23 @@ async function leadsView(p) {
     <div class="filters"><div class="chips">
       <a class="chip ${!p.stage && !p.stalled ? "on" : ""}" href="${link({stage: "", stalled: ""})}">All ${num(allCount)}</a>
       ${STAGES.map(s => `<a class="chip ${p.stage === s ? "on" : ""}" href="${link({stage: s, stalled: ""})}">${label(s)} ${num(r.stage_counts[s] || 0)}</a>`).join("")}
-      <a class="chip ${p.stalled ? "on" : ""}" href="${link({stalled: p.stalled ? "" : "1", stage: ""})}" title="Quotation sent 3+ days ago, nothing logged since">Waiting for follow-up</a></div>
+      <a class="chip ${p.stalled ? "on" : ""}" href="${link({stalled: p.stalled ? "" : "1", stage: ""})}" title="Quotation sent 3+ days ago, nothing logged since">Waiting for follow-up</a>
+      <a class="chip ${p.sort === "likely" ? "on" : ""}" href="${link({sort: p.sort === "likely" ? "" : "likely"})}" title="Open leads, the ones most likely to buy first">Most likely to buy</a></div>
       <span style="flex:1"></span>
       <select id="src"><option value="">All sources</option>${Object.entries(SOURCES).map(([k, v]) => `<option value="${k}" ${p.source === k ? "selected" : ""}>${v}</option>`).join("")}</select>
       ${staff.length ? `<select id="own"><option value="">All salespeople</option>${staff.map(u => `<option value="${u.id}" ${+p.owner_id === u.id ? "selected" : ""}>${esc(u.name)}</option>`).join("")}</select>` : ""}
       <form id="sf"><input id="sq" placeholder="Search name, phone, L-number" value="${esc(p.q || "")}"></form></div>
-    <div class="card"><div class="tablewrap"><table><tr><th>Lead</th><th>Customer</th><th>Project</th><th>Source</th>${staff.length ? "<th>Salesperson</th>" : ""}<th>Stage</th><th class="right">In stage</th><th class="right">Created</th></tr>
+    <div class="card"><div class="tablewrap"><table><tr><th>Lead</th><th>Customer</th><th>Project</th><th>Source</th>${staff.length ? "<th>Salesperson</th>" : ""}<th>Stage</th><th>Win chance</th><th class="right">In stage</th><th class="right">Created</th></tr>
       ${r.items.map(l => `<tr class="click" onclick="location.hash='#/leads/${l.id}'"><td class="nowrap">${esc(l.number)}</td>
         <td><div>${esc(l.customer)}</div><span class="muted small">${esc(l.phone || "")}</span></td>
         <td class="small">${esc(label(l.room || ""))}${l.area_m2 ? ", " + num(l.area_m2) + " m²" : ""}${l.budget ? `<br><span class="muted">budget ${qar(l.budget)}</span>` : ""}</td>
         <td class="small">${esc(SOURCES[l.source] || l.source)}</td>${staff.length ? `<td class="small">${esc(l.owner || "Unassigned")}</td>` : ""}
-        <td><span class="tag ${l.stage}">${label(l.stage)}</span></td><td class="right small">${l.days_in_stage} d</td><td class="right small">${date(l.created_at)}</td></tr>`).join("")}
+        <td><span class="tag ${l.stage}">${label(l.stage)}</span></td><td>${winBar(l.win)}</td><td class="right small">${l.days_in_stage} d</td><td class="right small">${date(l.created_at)}</td></tr>`).join("")}
       </table>${r.items.length ? "" : `<div class="empty">No leads match.</div>`}</div>
       <div class="pager">${r.total ? `${page * 25 + 1}–${Math.min(r.total, page * 25 + 25)} of ${num(r.total)}` : ""}
         <a class="btn ghost sm" ${page ? `href="${link({page: page - 1 || ""})}"` : "style='opacity:.4;pointer-events:none'"}>Previous</a>
-        <a class="btn ghost sm" ${(page + 1) * 25 < r.total ? `href="${link({page: page + 1})}"` : "style='opacity:.4;pointer-events:none'"}>Next</a></div></div>`;
+        <a class="btn ghost sm" ${(page + 1) * 25 < r.total ? `href="${link({page: page + 1})}"` : "style='opacity:.4;pointer-events:none'"}>Next</a></div></div>
+    ${p.sort === "likely" ? await winCard() : ""}`;
   $("#src").onchange = e => location.hash = link({source: e.target.value});
   if ($("#own")) $("#own").onchange = e => location.hash = link({owner_id: e.target.value});
   $("#sf").onsubmit = e => { e.preventDefault(); location.hash = link({q: $("#sq").value.trim()}); };
@@ -743,6 +767,10 @@ async function leadView(id) {
             <td class="right num">${qar(o.total, 2)}</td><td class="right small">${date(o.created_at)}</td></tr>`).join("")}</table></div></div>` : ""}
       </div>
       <div class="grid" style="align-content:start">
+        ${d.win ? `<div class="card"><div class="head"><h2 class="grow">Win chance</h2><a class="lnk small" href="#/leads?sort=likely">How it works</a></div>
+          <div style="display:flex;align-items:center;gap:12px"><span class="bigwin">${d.win.pct}%</span><span class="win ${winCls(d.win.pct)}"><i style="width:90px"><b style="width:${d.win.pct}%"></b></i></span></div>
+          <div class="small muted" style="margin-top:6px">${d.win.model === "quoted" ? "Based on the quotation and" : "Based on"} what happened with past leads like this one.</div>
+          ${winWhy(d.win)}</div>` : ""}
         <div class="card"><div class="head"><h2>Customer</h2></div><div class="kv">
           <span>Name</span><span>${esc(c.name)}</span><span>Phone</span><span>${c.phone ? `<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>` : "-"}</span>
           <span>Email</span><span class="ellipsis">${esc(c.email || "-")}</span><span>Type</span><span>${esc(label(c.type))}</span><span>Area</span><span>${esc(c.area || "-")}</span></div></div>

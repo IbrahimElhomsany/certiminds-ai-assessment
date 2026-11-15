@@ -159,7 +159,8 @@ def seed_tenant(db: Session, slug: str = "ceramica-nova", name: str = "Ceramica 
             if created > now:
                 continue
             ctype = pick(rng, [("retail", 75), ("contractor", 15), ("designer", 10)])
-            if customers and rng.random() < 0.12:
+            returning = bool(customers) and rng.random() < 0.12
+            if returning:
                 customer = rng.choice(customers)               # returning customer
             else:
                 person = f"{rng.choice(FIRST)} {rng.choice(LAST)}"
@@ -206,8 +207,14 @@ def seed_tenant(db: Session, slug: str = "ceramica-nova", name: str = "Ceramica 
                 return True
 
             pace = 0.4 if source in ("walk_in", "shop") else 1.0   # walk-ins decide faster
-            t = later(created, rng.uniform(0.1, 2) * pace)
-            if rng.random() > 0.76:                            # never qualified
+            reply_days = rng.uniform(0.1, 2) * pace
+            t = later(created, reply_days)
+            # How the demo history behaves (so the win-chance model has real patterns to find, as a shop's would):
+            # referrals, walk-ins and returning customers buy more often, slow replies and over-budget quotes less.
+            keen = {"referral": 0.18, "walk_in": 0.10, "phone": 0.0, "showroom_chat": -0.04, "shop": -0.12}[source]
+            keen += 0.14 if returning else 0
+            keen += {"contractor": 0.10, "designer": 0.05}.get(customer.type, 0)
+            if rng.random() > 0.76 + keen * 0.8:               # never qualified
                 if rng.random() < 0.6:
                     lead.lost_reason = "no_response"
                     move("lost", later(t, rng.uniform(3, 8)), "Marked lost: no response")
@@ -280,8 +287,16 @@ def seed_tenant(db: Session, slug: str = "ceramica-nova", name: str = "Ceramica 
             t = later(t, rng.uniform(1, 5) * pace)
             if rng.random() < 0.55 and move("negotiation", t, "Customer asked to revise quantities or price"):
                 t = later(t, rng.uniform(1, 6) * pace)
+            p_win = 0.48 + keen
+            p_win += 0.10 if reply_days < 0.3 else (-0.16 if reply_days > 1.2 else 0)
+            fit = float(quote.total / budget) if budget else 1.0
+            p_win += 0.10 if fit < 0.9 else (-0.22 if fit > 1.15 else 0)
+            if disc:
+                p_win += 0.06 if req.status in ("auto_approved", "approved") else -0.25
+            p_win = min(0.9, max(0.06, p_win))
+            lose = p_win + (1 - p_win) * 0.8                  # most of the rest are lost, a few are left open
             r = rng.random()
-            if r < 0.48:
+            if r < p_win:
                 if not move("won", t, f"Won: customer accepted {quote.number}"):
                     continue
                 quote.status = "accepted"
@@ -301,7 +316,7 @@ def seed_tenant(db: Session, slug: str = "ceramica-nova", name: str = "Ceramica 
                 db.flush()
                 db.add(Activity(tenant_id=tenant.id, lead_id=lead.id, user_id=owner_user.id, type="order",
                                 text=f"Order {order.number} confirmed", created_at=t))
-            elif r < 0.75:
+            elif r < lose:
                 if move("lost", t, "Marked lost"):
                     quote.status = "rejected"
                     lead.lost_reason = pick(rng, [("price", 40), ("competitor", 25), ("timing", 20), ("stock", 15)])

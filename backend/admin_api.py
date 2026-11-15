@@ -126,6 +126,7 @@ from sqlalchemy import func, or_  # noqa: E402
 from backend import crm_bridge  # noqa: E402
 from backend.crm import analytics  # noqa: E402
 from backend.crm import operations as ops  # noqa: E402
+from backend.crm import winchance  # noqa: E402
 from backend.db.models import (Activity, Batch, ChatSession, Customer, DiscountRequest, Order,  # noqa: E402
                                Product, Quote, StockMovement)
 
@@ -180,6 +181,7 @@ def lead_row(l: Lead, now) -> dict:
 @router.get("/leads/search")
 def search_leads(stage: Optional[str] = None, source: Optional[str] = None, owner_id: Optional[int] = None,
                  q: Optional[str] = None, stalled: bool = False, offset: int = 0, limit: int = 25,
+                 sort: Literal["newest", "likely"] = "newest",
                  user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Leads list for the screen: filters, search and paging, with the total count."""
     need_any(user, "leads.view_all", "leads.view_own")
@@ -201,12 +203,29 @@ def search_leads(stage: Optional[str] = None, source: Optional[str] = None, owne
         ids = [s["lead_id"] for s in analytics.stalled_quotes(db, user, now)]
         query = query.where(Lead.id.in_(ids))
     total = db.scalar(select(func.count()).select_from(query.subquery()))
-    rows = db.scalars(query.order_by(Lead.created_at.desc()).offset(max(0, offset)).limit(max(1, min(limit, 100))))
+    offset, limit = max(0, offset), max(1, min(limit, 100))
+    if sort == "likely":                       # open leads, most likely to buy first (the model scores them all)
+        query = query.where(Lead.stage.in_(winchance.OPEN))
+        total = db.scalar(select(func.count()).select_from(query.subquery()))
+        every = db.scalars(query).all()
+        wins = winchance.score(db, user.tenant_id, every)
+        every.sort(key=lambda l: -(wins[l.id] or {"pct": -1})["pct"])
+        rows = every[offset:offset + limit]
+    else:
+        rows = db.scalars(query.order_by(Lead.created_at.desc()).offset(offset).limit(limit)).all()
+        wins = winchance.score(db, user.tenant_id, rows)
     counts: dict[str, int] = {}
     for st, n in db.execute(select(Lead.stage, func.count(Lead.id)).where(
             Lead.id.in_(select(visible_leads(user).subquery().c.id))).group_by(Lead.stage)):
         counts[st] = n
-    return {"total": total, "items": [lead_row(l, now) for l in rows], "stage_counts": counts}
+    return {"total": total, "items": [{**lead_row(l, now), "win": wins.get(l.id)} for l in rows], "stage_counts": counts}
+
+
+@router.get("/winchance")
+def win_chance_card(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """How the win chance works for this company: what it learned from and how it did on leads it had not seen."""
+    need_any(user, "leads.view_all", "leads.view_own")
+    return winchance.card(db, user.tenant_id)
 
 
 def get_lead(db: Session, user: User, lead_id: int) -> Lead:
@@ -227,7 +246,7 @@ def lead_detail(lead_id: int, user: User = Depends(current_user), db: Session = 
     acts = db.scalars(select(Activity).where(Activity.lead_id == lead.id)
                       .order_by(Activity.created_at.desc(), Activity.id.desc())).all()
     chat = db.scalar(select(ChatSession).where(ChatSession.lead_id == lead.id))
-    return {"lead": lead_row(lead, ops.local_now()),
+    return {"lead": lead_row(lead, ops.local_now()), "win": winchance.score(db, user.tenant_id, [lead])[lead.id],
             "customer": {"name": c.name, "phone": c.phone, "email": c.email, "type": c.type, "area": c.area},
             "chat": {"messages": chat.messages, "last_message_at": chat.last_message_at} if chat else None,
             "quotes": [quote_row(db, q) for q in quotes],

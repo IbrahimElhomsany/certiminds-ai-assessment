@@ -297,6 +297,7 @@ async function api(path, body) {
   const res = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
+    if ([502, 503, 504].includes(res.status)) throw new Error("The shop is restarting for an update. Please try again in a minute.");
     const d = data.detail;
     throw new Error(Array.isArray(d) ? d.map(x => (x.msg || "").replace(/^Value error, /, "")).join(". ") : (d || "Something went wrong."));
   }

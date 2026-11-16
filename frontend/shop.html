@@ -160,6 +160,19 @@
   .err { color:var(--bad); font-size:13px; margin-top:10px; }
   .f.bad, select.bad { border-color:var(--bad) !important; background:#fff6f6; box-shadow:0 0 0 1px var(--bad); }
   .paychoice:has(.bad) label { border-color:var(--bad); }
+  .cal { border:1px solid var(--line); border-radius:14px; padding:12px; max-width:420px; }
+  .cal.bad { border-color:var(--bad); box-shadow:0 0 0 1px var(--bad); }
+  .calhead { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .calnav { width:32px; height:32px; border-radius:8px; border:1px solid var(--line); background:#fff; font-size:18px; line-height:1; cursor:pointer; }
+  .calnav:disabled { opacity:.3; cursor:default; }
+  .calgrid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; text-align:center; }
+  .calgrid i { font-style:normal; font-size:11px; color:var(--muted); font-weight:600; padding:4px 0; }
+  .calgrid button { height:38px; border-radius:9px; border:1px solid transparent; background:var(--soft); font-weight:500; color:var(--ink); cursor:pointer; }
+  .calgrid button:hover:not(:disabled) { border-color:var(--ink); }
+  .calgrid button:disabled { background:transparent; color:#c5c5c5; cursor:not-allowed; }
+  .calgrid button.on { background:var(--ink); color:#fff; }
+  .calpick { display:flex; gap:8px; align-items:flex-start; margin-top:10px; font-size:12.5px; color:var(--muted); }
+  .calpick .ico { width:16px; height:16px; flex:none; margin-top:1px; color:var(--ink); }
   .ferr { display:flex; gap:5px; align-items:center; color:var(--bad); font-size:12.5px; margin-top:5px; font-weight:500; }
   .done { max-width:640px; margin:48px auto; text-align:center; }
   /* complete your project */
@@ -647,6 +660,38 @@ function showErrors(form, errors) {           // errors: [[element, message]] ->
   return errors.length > 0;
 }
 
+// Delivery day as a month calendar: only the days we deliver can be picked (Saturday to Thursday, day +2 to +30).
+function deliveryCalendar(box, input, dates) {
+  const ok = new Set(dates), first = new Date(dates[0] + "T12:00"), last = new Date(dates[dates.length - 1] + "T12:00");
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  let month = new Date(first.getFullYear(), first.getMonth(), 1);
+  const nice = v => new Date(v + "T12:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  function draw() {
+    const y = month.getFullYear(), m = month.getMonth(), start = new Date(y, m, 1).getDay(), days = new Date(y, m + 1, 0).getDate();
+    const prevOk = month > new Date(first.getFullYear(), first.getMonth(), 1), nextOk = new Date(y, m + 1, 1) <= last;
+    let cells = "";
+    for (let i = 0; i < start; i++) cells += "<span></span>";
+    for (let d = 1; d <= days; d++) {
+      const v = iso(new Date(y, m, d, 12)), can = ok.has(v), fri = new Date(y, m, d).getDay() === 5;
+      cells += `<button type="button" data-v="${v}" ${can ? "" : "disabled"} class="${v === input.value ? "on" : ""}"
+        title="${can ? nice(v) : fri ? "No deliveries on Friday" : "Not available"}" aria-label="${nice(v)}${can ? "" : ", not available"}"
+        ${v === input.value ? 'aria-pressed="true"' : ""}>${d}</button>`;
+    }
+    box.innerHTML = `
+      <div class="calhead"><button type="button" class="calnav" data-step="-1" ${prevOk ? "" : "disabled"} aria-label="Previous month">‹</button>
+        <b>${month.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}</b>
+        <button type="button" class="calnav" data-step="1" ${nextOk ? "" : "disabled"} aria-label="Next month">›</button></div>
+      <div class="calgrid">${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(w => `<i>${w}</i>`).join("")}${cells}</div>
+      <div class="calpick">${ICON.truck}<span>Delivery on <b>${nice(input.value)}</b>. We deliver Saturday to Thursday and call the day before.</span></div>`;
+    box.querySelectorAll(".calnav").forEach(b => b.onclick = () => { month = new Date(y, m + +b.dataset.step, 1); draw(); });
+    box.querySelectorAll("button[data-v]").forEach(b => b.onclick = () => {
+      input.value = b.dataset.v; box.classList.remove("bad"); box.parentElement.querySelector(".ferr")?.remove(); draw();
+      box.querySelector(`button[data-v="${input.value}"]`)?.focus();
+    });
+  }
+  draw();
+}
+
 let OPTIONS = null;
 async function checkout(params) {
   setNav(null);
@@ -674,8 +719,7 @@ async function checkout(params) {
         <div data-order><label for="street">Street number or name</label><input class="f" id="street" maxlength="60" placeholder="e.g. 820"></div>
         <div data-order><label for="building">Building number</label><input class="f" id="building" maxlength="20" placeholder="e.g. 12"></div>
         <div data-order><label for="unit">Flat or villa (optional)</label><input class="f" id="unit" maxlength="30" placeholder="e.g. Flat 4"></div>
-        <div data-order class="full"><label for="day">Delivery day</label><select id="day">${OPTIONS.delivery_dates.map(d => `<option value="${d}">${new Date(d + "T12:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</option>`).join("")}</select>
-          <small class="muted">We deliver Saturday to Thursday. We call the day before.</small></div>
+        <div data-order class="full"><label id="dayLbl">Delivery day</label><input type="hidden" id="day" value="${OPTIONS.delivery_dates[0]}"><div class="cal" id="cal" role="group" aria-labelledby="dayLbl"></div></div>
         <div class="formhead" data-order>Payment</div>
         <div data-order class="full paychoice">
           ${OPTIONS.card_payment ? `<label><input type="radio" name="pay" value="card" checked><span><b>Pay now by card</b><small>Visa, Mastercard, Apple Pay or NAPS debit card, on Tap's secure payment page.</small>
@@ -704,6 +748,7 @@ async function checkout(params) {
   app.querySelectorAll("input[name=pay]").forEach(r => r.onchange = show);
   app.querySelectorAll(".seg button").forEach(b => b.onclick = () => { type = b.dataset.t; show(); });
   show();
+  deliveryCalendar($("#cal"), $("#day"), OPTIONS.delivery_dates);
   const form = $("#co");
   form.addEventListener("input", e => {         // fixing a box clears its error straight away
     const el = e.target; if (!el.classList.contains("bad")) return;
@@ -738,7 +783,7 @@ async function checkout(params) {
       location.hash = r.token ? `#/receipt/${r.token}` : "#/done";
     } catch (ex) {
       const ids = { name: "name", phone: "phone", email: "email", delivery_area: "area", room: "room", zone: "zone", street: "street",
-                    building: "building", unit: "unit", delivery_date: "day", notes: "notes" };
+                    building: "building", unit: "unit", delivery_date: "cal", notes: "notes" };
       const onBox = Object.entries(ex.fields || {}).filter(([k]) => ids[k]).map(([k, m]) => [$("#" + ids[k]), m]);
       showErrors(form, onBox);
       err.textContent = onBox.length ? "" : ex.message; btn.disabled = false; show();

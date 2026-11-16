@@ -13,12 +13,15 @@ API: https://developers.tap.company/docs/charges
 """
 from __future__ import annotations
 
+import logging
 import os
+import secrets
 from decimal import Decimal
 from typing import Optional
 
 import httpx
 
+log = logging.getLogger("nova.payments")
 API = "https://api.tap.company/v2"
 PAID = "CAPTURED"
 FAILED = {"DECLINED", "FAILED", "CANCELLED", "ABANDONED", "RESTRICTED", "VOID", "TIMEDOUT", "UNKNOWN"}
@@ -47,14 +50,19 @@ def _client() -> httpx.Client:
 
 def create_charge(amount: Decimal, reference: str, description: str, name: str, phone: str, email: Optional[str],
                   return_url: str, webhook_url: Optional[str] = None) -> dict:
-    """Returns {"id": "chg_...", "url": Tap's payment page}."""
+    """Returns {"id": "chg_...", "url": Tap's payment page}.
+
+    reference.order is our order number; reference.transaction must be NEW for every attempt, because Tap refuses a
+    second charge with a transaction reference it has already seen ("403 Failed, Duplicate"), e.g. when the customer
+    tries the card again after a failed payment."""
     if not enabled():
         raise PaymentError("Card payment is not set up.")
     digits = "".join(c for c in phone if c.isdigit())
     number = digits[-8:]
     first, _, last = name.strip().partition(" ")
     body = {"amount": float(amount), "currency": "QAR", "threeDSecure": True, "save_card": False,
-            "description": description[:200], "reference": {"transaction": reference, "order": reference},
+            "description": description[:200],
+            "reference": {"transaction": f"{reference}-{secrets.token_hex(4)}", "order": reference},
             "customer": {"first_name": first[:40], "last_name": (last or first)[:40],
                          "phone": {"country_code": "974", "number": number},
                          **({"email": email} if email else {})},
@@ -68,6 +76,7 @@ def create_charge(amount: Decimal, reference: str, description: str, name: str, 
     except httpx.HTTPError as e:
         raise PaymentError(f"Could not reach the payment provider ({type(e).__name__}).")
     if r.status_code >= 400:
+        log.warning("tap create_charge refused: http %s %s", r.status_code, _errors(r))
         raise PaymentError(f"The payment provider refused the payment ({r.status_code}).")
     data = r.json()
     url = (data.get("transaction") or {}).get("url")
@@ -88,8 +97,20 @@ def fetch_charge(charge_id: str) -> dict:
     if r.status_code >= 400:
         raise PaymentError(f"The payment provider could not find this payment ({r.status_code}).")
     d = r.json()
+    resp = d.get("response") or {}
+    log.info("tap charge %s: status=%s code=%s message=%s amount=%s %s", d.get("id"), d.get("status"), resp.get("code"),
+             resp.get("message"), d.get("amount"), d.get("currency"))
     card = d.get("card") or {}
     brand = (card.get("brand") or (d.get("source") or {}).get("payment_method") or "").upper()
     return {"id": d.get("id"), "status": (d.get("status") or "").upper(), "amount": Decimal(str(d.get("amount", 0))),
-            "currency": d.get("currency"), "reference": (d.get("reference") or {}).get("transaction"),
+            "currency": d.get("currency"), "reference": (d.get("reference") or {}).get("order"),
+            "code": resp.get("code"), "message": resp.get("message"),
             "card": f"{brand} •••• {card['last_four']}".strip() if card.get("last_four") else (brand or None)}
+
+
+def _errors(r: httpx.Response) -> str:
+    """Tap's own error codes (e.g. 1119 currency not supported), for the server log. Never includes the key."""
+    try:
+        return "; ".join(f"{e.get('code')} {e.get('description')}" for e in r.json().get("errors", []))[:300]
+    except Exception:
+        return ""

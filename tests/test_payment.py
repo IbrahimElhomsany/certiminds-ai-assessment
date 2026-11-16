@@ -251,3 +251,37 @@ def test_admin_order_shows_delivery_and_payment():
     o = client.get(f"/api/admin/orders/{oid}", headers={"Authorization": f"Bearer {tok}"}).json()
     shop = o.get("shop") or o.get("order", {}).get("shop")
     assert shop and shop["payment_method"] == "on_delivery" and "Zone 66" in shop["address"]
+
+
+def test_each_card_attempt_gets_a_new_tap_transaction_reference(monkeypatch):
+    """Tap refuses a repeated transaction reference ("403 Failed, Duplicate"), so trying the card again after a failed
+    payment must send a new one; the order reference stays the order number."""
+    monkeypatch.setenv("TAP_SECRET_KEY", "sk_test_dummy_for_tests")
+    sent = []
+
+    class Resp:
+        status_code = 200
+        def json(self):
+            return {"id": f"chg_TEST_REF{len(sent)}", "transaction": {"url": "https://checkout.example/x"}}
+
+    class Client:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def post(self, url, json): sent.append(json); return Resp()
+    monkeypatch.setattr(payments, "_client", lambda: Client())
+    for _ in range(2):
+        payments.create_charge(Decimal("10.00"), "O-0999", "test", "Ayesha Rahman", "+974 5555 1234", None, "https://x/r")
+    refs = [b["reference"] for b in sent]
+    assert refs[0]["order"] == refs[1]["order"] == "O-0999"
+    assert refs[0]["transaction"] != refs[1]["transaction"] and refs[0]["transaction"].startswith("O-0999-")
+    assert sent[0]["currency"] == "QAR" and sent[0]["redirect"]["url"] == "https://x/r"
+
+
+def test_failed_payment_shows_taps_reason(tap):
+    token = order(payment="card").json()["token"]
+    tap.status = "DECLINED"
+    orig = tap.fetch
+    tap_fetch = lambda cid: {**orig(cid), "code": "505", "message": "Declined, Insufficient Funds"}
+    payments.fetch_charge = tap_fetch
+    d = client.get(f"/api/shop/receipt/{token}").json()
+    assert d["payment"]["status"] == "failed" and d["payment"]["reason"] == "Declined, Insufficient Funds (code 505)"

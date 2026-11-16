@@ -8,6 +8,7 @@ Rules:
 - Every request or order becomes a customer + lead in Nova Studio, assigned to a salesperson.
 """
 import os
+import logging
 import math
 import secrets
 from datetime import date, datetime, time, timedelta
@@ -31,6 +32,7 @@ from backend.offers import project_offers
 from backend.ratelimit import RateLimiter
 from backend.tools import WASTAGE_BY_LAYOUT, compute_quantity
 
+log = logging.getLogger("nova.shop")
 router = APIRouter(prefix="/api/shop", tags=["Public shop"])
 SHOP_TENANT = os.getenv("SHOP_TENANT", "ceramica-nova")   # which company this shop front belongs to
 submit_limiter = RateLimiter(max_requests=5, window_seconds=60)
@@ -500,14 +502,15 @@ def start_card_payment(db: Session, chk: ShopCheckout, request: Request) -> dict
     return {"payment_url": ch["url"]}
 
 
-def sync_payment(db: Session, chk: ShopCheckout) -> None:
-    """Ask Tap itself what happened to the charge. Only Tap's answer, for the right amount and order, marks it paid."""
+def sync_payment(db: Session, chk: ShopCheckout) -> Optional[dict]:
+    """Ask Tap itself what happened to the charge. Only Tap's answer, for the right amount and order, marks it paid.
+    Returns Tap's charge (status, response code and message) so the receipt can say why a payment failed."""
     if chk.payment_status == "paid" or chk.provider != "tap" or not chk.provider_ref:
-        return
+        return None
     try:
         c = payments.fetch_charge(chk.provider_ref)
     except payments.PaymentError:
-        return
+        return None
     order = db.get(Order, chk.order_id)
     if c["status"] == payments.PAID and c["amount"] == chk.amount_due and c["currency"] == "QAR" \
             and c["reference"] in (None, order.number):
@@ -518,9 +521,13 @@ def sync_payment(db: Session, chk: ShopCheckout) -> None:
                         created_at=local_now()))
         audit(db, chk.tenant_id, "shop.paid", entity="order", entity_id=order.number,
               after={"amount": float(chk.amount_due), "provider": "tap", "charge": chk.provider_ref})
+    elif c["status"] == payments.PAID:
+        log.warning("tap charge %s captured but does not match order %s (amount %s %s, ref %s; expected %s QAR)",
+                    chk.provider_ref, order.number, c["amount"], c["currency"], c["reference"], chk.amount_due)
     elif c["status"] in payments.FAILED:
         chk.payment_status = "failed"
     db.commit()
+    return c
 
 
 @router.get("/pay/return/{token}", include_in_schema=False)
@@ -607,9 +614,12 @@ def receipt_data(db: Session, chk: ShopCheckout) -> dict:
 @router.get("/receipt/{token}")
 def receipt(token: str, db: Session = Depends(get_db)):
     chk = _checkout(db, token)
-    if chk.payment_status in ("pending", "failed"):
-        sync_payment(db, chk)
-    return receipt_data(db, chk)
+    c = sync_payment(db, chk) if chk.payment_status in ("pending", "failed") else None
+    d = receipt_data(db, chk)
+    if c and chk.payment_status != "paid" and (c.get("message") or c.get("status")):
+        # Tap's own reason, e.g. "Declined, Insufficient Funds (505)", so the customer and staff know what happened
+        d["payment"]["reason"] = f"{c.get('message') or c['status'].title()}" + (f" (code {c['code']})" if c.get("code") else "")
+    return d
 
 
 @router.get("/receipt/{token}/pdf")

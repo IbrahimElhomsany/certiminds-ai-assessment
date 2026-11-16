@@ -840,7 +840,7 @@ async function receiptPage(token) {
     : `${who} will call you before delivery.`;
   let banner = "";
   if (order && paid) banner = `<div class="paybanner ok">${ICON.check}<div class="grow"><b>Paid ${money(d.total)} by ${esc(p.card || "card")}</b><br><small>${fmtWhen(p.paid_at)} · payment reference ${esc(p.reference)}${p.test_mode ? " · test payment, no real money was taken" : ""}</small></div></div>`;
-  else if (order && p.method === "card") banner = `<div class="paybanner warn">${ICON.warn}<div class="grow"><b>${p.status === "pending" ? "We have not received the card payment yet" : "Nothing was charged to your card"}</b><br><small>To confirm the order, try the card again or pay when it is delivered.</small></div>
+  else if (order && p.method === "card") banner = `<div class="paybanner warn">${ICON.warn}<div class="grow"><b>${p.status === "pending" ? "We have not received the card payment yet" : "Nothing was charged to your card"}</b><br><small>${p.reason ? `The payment provider's answer: ${esc(p.reason)}. ` : ""}To confirm the order, try the card again or pay when it is delivered.</small></div>
       ${p.can_pay_card ? '<button class="btn" id="payNow">Pay now by card</button>' : ""}<button class="btn ghost" id="payLater">Pay on delivery</button></div>`;
   else if (order) banner = `<div class="paybanner warn">${ICON.truck}<div class="grow"><b>To pay on delivery: ${money(d.total)}</b><br><small>By card or cash to our driver.</small></div>
       ${p.can_pay_card ? '<button class="btn" id="payNow">Pay now by card instead</button>' : ""}</div>`;

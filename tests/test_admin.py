@@ -9,12 +9,18 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from backend import admin_api, catalog, crm_bridge, main
-from backend.db.database import Base, SessionLocal, engine, init_db
+from backend import admin_api, catalog, crm_bridge, main, shop_api
+from backend.db.database import Base, SessionLocal, engine, init_db, local_now
 from backend.db.models import AuditLog, Batch, DiscountRequest, Lead, Order, Product, Quote, StockMovement, User
 from backend.db.seed import DEMO_PASSWORD, seed_tenant
 
 client = TestClient(main.app)
+
+
+def delivery_address() -> dict:
+    """What an order needs on top of a quotation: a Qatar address, a delivery day from the list and how to pay."""
+    return {"zone": "66", "street": "820", "building": "12", "unit": "Flat 4",
+            "delivery_date": shop_api.delivery_days(local_now().date())[0].isoformat(), "payment": "on_delivery"}
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -187,7 +193,7 @@ def test_below_minimum_margin_only_owner_with_reason():
 def make_pending_order(sku: str, qty: str) -> int:
     """A shop order for `qty` of `sku`, the way the public checkout creates it."""
     r = client.post("/api/shop/checkout", json={"type": "order", "items": [{"sku": sku, "area_m2": float(qty)}],
-                                                "name": "Test Buyer", "phone": "+974 5512 3456", "delivery_area": "Doha"})
+                                                "name": "Test Buyer", "phone": "+974 5512 3456", "delivery_area": "Doha", **delivery_address()})
     assert r.status_code == 200, r.text
     with db() as s:
         return s.scalar(select(Order).where(Order.number == r.json()["order_number"])).id

@@ -925,7 +925,15 @@ async function orderView(id) {
           <td>${l.batch ? esc(l.batch) + (o.status === "pending" ? `<br><span class="muted small">${num(l.batch_left, 2)} left in batch</span>` : "") : `<span class="tag out">no single batch</span>`}</td>
           <td>${esc(l.shade || "-")}</td></tr>`).join("")}
         <tr><td colspan="2" class="right"><b>Total</b></td><td class="right num"><b>${qar(o.total, 2)}</b></td><td colspan="2"></td></tr></table></div>
-      ${o.delivered_at ? `<p class="muted small">Delivered ${dateTime(o.delivered_at)}</p>` : ""}</div>`;
+      ${o.delivered_at ? `<p class="muted small">Delivered ${dateTime(o.delivered_at)}</p>` : ""}</div>
+    ${o.shop ? `<div class="card"><div class="head"><h2 class="grow">Delivery and payment</h2>
+      <span class="tag ${o.shop.payment_status === "paid" ? "ok" : o.shop.payment_status === "failed" ? "out" : "pending"}">${
+        o.shop.payment_status === "paid" ? "Paid by card" : o.shop.payment_method === "on_delivery" ? "Pays on delivery"
+        : o.shop.payment_status === "failed" ? "Card payment failed" : "Card payment not finished"}</span></div>
+      <div class="kv"><span>Deliver to</span><span>${esc(o.shop.address)}</span>
+        <span>Delivery day</span><span>${o.shop.delivery_date ? date(o.shop.delivery_date) : "-"}</span>
+        <span>Amount</span><span>${qar(o.shop.amount_due, 2)}${o.shop.delivery_fee ? ` (incl. ${qar(o.shop.delivery_fee, 2)} delivery)` : " (free delivery)"}</span>
+        ${o.shop.payment_status === "paid" ? `<span>Paid</span><span>${esc(o.shop.card || "Card")} · ${dateTime(o.shop.paid_at)}<br><span class="muted small">Tap ${esc(o.shop.reference || "")}</span></span>` : ""}</div></div>` : ""}`;
   if ($("#bConf")) $("#bConf").onclick = () => act(() => api(`/orders/${id}/confirm`, {method: "POST"}), "Order confirmed, stock taken");
   if ($("#bDel")) $("#bDel").onclick = () => act(() => api(`/orders/${id}/deliver`, {method: "POST"}), "Marked delivered");
   if ($("#bCan")) $("#bCan").onclick = async () => {

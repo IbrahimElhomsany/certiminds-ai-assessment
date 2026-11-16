@@ -14,6 +14,8 @@
   * { box-sizing:border-box; }
   html, body { margin:0; overflow-x:hidden; background:#fff; color:var(--text);
                font:14px/1.55 "Poppins", -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { min-height:100vh; display:flex; flex-direction:column; }       /* the footer stays at the bottom on short pages */
+  body > main { flex:1 0 auto; width:100%; } body > footer { flex-shrink:0; }
   a { color:inherit; text-decoration:none; }
   button, input, select, textarea { font:inherit; color:inherit; }
   button { cursor:pointer; }
@@ -57,6 +59,9 @@
   .hero h1 { font-size:42px; margin:0 0 14px; letter-spacing:-.01em; }
   .hero p { font-size:16px; color:var(--muted); margin:0 0 24px; max-width:480px; }
   .hero .cta { display:flex; gap:12px; flex-wrap:wrap; }
+  .hero .cta .btn { transition:transform .18s ease, box-shadow .18s ease; }
+  .hero .cta .btn:hover { transform:scale(1.06); box-shadow:0 6px 18px rgba(0,0,0,.12); }
+  @media (prefers-reduced-motion: reduce) { .hero .cta .btn, .hero .cta .btn:hover { transition:none; transform:none; } }
   .hero img { width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:18px; }
   .usp { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:18px 0; margin-bottom:36px; }
   .usp div { display:flex; gap:12px; align-items:flex-start; }
@@ -149,9 +154,37 @@
   .seg button.on { background:var(--ink); color:#fff; }
   .err { color:var(--bad); font-size:13px; margin-top:10px; }
   .done { max-width:640px; margin:48px auto; text-align:center; }
-  .done .tick { width:64px; height:64px; border-radius:50%; background:var(--ok-soft); color:var(--ok); display:grid; place-items:center; margin:0 auto 16px; }
-  .done .tick .ico { width:30px; height:30px; }
-  .done .box { text-align:left; border:1px solid var(--line); border-radius:16px; padding:18px; margin:22px 0; }
+  /* complete your project */
+  [hidden] { display:none !important; }
+  .extras { display:grid; gap:12px; }
+  .xcard { display:grid; grid-template-columns:72px 1fr auto; gap:14px; align-items:center; border:1px solid var(--line); border-radius:14px; padding:12px; }
+  .xcard img { width:72px; height:72px; border-radius:10px; object-fit:cover; background:var(--soft); }
+  .xcard b { color:var(--ink); } .xcard .why { font-size:12.5px; color:var(--muted); margin-top:3px; }
+  .xcard .tagline { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--accent); }
+  .xcard .act { display:flex; flex-direction:column; align-items:flex-end; gap:8px; }
+  .xcard .act input { width:70px; }
+  .xcard.added { border-color:var(--ok); background:var(--ok-soft); }
+  .swatches { display:flex; gap:6px; margin-top:7px; } .swatches button { width:22px; height:22px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px var(--line); padding:0; }
+  .swatches button.on { box-shadow:0 0 0 2px var(--ink); }
+  /* checkout */
+  .paychoice { display:grid; gap:10px; } .paychoice label { display:flex; gap:10px; align-items:flex-start; border:1px solid var(--line); border-radius:12px; padding:12px; cursor:pointer; font-weight:400; margin:0; }
+  .paychoice label:has(input:checked) { border-color:var(--ink); box-shadow:0 0 0 1px var(--ink); }
+  .paychoice b { color:var(--ink); display:block; } .paychoice small { color:var(--muted); }
+  .testnote { background:var(--warn-soft); color:var(--warn); border-radius:8px; padding:6px 10px; font-size:12px; margin-top:6px; }
+  .formhead { grid-column:1/-1; margin:8px 0 -4px; font-size:15px; color:var(--ink); font-weight:600; }
+  /* receipt */
+  .receipt { max-width:860px; margin:36px auto; }
+  .receipt .top { text-align:center; margin-bottom:22px; }
+  .rgrid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:18px 0; }
+  .rbox { background:var(--soft); border-radius:14px; padding:14px 16px; font-size:13.5px; } .rbox h3 { margin:0 0 6px; font-size:14px; }
+  .paybanner { border-radius:14px; padding:14px 16px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .paybanner.ok { background:var(--ok-soft); color:#17663f; } .paybanner.warn { background:var(--warn-soft); color:#7a4d00; }
+  .paybanner .grow { flex:1; min-width:220px; }
+  .rlines .sline small { display:block; }
+  @media (max-width:720px) { .rgrid { grid-template-columns:1fr; } .xcard { grid-template-columns:56px 1fr; } .xcard .act { grid-column:1/-1; flex-direction:row; justify-content:flex-end; } }
+  .done .tick, .receipt .tick { width:64px; height:64px; border-radius:50%; background:var(--ok-soft); color:var(--ok); display:grid; place-items:center; margin:0 auto 16px; }
+  .done .tick .ico, .receipt .tick .ico { width:30px; height:30px; }
+  .done .box, .receipt .box { text-align:left; border:1px solid var(--line); border-radius:16px; padding:18px; margin:22px 0; }
 
   footer { border-top:1px solid var(--line); margin-top:40px; padding:28px 0 36px; color:var(--muted); font-size:13px; }
   footer .cols { display:flex; justify-content:space-between; gap:24px; flex-wrap:wrap; }
@@ -290,6 +323,7 @@ function card(p) {
       <div class="row"><span class="price">${money(p.price)} <span>/ ${p.unit === "m2" ? "m²" : "set"}</span></span>${availTag(p.availability)}</div>
     </div></a>`;
 }
+const unitWord = l => l.unit === "bag" ? "bag" : "set";
 function setNav(key) { document.querySelectorAll("#nav a, #mnav a").forEach(a => a.classList.toggle("on", a.dataset.k === key)); }
 
 // ---------------------------------------------------------------- pages
@@ -315,8 +349,8 @@ async function home() {
   <div class="sechead"><h2>Shop by category</h2></div>
   <section class="cats">
     <a class="cat" href="#/shop?kind=tile&location=indoor&surface=floor"><img src="${img("CN001")}" alt=""><span>Floor tiles ${ICON.arrow}</span></a>
-    <a class="cat" href="#/shop?kind=tile&surface=wall"><img src="${img("CN010")}" alt=""><span>Wall tiles ${ICON.arrow}</span></a>
-    <a class="cat" href="#/shop?kind=tile&location=outdoor"><img src="${img("CN009")}" alt=""><span>Outdoor ${ICON.arrow}</span></a>
+    <a class="cat" href="#/shop?kind=tile&surface=wall"><img src="/images/cat_wall.jpg" alt="A kitchen wall in Metro White tiles"><span>Wall tiles ${ICON.arrow}</span></a>
+    <a class="cat" href="#/shop?kind=tile&location=outdoor"><img src="/images/cat_outdoor.jpg" alt="A terrace in Ocean Grip outdoor tiles"><span>Outdoor ${ICON.arrow}</span></a>
     <a class="cat" href="#/shop?kind=set"><img src="${img("SN001")}" alt=""><span>Bathroom sets ${ICON.arrow}</span></a>
   </section>
   <div class="sechead"><h2>Best sellers</h2><small>Based on orders in the last 90 days</small></div>
@@ -465,10 +499,10 @@ async function cartPage() {
       <div class="cline">
         <a href="#/p/${encodeURIComponent(l.sku)}"><img src="${esc(l.image || IMG_BLANK)}" alt="" onerror="this.src='${IMG_BLANK}'"></a>
         <div><b>${esc(l.name)}</b>
-          <small>${l.kind === "tile" ? `${l.boxes} boxes = ${l.quantity_m2} m² for ${l.area_m2} m² (${l.wastage_percent}% spare) · ${money(l.unit_price)} / m²` : `${money(l.unit_price)} per set`}</small>
+          <small>${l.kind === "tile" ? `${l.boxes} boxes = ${l.quantity_m2} m² for ${l.area_m2} m² (${l.wastage_percent}% spare) · ${money(l.unit_price)} / m²` : `${money(l.unit_price)} per ${unitWord(l)}`}</small>
           <div class="edit">
             ${l.kind === "tile" ? `<label class="muted" style="font-size:12px">Area m² <input class="f" type="number" min="0.5" step="0.5" value="${l.area_m2}" data-i="${i}" data-f="area_m2"></label>`
-              : `<label class="muted" style="font-size:12px">Sets <input class="f" type="number" min="1" max="200" value="${l.quantity}" data-i="${i}" data-f="quantity"></label>`}
+              : `<label class="muted" style="font-size:12px">${cap(unitWord(l))}s <input class="f" type="number" min="1" max="200" value="${l.quantity}" data-i="${i}" data-f="quantity"></label>`}
             <button class="link" data-rm="${i}">Remove</button>
           </div>
           ${l.kind === "tile" && !l.one_batch ? batchNote(l) : ""}
@@ -481,9 +515,9 @@ async function cartPage() {
       <div class="sline"><span>Products</span><span>${money(cart.subtotal)}</span></div>
       <div class="sline"><span>Delivery</span><span>${o.free_delivery ? "Free" : money(o.delivery_fee_qar)}</span></div>
       <div class="sline total"><span>Total</span><span>${money(cart.subtotal + o.delivery_fee_qar)}</span></div>
-      <small class="muted">${o.free_delivery ? "" : `Free delivery from ${money(o.free_delivery_from_qar)}. `}No payment online: our team calls you to confirm delivery and payment.</small>
-      <a class="btn" href="#/checkout?type=order">Place order</a>
-      <a class="btn ghost" href="#/checkout?type=quote">${ICON.doc} Get a quotation first</a>
+      <small class="muted">${o.free_delivery ? "" : `Free delivery from ${money(o.free_delivery_from_qar)}. `}Pay online by card or when your order is delivered.</small>
+      <a class="btn" href="#/extras?type=order">Checkout</a>
+      <a class="btn ghost" href="#/extras?type=quote">${ICON.doc} Get a quotation first</a>
     </aside>
   </div>`;
   app.querySelectorAll("input[data-i]").forEach(inp => inp.onchange = () => {
@@ -495,6 +529,69 @@ async function cartPage() {
   app.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { const all = getCart(); all.splice(+b.dataset.rm, 1); setCart(all); cartPage(); });
 }
 
+// "Complete your project": grout, adhesive and spacers worked out from the tiles, plus tiles customers often pair
+async function extras(params) {
+  setNav(null);
+  const type = params.get("type") === "quote" ? "quote" : "order";
+  const next = `#/checkout?type=${type}`;
+  const items = getCart();
+  if (!items.length) { location.hash = "#/cart"; return; }
+  let sugg = [];
+  try { sugg = (await api("/api/shop/cart/suggest", { items })).suggestions; } catch {}
+  if (!sugg.length) { location.replace(next); return; }
+  const inCart = sku => getCart().some(i => i.sku === sku);
+  const label = { grout: "Grout", adhesive: "Tile adhesive", spacers: "Spacers", pair: "Often chosen together" };
+  app.innerHTML = `
+  <div class="receipt" style="max-width:780px">
+    <div class="crumbs"><a href="#/cart">Cart</a> / Complete your project</div>
+    <h1 style="margin:4px 0 6px">Anything else for the job?</h1>
+    <p class="muted" style="margin:0 0 18px">Worked out from the tiles in your cart. The amounts are a sensible start with about 10% spare; your installer has the final say.</p>
+    <div class="extras">${sugg.map((x, i) => `
+      <div class="xcard" data-i="${i}">
+        <img src="${esc(x.image || IMG_BLANK)}" alt="" onerror="this.src='${IMG_BLANK}'">
+        <div>
+          <div class="tagline">${esc(label[x.reason] || "Suggested")}</div>
+          <b data-name>${esc(x.name)}</b> <span class="muted" style="font-size:13px" data-price>· ${money(x.price)} / ${x.unit === "m2" ? "m²" : unitWord(x)}</span>
+          <div class="why">${esc(x.why)}</div>
+          ${x.alternatives && x.alternatives.length ? `<div class="swatches" aria-label="Grout colour">${[x, ...x.alternatives].map((a, k) =>
+            `<button type="button" title="${esc(cap(a.colour || a.name))}" aria-label="${esc(cap(a.colour || a.name))}" data-alt="${k}" class="${k ? "" : "on"}" style="background:${esc(a.hex || "#ddd")}"></button>`).join("")}</div>` : ""}
+        </div>
+        <div class="act">
+          ${x.kind === "tile" ? `<a class="btn ghost" href="#/p/${encodeURIComponent(x.sku)}">See tile</a>` : `
+          <label class="muted" style="font-size:12px">${x.unit === "bag" ? "Bags" : "Sets"} <input class="f" type="number" min="1" max="200" value="${x.suggest_quantity || 1}" data-q></label>
+          <button class="btn" type="button" data-add>Add</button>`}
+        </div>
+      </div>`).join("")}
+    </div>
+    <div style="display:flex;gap:10px;justify-content:space-between;flex-wrap:wrap;margin-top:22px">
+      <a class="btn ghost" href="#/cart">Back to cart</a>
+      <a class="btn" href="${next}">${type === "order" ? "Continue to delivery and payment" : "Continue to your details"} ${ICON.arrow}</a>
+    </div>
+  </div>`;
+  app.querySelectorAll(".xcard").forEach(el => {
+    const x = sugg[+el.dataset.i], opts = [x, ...(x.alternatives || [])];
+    let pick = opts[0];
+    const mark = () => { const on = inCart(pick.sku); el.classList.toggle("added", on); const b = el.querySelector("[data-add]"); if (b) b.textContent = on ? "Added ✓" : "Add"; };
+    el.querySelectorAll("[data-alt]").forEach(b => b.onclick = () => {
+      const was = pick; pick = opts[+b.dataset.alt];
+      el.querySelectorAll("[data-alt]").forEach(o => o.classList.toggle("on", o === b));
+      el.querySelector("[data-name]").textContent = pick.name;
+      el.querySelector("[data-price]").textContent = `· ${money(pick.price)} / bag`;
+      if (inCart(was.sku)) { setCart(getCart().filter(i => i.sku !== was.sku)); addToCart({ sku: pick.sku, quantity: +el.querySelector("[data-q]").value || 1 }); }
+      mark();
+    });
+    const add = el.querySelector("[data-add]");
+    if (add) add.onclick = () => {
+      if (inCart(pick.sku)) setCart(getCart().filter(i => i.sku !== pick.sku));
+      else addToCart({ sku: pick.sku, quantity: Math.max(1, Math.min(200, parseInt(el.querySelector("[data-q]").value) || 1)) });
+      mark();
+    };
+    const q = el.querySelector("[data-q]");
+    if (q) q.onchange = () => { if (inCart(pick.sku)) addToCart({ sku: pick.sku, quantity: Math.max(1, Math.min(200, parseInt(q.value) || 1)) }); };
+    mark();
+  });
+}
+
 let OPTIONS = null;
 async function checkout(params) {
   setNav(null);
@@ -503,6 +600,7 @@ async function checkout(params) {
   OPTIONS = OPTIONS || await api("/api/shop/options");
   const cart = await api("/api/shop/cart/price", { items });
   let type = params.get("type") === "quote" ? "quote" : "order";
+  const total = cart.subtotal + cart.offers.delivery_fee_qar;
   app.innerHTML = `
   <div class="cartpage">
     <section>
@@ -515,24 +613,40 @@ async function checkout(params) {
         <div><label for="email">Email (optional)</label><input class="f" id="email" type="email" autocomplete="email" maxlength="120"></div>
         <div><label for="area">Delivery area</label><select id="area">${OPTIONS.delivery_areas.map(a => `<option>${esc(a)}</option>`).join("")}</select></div>
         <div><label for="room">Which room is it for? (optional)</label><select id="room"><option value="">Choose…</option>${OPTIONS.rooms.map(r => `<option value="${esc(r)}">${esc(cap(r))}</option>`).join("")}</select></div>
-        <div class="full"><label for="notes">Notes (optional)</label><textarea id="notes" rows="3" maxlength="500" placeholder="e.g. preferred delivery day, building access"></textarea></div>
+        <div class="full"><label for="notes">Notes (optional)</label><textarea id="notes" rows="3" maxlength="500" placeholder="e.g. building access, call before arriving"></textarea></div>
+        <div class="formhead" data-order>Delivery address</div>
+        <div data-order><label for="zone">Zone number</label><input class="f" id="zone" inputmode="numeric" maxlength="3" placeholder="e.g. 66"></div>
+        <div data-order><label for="street">Street number or name</label><input class="f" id="street" maxlength="60" placeholder="e.g. 820"></div>
+        <div data-order><label for="building">Building number</label><input class="f" id="building" maxlength="20" placeholder="e.g. 12"></div>
+        <div data-order><label for="unit">Flat or villa (optional)</label><input class="f" id="unit" maxlength="30" placeholder="e.g. Flat 4"></div>
+        <div data-order class="full"><label for="day">Delivery day</label><select id="day">${OPTIONS.delivery_dates.map(d => `<option value="${d}">${new Date(d + "T12:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</option>`).join("")}</select>
+          <small class="muted">We deliver Saturday to Thursday. We call the day before.</small></div>
+        <div class="formhead" data-order>Payment</div>
+        <div data-order class="full paychoice">
+          ${OPTIONS.card_payment ? `<label><input type="radio" name="pay" value="card" checked><span><b>Pay now by card</b><small>Visa, Mastercard, Apple Pay or NAPS debit card, on Tap's secure payment page.</small>
+            ${OPTIONS.card_test_mode ? '<div class="testnote">Test mode: use a Tap test card. No real money is taken.</div>' : ""}</span></label>` : ""}
+          <label><input type="radio" name="pay" value="on_delivery" ${OPTIONS.card_payment ? "" : "checked"}><span><b>Pay on delivery</b><small>By card or cash to our driver when your order arrives.</small></span></label>
+        </div>
         <div class="full"><button class="btn" id="submit" type="submit"></button><div class="err" id="err" role="alert"></div></div>
       </form>
     </section>
     <aside class="summary">
       <h3>Summary</h3>
-      ${cart.lines.map(l => `<div class="sline"><span>${esc(l.name)}<br><small class="muted">${l.kind === "tile" ? `${l.boxes} boxes · ${l.quantity_m2} m²` : `${l.quantity} set${l.quantity > 1 ? "s" : ""}`}</small></span><span>${money(l.line_total)}</span></div>`).join("")}
+      ${cart.lines.map(l => `<div class="sline"><span>${esc(l.name)}<br><small class="muted">${l.kind === "tile" ? `${l.boxes} boxes · ${l.quantity_m2} m²` : `${l.quantity} ${unitWord(l)}${l.quantity > 1 ? "s" : ""}`}</small></span><span>${money(l.line_total)}</span></div>`).join("")}
       <div class="sline"><span>Delivery</span><span>${cart.offers.free_delivery ? "Free" : money(cart.offers.delivery_fee_qar)}</span></div>
       <div class="sline total"><span>Total</span><span>${money(cart.subtotal + cart.offers.delivery_fee_qar)}</span></div>
     </aside>
   </div>`;
   const show = () => {
     app.querySelectorAll(".seg button").forEach(b => b.classList.toggle("on", b.dataset.t === type));
-    $("#submit").textContent = type === "order" ? "Place order" : "Send me the quotation";
+    app.querySelectorAll("[data-order]").forEach(el => el.hidden = type !== "order");
+    const card = type === "order" && (app.querySelector("input[name=pay]:checked") || {}).value === "card";
+    $("#submit").textContent = type === "quote" ? "Send me the quotation" : card ? `Pay ${money(total)} by card` : "Place order";
     $("#typeNote").textContent = type === "order"
-      ? "No payment now. A member of our sales team will call you to confirm delivery and payment."
-      : "You get a quotation number straight away, valid for 14 days. Our team will call to answer any questions.";
+      ? "Enter where to deliver, pick a day and choose how to pay. You get a receipt you can download straight away."
+      : "You get a quotation number and a PDF straight away, valid for 14 days. Our team will call to answer any questions.";
   };
+  app.querySelectorAll("input[name=pay]").forEach(r => r.onchange = show);
   app.querySelectorAll(".seg button").forEach(b => b.onclick = () => { type = b.dataset.t; show(); });
   show();
   $("#co").onsubmit = async e => {
@@ -541,14 +655,23 @@ async function checkout(params) {
     err.textContent = "";
     if ($("#name").value.trim().length < 2) { err.textContent = "Please enter your name."; return; }
     if (($("#phone").value.match(/\d/g) || []).length < 8) { err.textContent = "Please enter a valid mobile number."; return; }
-    btn.disabled = true; btn.textContent = "Sending…";
+    const order = type === "order", pay = (app.querySelector("input[name=pay]:checked") || {}).value;
+    if (order) {
+      if (!/^\d{1,3}$/.test($("#zone").value.trim())) { err.textContent = "Please enter your zone number (1 to 3 digits)."; return; }
+      if (!$("#street").value.trim() || !$("#building").value.trim()) { err.textContent = "Please enter the street and building number."; return; }
+      if (!pay) { err.textContent = "Please choose how you would like to pay."; return; }
+    }
+    btn.disabled = true; btn.textContent = pay === "card" && order ? "Opening the payment page…" : "Sending…";
     try {
       const r = await api("/api/shop/checkout", { type, items, name: $("#name").value.trim(), phone: $("#phone").value.trim(),
         email: $("#email").value.trim() || null, delivery_area: $("#area").value, room: $("#room").value || null,
-        notes: $("#notes").value.trim() || null, ...chatLink() });
+        notes: $("#notes").value.trim() || null, ...chatLink(),
+        ...(order ? { zone: $("#zone").value.trim(), street: $("#street").value.trim(), building: $("#building").value.trim(),
+                      unit: $("#unit").value.trim() || null, delivery_date: $("#day").value, payment: pay } : {}) });
       setCart([]);
       try { sessionStorage.setItem("nova_last", JSON.stringify(r)); } catch {}
-      location.hash = "#/done";
+      if (r.payment_url) { location.href = r.payment_url; return; }
+      location.hash = r.token ? `#/receipt/${r.token}` : "#/done";
     } catch (ex) { err.textContent = ex.message; btn.disabled = false; show(); }
   };
 }
@@ -583,11 +706,64 @@ function donePage() {
   </div>`;
 }
 
+async function receiptPage(token) {
+  setNav(null);
+  const d = await api("/api/shop/receipt/" + encodeURIComponent(token));
+  const order = d.kind === "order", p = d.payment, paid = p.status === "paid", a = d.address;
+  const fmtDay = iso => new Date(iso + "T12:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const fmtWhen = iso => new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  let banner = "";
+  if (order && paid) banner = `<div class="paybanner ok">${ICON.check}<div class="grow"><b>Paid ${money(d.total)} by ${esc(p.card || "card")}</b><br><small>${fmtWhen(p.paid_at)} · payment reference ${esc(p.reference)}${p.test_mode ? " · test payment, no real money was taken" : ""}</small></div></div>`;
+  else if (order && p.method === "card") banner = `<div class="paybanner warn">${ICON.warn}<div class="grow"><b>${p.status === "pending" ? "We have not received the card payment yet" : "The card payment did not go through"}</b><br><small>Your order is saved. You can try the card again or pay when it is delivered.</small></div>
+      ${p.can_pay_card ? '<button class="btn" id="payNow">Pay now by card</button>' : ""}<button class="btn ghost" id="payLater">Pay on delivery</button></div>`;
+  else if (order) banner = `<div class="paybanner warn">${ICON.truck}<div class="grow"><b>To pay on delivery: ${money(d.total)}</b><br><small>By card or cash to our driver.</small></div>
+      ${p.can_pay_card ? '<button class="btn" id="payNow">Pay now by card instead</button>' : ""}</div>`;
+  app.innerHTML = `
+  <div class="receipt">
+    <div class="top">
+      <div class="tick">${ICON.check}</div>
+      <h1 style="margin:6px 0">${order ? `Thank you, your order ${esc(d.number)} is confirmed` : `Quotation ${esc(d.number)} is ready`}</h1>
+      <p class="muted" style="margin:0">${d.salesperson ? `${esc(d.salesperson)} from our sales team` : "Our sales team"} will call you ${order ? "before delivery" : "to answer any questions"}.
+        ${order ? "" : `Prices are valid until ${fmtDay(d.valid_until.slice(0, 10))}.`}</p>
+    </div>
+    ${banner}
+    <div class="rgrid">
+      <div class="rbox"><h3>Customer</h3>${esc(d.customer.name)}<br>${esc(d.customer.phone)}${d.customer.email ? `<br>${esc(d.customer.email)}` : ""}</div>
+      <div class="rbox"><h3>Delivery</h3>${order ? `Zone ${esc(a.zone)}, Street ${esc(a.street)}, Building ${esc(a.building)}<br>${a.unit ? esc(a.unit) + ", " : ""}${esc(a.area)}, Qatar<br><b>${fmtDay(d.delivery_date)}</b>`
+        : `Delivery area: ${esc(a.area)}<br>The delivery day is agreed when you order.`}</div>
+    </div>
+    <div class="box" style="text-align:left">
+      ${d.lines.map(l => `<div class="sline"><span>${esc(l.name)}<br><small class="muted">${l.kind === "tile" ? `${l.boxes} boxes · ${l.quantity} m² · ${money(l.unit_price)} / m²` : `${l.quantity} ${unitWord(l)}${l.quantity > 1 ? "s" : ""} · ${money(l.unit_price)} each`} · ${esc(l.sku)}</small></span><span>${money(l.line_total)}</span></div>`).join("")}
+      <div class="sline"><span>Products</span><span>${money(d.subtotal)}</span></div>
+      <div class="sline"><span>Delivery</span><span>${d.delivery_fee ? money(d.delivery_fee) : "Free"}</span></div>
+      <div class="sline total"><span>${order ? (paid ? "Total paid" : "Total to pay") : "Total"}</span><span>${money(d.total)}</span></div>
+    </div>
+    <div class="err" id="rerr" role="alert" style="text-align:center"></div>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:18px">
+      <a class="btn" href="/api/shop/receipt/${encodeURIComponent(token)}/pdf">${ICON.doc} Download ${order ? "receipt" : "quotation"} (PDF)</a>
+      <a class="btn ghost" href="#/">Back to the shop</a>
+    </div>
+    <p class="muted" style="font-size:12.5px;text-align:center;margin-top:16px">Bookmark this page to see your ${order ? "order" : "quotation"} again. ${d.company.demo ? "Demo store: products, prices and stock are demonstration data." : ""}</p>
+  </div>`;
+  const errEl = $("#rerr");
+  const now = $("#payNow"), later = $("#payLater");
+  if (now) now.onclick = async () => {
+    now.disabled = true; now.textContent = "Opening the payment page…";
+    try { location.href = (await api(`/api/shop/receipt/${encodeURIComponent(token)}/pay`, {})).payment_url; }
+    catch (e) { errEl.textContent = e.message; now.disabled = false; now.textContent = "Pay now by card"; }
+  };
+  if (later) later.onclick = async () => {
+    later.disabled = true;
+    try { await api(`/api/shop/receipt/${encodeURIComponent(token)}/on-delivery`, {}); receiptPage(token); }
+    catch (e) { errEl.textContent = e.message; later.disabled = false; }
+  };
+}
+
 // ---------------------------------------------------------------- router
 async function route() {
   const [path, query] = (location.hash.slice(1) || "/").split("?");
   $("#bubble").href = "/assistant";
-  $("#bubble").hidden = path === "/checkout";
+  $("#bubble").hidden = path === "/checkout" || path === "/extras";
   const params = new URLSearchParams(query || "");
   window.scrollTo(0, 0);
   try {
@@ -595,7 +771,9 @@ async function route() {
     else if (path === "/shop") await listing(params);
     else if (path.startsWith("/p/")) await productPage(decodeURIComponent(path.slice(3)));
     else if (path === "/cart") await cartPage();
+    else if (path === "/extras") await extras(params);
     else if (path === "/checkout") await checkout(params);
+    else if (path.startsWith("/receipt/")) await receiptPage(decodeURIComponent(path.slice(9)));
     else if (path === "/done") donePage();
     else location.hash = "#/";
   } catch (e) {

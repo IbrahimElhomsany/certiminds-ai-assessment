@@ -7,12 +7,18 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from backend import admin_api, main, shop_api
-from backend.db.database import Base, SessionLocal, engine, init_db
+from backend.db.database import Base, SessionLocal, engine, init_db, local_now
 from backend.db.models import Activity, AuditLog, Batch, Customer, Lead, Order, Product, Quote, Tenant, User
 from backend.db.seed import DEMO_PASSWORD, seed_tenant
 from backend.tools import calculate_tile_quantity
 
 client = TestClient(main.app)
+
+
+def delivery_address() -> dict:
+    """What an order needs on top of a quotation: a Qatar address, a delivery day from the list and how to pay."""
+    return {"zone": "66", "street": "820", "building": "12", "unit": "Flat 4",
+            "delivery_date": shop_api.delivery_days(local_now().date())[0].isoformat(), "payment": "on_delivery"}
 BUYER = {"name": "Ayesha Rahman", "phone": "+974 5555 1234", "email": "ayesha@example.com",
          "delivery_area": "Lusail", "room": "bathroom", "notes": "Weekend delivery please"}
 
@@ -148,7 +154,7 @@ def test_quote_request_becomes_a_lead_in_the_crm(db):
 
 def test_order_waits_for_staff_and_suggests_one_batch(db):
     stock_before = db.scalar(select(func.sum(Batch.qty_left)))
-    r = checkout("order", items=[{"sku": "CN004", "area_m2": 30}])
+    r = checkout("order", items=[{"sku": "CN004", "area_m2": 30}], **delivery_address())
     assert r.status_code == 200, r.text
     db.expire_all()
     o = db.scalar(select(Order).where(Order.number == r.json()["order_number"]))

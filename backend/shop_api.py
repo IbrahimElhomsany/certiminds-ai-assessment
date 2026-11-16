@@ -8,11 +8,13 @@ Rules:
 - Every request or order becomes a customer + lead in Nova Studio, assigned to a salesperson.
 """
 import os
-from datetime import timedelta
+import secrets
+from datetime import date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import RedirectResponse, Response
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -20,8 +22,9 @@ from sqlalchemy.orm import Session
 from backend import crm_bridge
 from backend.auth import audit
 from backend.db.database import get_db, local_now
+from backend import payments
 from backend.db.models import (Activity, Batch, Customer, Lead, Order, OrderLine, Product, Quote, QuoteLine,
-                               Tenant, User)
+                               ShopCheckout, Tenant, User)
 from backend.db.numbering import next_number
 from backend.offers import project_offers
 from backend.ratelimit import RateLimiter
@@ -74,6 +77,8 @@ def product_out(p: Product, sales_rank: Optional[int] = None) -> dict:
                     "slip_rating": a.get("slip_rating"), "surfaces": a.get("surfaces", []),
                     "locations": a.get("locations", []), "tiles_per_box": a.get("tiles_per_box"),
                     "box_m2": a.get("box_m2")})
+    elif p.kind == "acc":
+        out.update({"group": p.category, "colour": a.get("colour"), "hex": a.get("hex"), "bag_kg": a.get("bag_kg")})
     else:
         out.update({"finish": a.get("finish"), "includes": a.get("includes", [])})
     return out
@@ -90,7 +95,7 @@ def best_seller_ranks(db: Session, tenant_id: int, days: int = 90) -> dict[int, 
 
 
 @router.get("/products")
-def list_products(kind: Optional[Literal["tile", "set"]] = None, location: Optional[Literal["indoor", "outdoor"]] = None,
+def list_products(kind: Optional[Literal["tile", "set", "acc"]] = None, location: Optional[Literal["indoor", "outdoor"]] = None,
                   surface: Optional[Literal["floor", "wall"]] = None, q: Optional[str] = Query(default=None, max_length=60),
                   sort: Literal["popular", "price_asc", "price_desc", "name"] = "popular",
                   tenant: Tenant = Depends(shop_tenant), db: Session = Depends(get_db)):
@@ -100,6 +105,8 @@ def list_products(kind: Optional[Literal["tile", "set"]] = None, location: Optio
     for p in rows:
         a = p.attributes or {}
         if kind and p.kind != kind:
+            continue
+        if not kind and p.kind == "acc":           # grout and adhesive are offered at checkout, not in the main list
             continue
         if location and location not in a.get("locations", []):
             continue
@@ -140,7 +147,15 @@ def product_detail(sku: str, tenant: Tenant = Depends(shop_tenant), db: Session 
 
 @router.get("/options")
 def options():
-    return {"delivery_areas": DELIVERY_AREAS, "rooms": ROOMS}
+    today = local_now().date()
+    return {"delivery_areas": DELIVERY_AREAS, "rooms": ROOMS,
+            "card_payment": payments.enabled(), "card_test_mode": payments.test_mode(),
+            "delivery_dates": [d.isoformat() for d in delivery_days(today)]}
+
+
+def delivery_days(today: date) -> list[date]:
+    """We deliver Saturday to Thursday, from the day after tomorrow, up to 30 days ahead."""
+    return [d for d in (today + timedelta(days=i) for i in range(2, 31)) if d.weekday() != 4]
 
 
 # ------------------------------------------------------------------ cart pricing
@@ -206,6 +221,49 @@ def cart_price(req: CartRequest, request: Request, tenant: Tenant = Depends(shop
     return public(price_cart(db, tenant, req.items))
 
 
+@router.post("/cart/suggest")
+def cart_suggest(req: CartRequest, request: Request, tenant: Tenant = Depends(shop_tenant), db: Session = Depends(get_db)):
+    """'Complete your project': grout, adhesive and spacers worked out from the tiles in the cart, plus tiles
+    customers often choose with them (learned, D3). Things already in the cart are left out."""
+    if not price_limiter.allow(client_key(request)):
+        raise HTTPException(status_code=429, detail="Too many requests, please slow down.")
+    from backend import accessories
+    from backend.crm import picks
+    cart = price_cart(db, tenant, req.items)
+    in_cart = {l["sku"] for l in cart["lines"]}
+    tiles = []
+    for l in cart["lines"]:
+        if l["kind"] == "tile":
+            p = l["_product"]
+            w, ln = map(int, p.attributes["size_cm"].split("x"))
+            tiles.append({"sku": p.sku, "name": p.name, "style": p.category, "width_cm": w, "length_cm": ln, "m2": l["area_m2"]})
+    prods = {p.sku: p for p in db.scalars(select(Product).where(Product.tenant_id == tenant.id, Product.active.is_(True)))}
+    out = []
+    for n in accessories.needs_for(tiles):
+        p = prods.get(n["sku"])
+        if p is None or (n["group"] != "grout" and n["sku"] in in_cart) or (n["group"] == "grout" and
+                                                                             any(s.startswith("GR") for s in in_cart)):
+            continue
+        out.append({**product_out(p), "suggest_quantity": n["quantity"], "why": n["why"], "reason": n["group"],
+                    "alternatives": [product_out(prods[a["sku"]]) for a in accessories.ACCESSORIES
+                                     if a["group"] == n["group"] and a["sku"] != p.sku and a["sku"] in prods]
+                                    if n["group"] == "grout" else []})
+    learned = picks.learned(db, tenant.id)["pairs"]
+    seen = set()
+    for l in cart["lines"]:
+        for x in learned.get(l["sku"], []):
+            p = prods.get(x["sku"])
+            if p is None or p.sku in in_cart or p.sku in seen or p.kind == "acc":
+                continue
+            seen.add(p.sku)
+            out.append({**product_out(p), "suggest_quantity": None if p.kind == "tile" else 1, "reason": "pair",
+                         "why": f"Customers who chose {l['name']} often add this ({x['together']} projects so far)."
+                                + (" Enter the area to see the price." if p.kind == "tile" else "")})
+            if len(seen) >= 3:
+                break
+    return {"currency": "QAR", "suggestions": out}
+
+
 # ------------------------------------------------------------------ quotation request / order
 class CheckoutRequest(CartRequest):
     type: Literal["quote", "order"]
@@ -217,6 +275,24 @@ class CheckoutRequest(CartRequest):
     notes: Optional[str] = Field(default=None, max_length=500)
     chat_session_id: Optional[str] = Field(default=None, pattern=r"^[a-zA-Z0-9_-]{4,64}$")   # came from the AI chat
     chat_visitor_id: Optional[str] = Field(default=None, pattern=r"^USR-\d{3,10}$")
+    # an order also needs the Qatar address (zone / street / building), a delivery day and how to pay
+    zone: Optional[str] = Field(default=None, pattern=r"^\d{1,3}$")
+    street: Optional[str] = Field(default=None, min_length=1, max_length=60)
+    building: Optional[str] = Field(default=None, min_length=1, max_length=20)
+    unit: Optional[str] = Field(default=None, max_length=30)
+    delivery_date: Optional[date] = None
+    payment: Optional[Literal["card", "on_delivery"]] = None
+
+    @model_validator(mode="after")
+    def order_needs_address(self):
+        if self.type == "order":
+            if not (self.zone and self.street and self.building):
+                raise ValueError("enter the delivery address: zone, street and building number")
+            if self.delivery_date is None or self.delivery_date not in delivery_days(local_now().date()):
+                raise ValueError("choose a delivery day from the list (Saturday to Thursday, from the day after tomorrow)")
+            if self.payment is None:
+                raise ValueError("choose how you would like to pay")
+        return self
 
     @field_validator("phone")
     @classmethod
@@ -269,6 +345,8 @@ def checkout(req: CheckoutRequest, request: Request, tenant: Tenant = Depends(sh
              db: Session = Depends(get_db)):
     if not submit_limiter.allow(client_key(request)):
         raise HTTPException(status_code=429, detail="Too many requests, please try again in a minute.")
+    if req.type == "order" and req.payment == "card" and not payments.enabled():
+        raise HTTPException(status_code=422, detail="Card payment is not available right now. Please choose pay on delivery.")
     cart = price_cart(db, tenant, req.items)
     now = local_now()
 
@@ -324,7 +402,7 @@ def checkout(req: CheckoutRequest, request: Request, tenant: Tenant = Depends(sh
 
     order = None
     if req.type == "order":
-        # No online payment: the order waits until a salesperson calls to confirm delivery and payment.
+        # The order is saved first; a card payment (Tap) is started after, and the salesperson still calls to confirm.
         order = Order(tenant_id=tenant.id, number=next_number(db, Order, tenant.id, "O"), quote_id=quote.id,
                       customer_id=customer.id, created_by=None, status="pending", total=quote.total,
                       cost_total=quote.cost_total, created_at=now)
@@ -342,12 +420,178 @@ def checkout(req: CheckoutRequest, request: Request, tenant: Tenant = Depends(sh
             if order else f"Customer requested quotation {quote.number} online (QAR {quote.total:,.2f}).")
     if split:
         text += f" Check shade: no single batch covers {', '.join(split)}."
+    fee = Decimal(str(cart["offers"]["delivery_fee_qar"]))
+    chk = ShopCheckout(tenant_id=tenant.id, token=secrets.token_urlsafe(24), kind=req.type, quote_id=quote.id,
+                       order_id=order.id if order else None, name=req.name.strip(), phone=req.phone, email=req.email,
+                       delivery_area=req.delivery_area, zone=req.zone, street=req.street, building=req.building,
+                       unit=(req.unit or "").strip() or None,
+                       delivery_date=datetime.combine(req.delivery_date, time(9)) if req.delivery_date else None,
+                       delivery_fee=q2(fee), amount_due=q2(quote.total + fee), payment_method=req.payment,
+                       payment_status="unpaid", created_at=now)
+    db.add(chk)
+    if order:
+        text += (f" Deliver on {req.delivery_date:%a %d %b} to zone {req.zone}, street {req.street}, building {req.building}"
+                 f"{', ' + chk.unit if chk.unit else ''} ({req.delivery_area}). "
+                 + ("Paying online by card." if req.payment == "card" else "Pays on delivery."))
     db.add(Activity(tenant_id=tenant.id, lead_id=lead.id, user_id=None, type="created", text=text, created_at=now))
     audit(db, tenant.id, f"shop.{req.type}", entity="lead", entity_id=lead.number,
           after={"quote": quote.number, "order": order.number if order else None, "total": float(quote.total)})
     db.commit()
 
+    pay = start_card_payment(db, chk, request) if order and req.payment == "card" else {}
     return {"type": req.type, "reference": order.number if order else quote.number, "quote_number": quote.number,
             "order_number": order.number if order else None, "valid_until": quote.valid_until.date().isoformat(),
             "cart": public(cart), "assigned_to": owner.name.split()[0] if owner else None,
-            "lead_from_chat": lead.source == "showroom_chat"}
+            "lead_from_chat": lead.source == "showroom_chat", "token": chk.token, **pay}
+
+
+# ------------------------------------------------------------------ card payment (Tap) and the receipt
+def _base(request: Request) -> str:
+    return (os.getenv("PUBLIC_BASE_URL") or os.getenv("RENDER_EXTERNAL_URL") or str(request.base_url)).rstrip("/")
+
+
+def _checkout(db: Session, token: str) -> ShopCheckout:
+    chk = db.scalar(select(ShopCheckout).where(ShopCheckout.token == token)) if 16 <= len(token) <= 48 else None
+    if chk is None:
+        raise HTTPException(status_code=404, detail="Not found.")
+    return chk
+
+
+def start_card_payment(db: Session, chk: ShopCheckout, request: Request) -> dict:
+    """Ask Tap for a payment page. The order is already saved, so if this fails the customer can try again or
+    choose to pay on delivery from the receipt page."""
+    order = db.get(Order, chk.order_id)
+    base = _base(request)
+    try:
+        ch = payments.create_charge(chk.amount_due, order.number, f"Ceramica Nova order {order.number}", chk.name,
+                                    chk.phone, chk.email, f"{base}/api/shop/pay/return/{chk.token}",
+                                    f"{base}/api/shop/pay/tap/webhook" if base.startswith("https://") else None)
+    except payments.PaymentError as e:
+        chk.payment_status = "failed"
+        db.commit()
+        return {"payment_error": str(e)}
+    chk.provider, chk.provider_ref, chk.payment_status, chk.payment_method = "tap", ch["id"], "pending", "card"
+    db.commit()
+    return {"payment_url": ch["url"]}
+
+
+def sync_payment(db: Session, chk: ShopCheckout) -> None:
+    """Ask Tap itself what happened to the charge. Only Tap's answer, for the right amount and order, marks it paid."""
+    if chk.payment_status == "paid" or chk.provider != "tap" or not chk.provider_ref:
+        return
+    try:
+        c = payments.fetch_charge(chk.provider_ref)
+    except payments.PaymentError:
+        return
+    order = db.get(Order, chk.order_id)
+    if c["status"] == payments.PAID and c["amount"] == chk.amount_due and c["currency"] == "QAR" \
+            and c["reference"] in (None, order.number):
+        chk.payment_status, chk.paid_at, chk.card = "paid", local_now(), c["card"]
+        quote = db.get(Quote, chk.quote_id)
+        db.add(Activity(tenant_id=chk.tenant_id, lead_id=quote.lead_id, user_id=None, type="order",
+                        text=f"Paid online by card: QAR {chk.amount_due:,.2f} for {order.number} (Tap {chk.provider_ref}).",
+                        created_at=local_now()))
+        audit(db, chk.tenant_id, "shop.paid", entity="order", entity_id=order.number,
+              after={"amount": float(chk.amount_due), "provider": "tap", "charge": chk.provider_ref})
+    elif c["status"] in payments.FAILED:
+        chk.payment_status = "failed"
+    db.commit()
+
+
+@router.get("/pay/return/{token}", include_in_schema=False)
+def pay_return(token: str, tap_id: Optional[str] = None, db: Session = Depends(get_db)):
+    """Tap sends the customer back here. We check with Tap, then show the receipt."""
+    chk = _checkout(db, token)
+    if tap_id and tap_id != chk.provider_ref:
+        tap_id = None                            # a charge id that is not this order's is ignored
+    sync_payment(db, chk)
+    return RedirectResponse(f"/#/receipt/{chk.token}", status_code=303)
+
+
+@router.post("/pay/tap/webhook", include_in_schema=False)
+async def tap_webhook(request: Request, db: Session = Depends(get_db)):
+    """Tap's server-to-server notice. The body is not trusted: we only take the charge id and ask Tap again."""
+    try:
+        cid = str((await request.json()).get("id", ""))[:80]
+    except Exception:
+        return {"ok": False}
+    chk = db.scalar(select(ShopCheckout).where(ShopCheckout.provider_ref == cid)) if cid.startswith("chg_") else None
+    if chk:
+        sync_payment(db, chk)
+    return {"ok": True}
+
+
+@router.post("/receipt/{token}/pay")
+def pay_again(token: str, request: Request, db: Session = Depends(get_db)):
+    chk = _checkout(db, token)
+    if chk.kind != "order" or chk.payment_status == "paid":
+        raise HTTPException(status_code=409, detail="Nothing to pay.")
+    if db.get(Order, chk.order_id).status == "cancelled":
+        raise HTTPException(status_code=409, detail="This order was cancelled.")
+    if not payments.enabled():
+        raise HTTPException(status_code=422, detail="Card payment is not available right now.")
+    if not submit_limiter.allow(client_key(request)):
+        raise HTTPException(status_code=429, detail="Too many requests, please try again in a minute.")
+    out = start_card_payment(db, chk, request)
+    if "payment_error" in out:
+        raise HTTPException(status_code=502, detail=out["payment_error"])
+    return out
+
+
+@router.post("/receipt/{token}/on-delivery")
+def pay_on_delivery(token: str, db: Session = Depends(get_db)):
+    chk = _checkout(db, token)
+    if chk.kind != "order" or chk.payment_status == "paid":
+        raise HTTPException(status_code=409, detail="Nothing to change.")
+    sync_payment(db, chk)
+    if chk.payment_status == "paid":
+        return receipt_data(db, chk)
+    chk.payment_method, chk.payment_status = "on_delivery", "unpaid"
+    db.commit()
+    return receipt_data(db, chk)
+
+
+def receipt_data(db: Session, chk: ShopCheckout) -> dict:
+    quote = db.get(Quote, chk.quote_id)
+    order = db.get(Order, chk.order_id) if chk.order_id else None
+    lead = db.get(Lead, quote.lead_id) if quote.lead_id else None
+    tenant = db.get(Tenant, chk.tenant_id)
+    lines = []
+    for ql in quote.lines:
+        p = ql.product
+        a = p.attributes or {}
+        lines.append({"sku": p.sku, "name": p.name, "kind": p.kind, "unit": p.unit, "size_cm": a.get("size_cm"),
+                      "boxes": ql.boxes, "quantity": float(ql.quantity), "unit_price": float(ql.unit_price),
+                      "line_total": float(ql.line_total), "image": p.image})
+    return {"kind": chk.kind, "company": {"name": tenant.name, "demo": tenant.is_demo},
+            "number": order.number if order else quote.number, "quote_number": quote.number,
+            "order_status": order.status if order else None, "created_at": chk.created_at,
+            "valid_until": quote.valid_until, "salesperson": lead.owner.name.split()[0] if lead and lead.owner else None,
+            "customer": {"name": chk.name, "phone": chk.phone, "email": chk.email},
+            "address": {"area": chk.delivery_area, "zone": chk.zone, "street": chk.street, "building": chk.building,
+                        "unit": chk.unit},
+            "delivery_date": chk.delivery_date.date().isoformat() if chk.delivery_date else None,
+            "lines": lines, "subtotal": float(quote.total), "delivery_fee": float(chk.delivery_fee),
+            "total": float(chk.amount_due),
+            "payment": {"method": chk.payment_method, "status": chk.payment_status, "card": chk.card,
+                        "paid_at": chk.paid_at, "reference": chk.provider_ref, "test_mode": payments.test_mode(),
+                        "can_pay_card": payments.enabled() and chk.kind == "order" and chk.payment_status != "paid"
+                                        and (order is None or order.status != "cancelled")}}
+
+
+@router.get("/receipt/{token}")
+def receipt(token: str, db: Session = Depends(get_db)):
+    chk = _checkout(db, token)
+    if chk.payment_status in ("pending", "failed"):
+        sync_payment(db, chk)
+    return receipt_data(db, chk)
+
+
+@router.get("/receipt/{token}/pdf")
+def receipt_pdf(token: str, db: Session = Depends(get_db)):
+    from backend.receipt_pdf import build_receipt_pdf
+    chk = _checkout(db, token)
+    d = receipt_data(db, chk)
+    name = f"Ceramica-Nova-{d['number']}.pdf"
+    return Response(build_receipt_pdf(d), media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "no-store"})

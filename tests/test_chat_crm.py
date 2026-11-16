@@ -10,12 +10,18 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from backend import catalog, crm_bridge, main, shop_api
-from backend.db.database import Base, SessionLocal, engine, init_db
+from backend.db.database import Base, SessionLocal, engine, init_db, local_now
 from backend.db.models import Activity, ChatSession, Customer, DiscountRequest, Lead, Product, Quote, User
 from backend.db.seed import seed_tenant
 from backend.tools import check_inventory
 
 client = TestClient(main.app)
+
+
+def delivery_address() -> dict:
+    """What an order needs on top of a quotation: a Qatar address, a delivery day from the list and how to pay."""
+    return {"zone": "66", "street": "820", "building": "12", "unit": "Flat 4",
+            "delivery_date": shop_api.delivery_days(local_now().date())[0].isoformat(), "payment": "on_delivery"}
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -183,7 +189,7 @@ def test_shop_checkout_continues_the_chat_lead(db):
     leads_before = db.scalar(select(func.count()).select_from(Lead))
     r = client.post("/api/shop/checkout", json={
         "type": "order", "items": [{"sku": "CN010", "area_m2": 30}], "name": "Khalid Nasser", "phone": "+974 7711 2233",
-        "delivery_area": "Doha", "chat_session_id": sid, "chat_visitor_id": "USR-5550001"})
+        "delivery_area": "Doha", "chat_session_id": sid, "chat_visitor_id": "USR-5550001", **delivery_address()})
     assert r.status_code == 200 and r.json()["lead_from_chat"] is True
     db.expire_all()
     assert db.scalar(select(func.count()).select_from(Lead)) == leads_before    # same lead, no duplicate

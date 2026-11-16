@@ -262,3 +262,32 @@ class ChoiceEvent(TenantMixin, Base):
     room: Mapped[Optional[str]] = mapped_column(String(40))            # CRM room word: bathroom, kitchen...
     with_sku: Mapped[Optional[str]] = mapped_column(String(20))        # the tile on the other surface at that moment
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+
+class ShopCheckout(TenantMixin, Base):
+    """What the customer gave at the shop checkout and how they paid. Its random token is the customer's private
+    link to their receipt or quotation (order numbers are easy to guess, the token is not)."""
+    __tablename__ = "shop_checkouts"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token: Mapped[str] = mapped_column(String(48), unique=True, index=True)
+    kind: Mapped[str] = mapped_column(String(10))                       # quote | order
+    quote_id: Mapped[int] = mapped_column(ForeignKey("quotes.id"), index=True)
+    order_id: Mapped[Optional[int]] = mapped_column(ForeignKey("orders.id"), index=True)
+    name: Mapped[str] = mapped_column(String(80))
+    phone: Mapped[str] = mapped_column(String(20))
+    email: Mapped[Optional[str]] = mapped_column(String(120))
+    delivery_area: Mapped[str] = mapped_column(String(40))
+    zone: Mapped[Optional[str]] = mapped_column(String(10))              # Qatar address: zone / street / building
+    street: Mapped[Optional[str]] = mapped_column(String(60))
+    building: Mapped[Optional[str]] = mapped_column(String(20))
+    unit: Mapped[Optional[str]] = mapped_column(String(30))
+    delivery_date: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    delivery_fee: Mapped[Decimal] = mapped_column(Money, default=Decimal("0"))
+    amount_due: Mapped[Decimal] = mapped_column(Money)                  # products + delivery
+    payment_method: Mapped[Optional[str]] = mapped_column(String(20))   # card | on_delivery
+    payment_status: Mapped[str] = mapped_column(String(20), default="unpaid")   # unpaid | pending | paid | failed
+    provider: Mapped[Optional[str]] = mapped_column(String(20))         # tap
+    provider_ref: Mapped[Optional[str]] = mapped_column(String(80))     # Tap charge id (chg_...)
+    card: Mapped[Optional[str]] = mapped_column(String(40))             # e.g. "VISA •••• 1111" (never the full number)
+    paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime)

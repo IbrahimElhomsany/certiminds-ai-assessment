@@ -55,6 +55,13 @@ def build_providers():
 
 app = FastAPI(title="Ceramica Nova AI Sales API + Nova Studio admin", version="1.1")
 init_db()                      # creates missing tables; demo data comes from `python -m backend.db.seed`
+try:                           # grout, adhesive and spacers for companies seeded before they existed
+    from backend.db.database import SessionLocal as _S
+    from backend.db.seed import ensure_accessories as _ea
+    with _S() as _db:
+        _ea(_db)
+except Exception:              # never block start-up over this
+    pass
 app.include_router(admin_router)
 app.include_router(shop_router)
 app.include_router(visual_router)

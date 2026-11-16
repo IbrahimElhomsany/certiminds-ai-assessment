@@ -395,7 +395,20 @@ def order_row(db: Session, o: Order) -> dict:
             "lead": lead.number if lead else None, "lead_id": lead.id if lead else None, "customer": c.name,
             "phone": c.phone, "area": c.area, "owner": lead.owner.name if lead and lead.owner else None,
             "channel": quote.channel if quote else "staff", "status": o.status, "total": money(o.total),
-            "created_at": o.created_at, "delivered_at": o.delivered_at}
+            "created_at": o.created_at, "delivered_at": o.delivered_at, "shop": shop_info(db, o)}
+
+
+def shop_info(db: Session, o: Order) -> Optional[dict]:
+    """For orders placed in the online shop: delivery address and day, and how the customer pays."""
+    from backend.db.models import ShopCheckout
+    c = db.scalar(select(ShopCheckout).where(ShopCheckout.order_id == o.id))
+    if c is None:
+        return None
+    return {"address": f"Zone {c.zone}, Street {c.street}, Building {c.building}" + (f", {c.unit}" if c.unit else "")
+                       + f", {c.delivery_area}",
+            "delivery_date": c.delivery_date, "payment_method": c.payment_method, "payment_status": c.payment_status,
+            "amount_due": money(c.amount_due), "delivery_fee": money(c.delivery_fee), "card": c.card,
+            "paid_at": c.paid_at, "reference": c.provider_ref}
 
 
 def visible_orders(user: User):

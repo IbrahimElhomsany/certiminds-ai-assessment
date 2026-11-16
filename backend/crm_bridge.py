@@ -70,7 +70,7 @@ def refresh_catalog(force: bool = False) -> bool:
                             "price_per_m2": float(p.price), "currency": "QAR", "stock_m2": stock,
                             "largest_batch_m2": float(max(batches, default=Decimal(0)))}
                     tiles[p.sku] = cat.Product(**data)
-                else:
+                elif p.kind == "set":
                     base = _BASE_SETS.get(p.sku)
                     data = {**(base.model_dump() if base else {"description": p.name, "style": "Modern",
                                                                "rooms": ["bathroom"]}),

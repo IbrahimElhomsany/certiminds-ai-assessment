@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.auth import audit, hash_password
+from backend.accessories import ACCESSORIES
 from backend.catalog import CATALOG, SANITARY
 from backend.db.database import Base, SessionLocal, engine, init_db, local_now
 from backend.db.models import (Activity, Batch, Customer, DiscountRequest, Lead, Order, OrderLine, Product,
@@ -102,9 +103,36 @@ def seed_products(db: Session, tenant: Tenant, rng: random.Random) -> dict[str, 
             price=q2(s.price), cost_price=q2(s.price * rng.uniform(0.58, 0.66)), reorder_point=Decimal(8),
             image=SET_IMAGES.get(s.category), attributes={"finish": s.finish, "includes": s.includes,
                                                           "catalog_stock_units": s.stock_units})
+    for a in ACCESSORIES:
+        products[a["sku"]] = accessory_product(tenant, a, random.Random(a["sku"]))   # own rng: the rest of the demo stays the same
     db.add_all(products.values())
     db.flush()
     return products
+
+
+def accessory_product(tenant: Tenant, a: dict, rng: random.Random) -> Product:
+    return Product(tenant_id=tenant.id, sku=a["sku"], name=a["name"], kind="acc", category=a["group"], unit="bag",
+                   price=q2(a["price"]), cost_price=q2(a["price"] * rng.uniform(0.5, 0.6)), reorder_point=Decimal(40),
+                   image=f"/images/{a['sku']}.svg", attributes={k: v for k, v in a.items() if k in ("colour", "hex", "bag_kg", "group")}
+                   | {"catalog_stock_units": a["stock"]})
+
+
+def ensure_accessories(db: Session) -> int:
+    """Adds grout, adhesive and spacers to companies created before they existed (one batch each). Returns how many."""
+    added = 0
+    for t in db.scalars(select(Tenant)):
+        have = set(db.scalars(select(Product.sku).where(Product.tenant_id == t.id, Product.kind == "acc")))
+        for a in ACCESSORIES:
+            if a["sku"] in have:
+                continue
+            p = accessory_product(t, a, random.Random(a["sku"]))
+            db.add(p)
+            db.flush()
+            db.add(Batch(tenant_id=t.id, product_id=p.id, code=f"{a['sku']}-START", shade=None, received_at=local_now(),
+                         received_qty=Decimal(a["stock"]), qty_left=Decimal(a["stock"])))
+            added += 1
+    db.commit()
+    return added
 
 
 # ------------------------------------------------------------------ main generator

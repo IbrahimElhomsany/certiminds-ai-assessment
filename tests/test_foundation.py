@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import sessionmaker
 
 from backend import admin_api, auth, main
+from backend.accessories import BY_SKU
 from backend.catalog import CATALOG, SANITARY
 from backend.db.database import Base, SessionLocal, engine, init_db, make_engine
 from backend.db.models import (AuditLog, Batch, DiscountRequest, Lead, Order, OrderLine, Product, Quote, Tenant,
@@ -87,7 +88,8 @@ def test_no_activity_after_today(db):
 def test_stock_matches_catalog_and_never_negative(db):
     t = nova(db)
     for p in db.scalars(select(Product).where(Product.tenant_id == t.id)):
-        expected = CATALOG[p.sku].stock_m2 if p.kind == "tile" else SANITARY[p.sku].stock_units
+        expected = (CATALOG[p.sku].stock_m2 if p.kind == "tile" else SANITARY[p.sku].stock_units if p.kind == "set"
+                    else BY_SKU[p.sku]["stock"])
         assert sum(b.qty_left for b in p.batches) == Decimal(str(expected)), p.sku
         assert all(b.qty_left >= 0 and b.received_qty >= b.qty_left for b in p.batches)
 

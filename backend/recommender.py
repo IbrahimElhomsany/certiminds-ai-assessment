@@ -53,6 +53,13 @@ class Recommendation:
     estimated_subtotal: Optional[float]
     boxes: Optional[int]
     reasons: list[str] = field(default_factory=list)
+    often_with: list[str] = field(default_factory=list)      # learned: tiles customers often choose with this one
+
+
+# Learned from what customers really choose (backend/crm/picks.py), set when the catalog is loaded from the
+# database. A small bonus only: hard rules run first, and style, budget and stock weigh more.
+LEARNED_BONUS = None      # callable(req, sku) -> (points, reason) | None
+LEARNED_PAIRS = None      # callable(sku) -> [{"sku", "name", ...}]
 
 
 @dataclass
@@ -133,8 +140,14 @@ def recommend(req: CustomerRequirements, wants_cheap: bool = False, wants_luxury
             continue
         score, reasons, subtotal, boxes, status, available = score_product(
             p, req, wants_cheap, wants_luxury, req.area_m2)
+        learned = LEARNED_BONUS(req, p.sku) if LEARNED_BONUS else None
+        if learned:
+            score += learned[0]
+            if learned[1]:
+                reasons.append(learned[1])
+        with_ = [x["name"] for x in (LEARNED_PAIRS(p.sku) if LEARNED_PAIRS else [])][:2]
         recs.append(Recommendation(p.sku, p.name, round(score, 1), p.price_per_m2, p.slip_rating,
-                                   status or "NOT_CHECKED", available, subtotal, boxes, reasons))
+                                   status or "NOT_CHECKED", available, subtotal, boxes, reasons, with_))
     recs.sort(key=lambda r: (-r.score, r.price_per_m2, r.sku))     # ties broken deterministically
     return recs[:max_results], rejected
 

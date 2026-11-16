@@ -126,7 +126,16 @@ def product_detail(sku: str, tenant: Tenant = Depends(shop_tenant), db: Session 
     loc = set((p.attributes or {}).get("locations", []))
     related = sorted(others, key=lambda o: (not (loc & set((o.attributes or {}).get("locations", []))),
                                             o.category != p.category, ranks.get(o.id, 999)))[:4]
-    return {**product_out(p, ranks.get(p.id)), "related": [product_out(o, ranks.get(o.id)) for o in related]}
+    from backend.crm import picks                       # D3: learned from quotations and the visualiser
+    learned = picks.learned(db, tenant.id)["pairs"].get(p.sku, [])
+    by_sku = {o.sku: o for o in others}
+    by_sku.update({o.sku: o for o in db.scalars(select(Product).where(Product.tenant_id == tenant.id, Product.active.is_(True),
+                                                                      Product.sku.in_([x["sku"] for x in learned])))})
+    often = [{**product_out(by_sku[x["sku"]], ranks.get(by_sku[x["sku"]].id)), "together": x["together"]}
+             for x in learned if x["sku"] in by_sku]
+    shown = {o["sku"] for o in often}
+    return {**product_out(p, ranks.get(p.id)), "often_with": often,
+            "related": [product_out(o, ranks.get(o.id)) for o in related if o.sku not in shown]}
 
 
 @router.get("/options")

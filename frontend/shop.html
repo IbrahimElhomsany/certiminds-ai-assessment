@@ -405,6 +405,7 @@ async function productPage(sku) {
       </div>`}
     </div>
   </div>
+  ${p.often_with && p.often_with.length ? `<div class="sechead"><h2>Often chosen with this</h2><span class="muted" style="font-size:13px">From our customers' quotations</span></div><section class="grid" style="margin-bottom:20px">${p.often_with.map(card).join("")}</section>` : ""}
   ${p.related.length ? `<div class="sechead"><h2>You may also like</h2></div><section class="grid" style="margin-bottom:20px">${p.related.map(card).join("")}</section>` : ""}`;
 
   const out = $("#calcOut"), add = $("#add");

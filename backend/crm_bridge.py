@@ -78,6 +78,13 @@ def refresh_catalog(force: bool = False) -> bool:
                             "includes": a.get("includes", []), "price": float(p.price), "currency": "QAR",
                             "unit": "set", "stock_units": int(stock)}
                     sets[p.sku] = cat.SanitaryProduct(**data)
+            try:                                 # D3: what customers choose, for the assistant's ranking
+                from backend import recommender
+                from backend.crm import picks
+                picks.refresh_live(db, t.id)
+                recommender.LEARNED_BONUS, recommender.LEARNED_PAIRS = picks.live_bonus, picks.live_pairs
+            except Exception as e:
+                log_event("picks_refresh_failed", error=type(e).__name__)
         if tiles:
             cat.replace_catalog(tiles, sets)
         _last_refresh = time.monotonic()

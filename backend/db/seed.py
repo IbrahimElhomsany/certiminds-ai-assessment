@@ -56,6 +56,7 @@ ROOMS = {  # room: (weight, floor SKUs, wall SKUs, floor m2 range, wall m2 range
 STYLE_WORD = {"Marble": "marble look", "Luxury marble": "marble look", "Stone": "stone look", "Wood": "wood look",
               "Slate": "natural stone look", "Natural": "natural stone look", "Industrial": "concrete look"}
 SHADES = ["A1", "A2", "B1", "B2", "C1"]
+PAIRS = {"CN012": "CN007", "CN005": "CN010", "CN011": "CN013", "CN002": "CN015", "CN015": "CN008"}   # floor -> usual wall
 
 
 def q2(x) -> Decimal:
@@ -176,9 +177,11 @@ def seed_tenant(db: Session, slug: str = "ceramica-nova", name: str = "Ceramica 
             room = pick(rng, [(r, v[0]) for r, v in ROOMS.items()])
             _, floors, walls, f_rng, w_rng = ROOMS[room]
             scale = 2.2 if customer.type == "contractor" else 1
-            floor_sku = rng.choice(floors)
+            # customers do have favourites: the first tiles listed for a room are picked more often, and some
+            # floor + wall pairs go together (so "popular for bathrooms" and "often chosen together" have real patterns)
+            floor_sku = rng.choices(floors, weights=[5, 3, 2, 1, 1][:len(floors)])[0]
             floor_m2 = round(rng.uniform(*f_rng) * scale)
-            wall_sku = rng.choice(walls) if walls else None
+            wall_sku = (PAIRS[floor_sku] if PAIRS.get(floor_sku) in walls and rng.random() < 0.6 else rng.choice(walls)) if walls else None
             wall_m2 = round(rng.uniform(*w_rng) * scale) if walls else 0
             area = floor_m2 + wall_m2
             est = float(tiles[floor_sku].price) * floor_m2 * 1.1 + (float(tiles[wall_sku].price) * wall_m2 * 1.1 if wall_sku else 0)

@@ -221,6 +221,14 @@ def search_leads(stage: Optional[str] = None, source: Optional[str] = None, owne
     return {"total": total, "items": [{**lead_row(l, now), "win": wins.get(l.id)} for l in rows], "stage_counts": counts}
 
 
+@router.get("/choices")
+def choices_card(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """D3: what customers choose per room and which tiles go together, learned from quotes, orders and the visualiser."""
+    need_any(user, "inventory.view", "leads.view_all")
+    from backend.crm import picks
+    return picks.summary(db, user.tenant_id)
+
+
 @router.get("/winchance")
 def win_chance_card(user: User = Depends(current_user), db: Session = Depends(get_db)):
     """How the win chance works for this company: what it learned from and how it did on leads it had not seen."""

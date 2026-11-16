@@ -950,7 +950,19 @@ async function inventoryView(p) {
         <td class="right num">${qar(s.price, 2)}<span class="muted small">/${s.unit === "m2" ? "m²" : "set"}</span></td>
         <td class="right num">${num(s.stock, 1)} ${s.unit === "m2" ? "m²" : ""}</td><td class="right num">${num(s.largest_batch, 1)}</td>
         <td class="right">${s.batches}</td><td class="right">${num(s.sold_per_day, 1)}</td>
-        <td class="right">${s.days_of_stock != null ? num(s.days_of_stock) : "-"}</td><td><span class="tag ${s.status}">${label(s.status)}</span></td></tr>`).join("")}</table></div></div>`;
+        <td class="right">${s.days_of_stock != null ? num(s.days_of_stock) : "-"}</td><td><span class="tag ${s.status}">${label(s.status)}</span></td></tr>`).join("")}</table></div></div>
+    ${await choicesCard()}`;
+}
+async function choicesCard() {
+  let c; try { c = await api("/choices"); } catch (e) { return ""; }
+  if (!c.rooms.length) return "";
+  return `<div class="card"><div class="head"><h2 class="grow">What customers choose</h2>${c.demo ? `<span class="tag pending">Learned from demo data</span>` : ""}</div>
+    <p class="small" style="margin:0 0 10px">Counted from this company's quotations (a won order counts double) and from tiles visitors added to their project in the room visualiser
+    (${num(c.events)} so far, half weight). Ceramica Nova AI uses it as a small bonus when it suggests tiles: safety rules, style, budget and stock still come first.</p>
+    <div class="grid row2"><div class="tablewrap"><table><tr><th>Room</th><th>Chosen most</th></tr>
+      ${c.rooms.map(r => `<tr><td class="nowrap">${esc(label(r.room))}<br><span class="muted small">${num(r.projects)} quotations${r.enough ? "" : " · too few to use"}</span></td>
+        <td class="small">${r.top.map(t => `${esc(t.name)} <span class="muted">(in ${num(t.chosen)} quotes${t.bought ? `, ${num(t.bought)} bought` : ""}${t.liked ? `, ${num(t.liked)} added in the visualiser` : ""})</span>`).join("<br>")}</td></tr>`).join("")}</table></div>
+    <div><b class="small">Often chosen together</b>${c.pairs.length ? `<ul class="why">${c.pairs.map(p => `<li>${esc(p.a)} + ${esc(p.b)} <span class="muted">· ${num(p.together)} times, ${p.lift}× more than chance</span></li>`).join("")}</ul>` : `<div class="muted small">Not enough yet.</div>`}</div></div></div>`;
 }
 
 async function productView(sku) {

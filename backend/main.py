@@ -33,6 +33,7 @@ from backend.admin_api import router as admin_router                 # noqa: E40
 from backend.shop_api import router as shop_router                   # noqa: E402
 from backend.visual import router as visual_router                   # noqa: E402
 from backend.worlds import router as worlds_router                   # noqa: E402
+from backend.crm.picks import router as picks_router
 from backend.db.database import init_db                               # noqa: E402
 
 
@@ -58,6 +59,7 @@ app.include_router(admin_router)
 app.include_router(shop_router)
 app.include_router(visual_router)
 app.include_router(worlds_router)
+app.include_router(picks_router)
 gateway = LLMGateway(build_providers(), timeout_s=float(os.getenv("LLM_TIMEOUT_S", "30")),
                      cache=TTLCache(ttl_seconds=3600), prompt_version=PROMPT_VERSION)
 agent_client = None

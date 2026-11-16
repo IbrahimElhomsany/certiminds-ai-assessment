@@ -249,3 +249,16 @@ class AuditLog(TenantMixin, Base):
     before: Mapped[Optional[dict]] = mapped_column(JSON)
     after: Mapped[Optional[dict]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+
+
+class ChoiceEvent(TenantMixin, Base):
+    """A tile a visitor tried on or added to their project in the room visualiser (anonymous: a random browser id,
+    never a person). Used with quotes and orders to learn what customers really choose (D3)."""
+    __tablename__ = "choice_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    visitor_id: Mapped[str] = mapped_column(String(40), index=True)
+    sku: Mapped[str] = mapped_column(String(20), index=True)
+    kind: Mapped[str] = mapped_column(String(10))                      # tried | added
+    room: Mapped[Optional[str]] = mapped_column(String(40))            # CRM room word: bathroom, kitchen...
+    with_sku: Mapped[Optional[str]] = mapped_column(String(20))        # the tile on the other surface at that moment
+    created_at: Mapped[datetime] = mapped_column(DateTime, index=True)

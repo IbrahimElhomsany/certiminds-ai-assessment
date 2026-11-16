@@ -381,11 +381,32 @@ function renderPbar(room, surf, p, unfit) {
   $("pbar").innerHTML = `<img src="${p.image || BLANK}" alt="">
     <div class="nm"><b>${esc(p.name)}</b><small>${SURF[surf]} · ${esc(p.size_cm)} cm · ${esc(cap(p.finish))}${area}</small><div>${tag}<button class="linkbtn" type="button" data-specs="${p.sku}">Specs</button></div></div>
     <div class="pr">${money(p.price)}<small>per m²</small></div>
-    <button class="btn ${inProj ? "ghost" : ""}" type="button" data-addproj="${surf}">${inProj ? "✓ In your project" : "Add to project"}</button>`;
+    <button class="btn ${inProj ? "ghost" : ""}" type="button" data-addproj="${surf}">${inProj ? "✓ In your project" : "Add to project"}</button>
+    <div class="pairtip" id="pairtip" hidden></div>`;
+  // learned from customers: a tile for the OTHER surface that is often chosen with this one
+  const other = surf === "floor" ? "wall" : "floor";
+  if (room.surfaces[other]) pairsFor(p.sku).then(list => {
+    const tip = $("pairtip"); if (!tip || S.vis[surf] !== p.sku) return;
+    const m = list.find(x => fits(x.sku, other) && tileOkInRoom(x.sku, room) && S.vis[other] !== x.sku);
+    if (!m) return;
+    tip.innerHTML = `Often chosen with this: <b>${esc(m.name)}</b> on the ${other} <span>(chosen together ${m.together} times)</span> <button class="linkbtn" type="button" data-pairtry="${m.sku}" data-pairsurf="${other}">Try it</button>`;
+    tip.hidden = false;
+  });
+}
+// D3: tell the shop which tiles people try and choose (anonymous browser id), so suggestions learn from it
+function choice(sku, kind, withSku) {
+  try { fetch("/api/v1/choices", { method: "POST", headers: { "Content-Type": "application/json", "X-User-Id": USER_ID },
+    body: JSON.stringify({ sku, kind, room: curRoom().id, with_sku: withSku || null }), keepalive: true }).catch(() => {}); } catch (e) {}
+}
+const PAIRS = {};
+async function pairsFor(sku) {
+  if (!(sku in PAIRS)) { PAIRS[sku] = []; try { PAIRS[sku] = (await (await fetch(`/api/v1/choices/pairs/${encodeURIComponent(sku)}`)).json()).often_with || []; } catch (e) {} }
+  return PAIRS[sku];
 }
 function addToProject(surf) {
   const sku = S.vis[surf]; if (!fits(sku, surf)) return false;
   S.proj[surf].sku = sku;
+  choice(sku, "added", S.proj[surf === "floor" ? "wall" : "floor"].sku);
   if (curRoom().id === "own" && surf === "floor" && S.own.areaM2 && !S.proj.floor.area) S.proj.floor.area = Math.round(S.own.areaM2 * 10) / 10;
   if (curRoom().id === "own" && surf === "wall" && S.own.wallM2 && !S.proj.wall.area) S.proj.wall.area = Math.round(S.own.wallM2 * 10) / 10;
   save(); return true;
@@ -900,7 +921,8 @@ document.addEventListener("click", e => {
   else if (d.mt) { mtool = d.mt; document.querySelectorAll("#mtool button").forEach(b => b.classList.toggle("on", b === t)); }
   else if (d.mz) { msize = +d.mz; document.querySelectorAll("#msize button").forEach(b => b.classList.toggle("on", b === t)); }
   else if (t.closest("#vsurf") && d.s) { S.vis.surface = d.s; save(); renderVisControls(); }
-  else if (d.vt !== undefined) { S.vis[S.vis.surface] = d.vt || null; if (d.vt) S.selected = d.vt; visChanged(); }
+  else if (d.vt !== undefined) { S.vis[S.vis.surface] = d.vt || null; if (d.vt) { S.selected = d.vt; choice(d.vt, "tried"); } visChanged(); }
+  else if (d.pairtry) { S.vis.surface = d.pairsurf; S.vis[d.pairsurf] = d.pairtry; S.selected = d.pairtry; choice(d.pairtry, "tried"); visChanged(); }
   else if (d.l !== undefined) { S.vis.opt[S.vis.surface].layout = +d.l; visChanged(); }
   else if (d.gc) { S.vis.groutColor = d.gc; visChanged(); }
   else if (d.w) { S.vis.grout = +d.w; visChanged(); }

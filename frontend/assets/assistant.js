@@ -992,11 +992,21 @@ const sw = $("tswitch");
 const toggleTech = () => { document.body.classList.toggle("tech"); sw.setAttribute("aria-checked", document.body.classList.contains("tech")); };
 sw.onclick = toggleTech; sw.onkeydown = e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleTech(); } };
 $("f").onsubmit = e => { e.preventDefault(); send($("q").value); };
+$("cbForm").oninput = e => { if (e.target.classList.contains("invalid")) { e.target.classList.remove("invalid"); e.target.nextElementSibling?.classList.contains("ferr") && e.target.nextElementSibling.remove(); } };
 $("cbForm").onsubmit = async e => {
   e.preventDefault();
   const msg = $("cbMsg"), name = $("cbName").value.trim(), phone = $("cbPhone").value.trim();
   if (!S.sessionId) { msg.innerHTML = 'Tell <a href="#/chat">Nova</a> a little about your project first, so the salesperson has the details.'; return; }
-  if (name.length < 2 || (phone.match(/\d/g) || []).length < 8) { msg.textContent = "Please enter your name and a valid mobile number."; return; }
+  document.querySelectorAll("#cbForm .ferr").forEach(x => x.remove());
+  document.querySelectorAll("#cbForm .invalid").forEach(x => { x.classList.remove("invalid"); x.removeAttribute("aria-invalid"); });
+  const bad = [];
+  if (name.length < 2) bad.push([$("cbName"), "Please enter your name."]);
+  if ((phone.match(/\d/g) || []).length < 8 || /[^\d+\s()-]/.test(phone)) bad.push([$("cbPhone"), "Please enter a valid mobile number, e.g. +974 5555 1234."]);
+  if (bad.length) {                       // the message sits right under the box it belongs to, in red
+    bad.forEach(([el, m]) => { el.classList.add("invalid"); el.setAttribute("aria-invalid", "true");
+      const d = document.createElement("div"); d.className = "ferr"; d.textContent = m; el.insertAdjacentElement("afterend", d); });
+    bad[0][0].focus(); msg.textContent = ""; return;
+  }
   $("cbSend").disabled = true;
   try {
     const r = await fetch("/api/v1/chat/callback", { method: "POST", headers: { "Content-Type": "application/json" },

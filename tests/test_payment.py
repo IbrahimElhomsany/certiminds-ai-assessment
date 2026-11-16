@@ -119,11 +119,24 @@ def test_suggests_grout_adhesive_and_spacers_for_the_tiles():
     assert not any(x["reason"] == "grout" for x in s2)
 
 
-def test_accessories_stay_out_of_the_main_product_list_but_can_be_bought():
-    assert not any(p["kind"] == "acc" for p in client.get("/api/shop/products").json()["products"])
-    assert len(client.get("/api/shop/products?kind=acc").json()["products"]) == 6
+def test_accessories_have_their_own_category_and_can_be_bought():
+    acc = client.get("/api/shop/products?kind=acc").json()["products"]
+    assert len(acc) == 6 and all(p["unit"] == "bag" for p in acc)
+    assert any(p["sku"] == "GR01" for p in client.get("/api/shop/products?q=grout").json()["products"])
+    assert not any(p["kind"] == "acc" for p in client.get("/api/shop/products?kind=tile").json()["products"])
     cart = client.post("/api/shop/cart/price", json={"items": TILES + [{"sku": "AD01", "quantity": 2}]}).json()
     assert cart["lines"][1]["unit"] == "bag" and cart["lines"][1]["line_total"] == 96.0
+
+
+def test_product_page_works_out_how_many_bags():
+    g = client.get("/api/shop/products/GR02/estimate?area_m2=24&size_cm=60x60").json()
+    assert g["quantity"] == 1 and "kg" in g["why"] and g["line_total"] == 32.0
+    a = client.get("/api/shop/products/AD01/estimate?area_m2=24&size_cm=60x60").json()
+    assert a["quantity"] == 6                                              # 4 kg/m2 x 24 m2 x 1.1 spare / 20 kg
+    assert client.get("/api/shop/products/AD01/estimate?area_m2=24&size_cm=60x120").json()["quantity"] == 8   # bigger tiles: 5.5 kg/m2
+    assert client.get("/api/shop/products/SP01/estimate?area_m2=24&size_cm=60x60").json()["quantity"] == 3
+    assert client.get("/api/shop/products/CN001/estimate?area_m2=24&size_cm=60x60").status_code == 404
+    assert client.get("/api/shop/products/GR01/estimate?area_m2=24&size_cm=big").status_code == 422
 
 
 # ------------------------------------------------------------------ pay on delivery and the receipt

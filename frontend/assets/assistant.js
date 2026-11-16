@@ -1,4 +1,4 @@
-/* Ceramica Nova AI: the customer assistant, as three steps that share one project.
+/* Ceramica Nova AI: the customer assistant, as three sections (any order) that share one project.
  *   #/chat     Find my tiles   – talk to Nova (the LLM agent); its suggestions land in "Your tiles".
  *   #/visual   See it in a room – the tile visualiser (assets/visualiser.js) on sample rooms.
  *   #/project  Plan my project  – areas, boxes, waste, stock and price from the server, then PDF / cart / order.
@@ -57,12 +57,12 @@ function route() {
   window.scrollTo(0, 0);
 }
 function renderSteps() {
-  const done = { chat: S.recs.length > 0 || !!S.selected, visual: !!(S.vis.floor || S.vis.wall), project: !!S.quote };
+  // Three sections the customer can use in any order: only the one they are on is highlighted (no numbers or ticks,
+  // which suggested an order and steps "done" that the customer never went through).
   document.querySelectorAll("#steps a").forEach(a => {
-    const p = a.dataset.p, now = document.body.dataset.step === p;
-    a.classList.toggle("now", now); a.classList.toggle("done", !now && done[p]);
-    a.querySelector(".dot").textContent = !now && done[p] ? "✓" : { chat: 1, visual: 2, project: 3 }[p];
-    if (now) a.setAttribute("aria-current", "step"); else a.removeAttribute("aria-current");
+    const now = document.body.dataset.step === a.dataset.p;
+    a.classList.toggle("now", now);
+    if (now) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
   });
   let n = 0; try { n = (JSON.parse(localStorage.getItem("nova_cart_v1")) || []).length; } catch {}
   $("cartCount").hidden = !n; $("cartCount").textContent = n;

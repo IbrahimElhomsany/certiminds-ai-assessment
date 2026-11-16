@@ -156,6 +156,7 @@
   .done { max-width:640px; margin:48px auto; text-align:center; }
   /* complete your project */
   [hidden] { display:none !important; }
+  .howmany { margin:0 0 12px; font-size:14px; } .howmany summary { cursor:pointer; color:var(--accent); font-weight:500; margin-bottom:8px; }
   .extras { display:grid; gap:12px; }
   .xcard { display:grid; grid-template-columns:72px 1fr auto; gap:14px; align-items:center; border:1px solid var(--line); border-radius:14px; padding:12px; }
   .xcard img { width:72px; height:72px; border-radius:10px; object-fit:cover; background:var(--soft); }
@@ -236,6 +237,7 @@
       <a href="#/shop?kind=tile&surface=wall" data-k="wall">Wall tiles</a>
       <a href="#/shop?kind=tile&location=outdoor" data-k="outdoor">Outdoor</a>
       <a href="#/shop?kind=set" data-k="set">Bathroom sets</a>
+      <a href="#/shop?kind=acc" data-k="acc">Grout &amp; adhesive</a>
     </nav>
     <form class="search" id="searchForm" role="search">
       <svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
@@ -249,6 +251,7 @@
     <a href="#/shop?kind=tile&surface=wall" data-k="wall">Wall tiles</a>
     <a href="#/shop?kind=tile&location=outdoor" data-k="outdoor">Outdoor</a>
     <a href="#/shop?kind=set" data-k="set">Bathroom sets</a>
+    <a href="#/shop?kind=acc" data-k="acc">Grout &amp; adhesive</a>
     <a href="#/shop" data-k="all">All products</a>
   </nav>
 </header>
@@ -264,7 +267,7 @@
       <small>Demo store: products, prices and stock are demonstration data.</small>
     </div>
     <div>
-      <a href="#/shop?kind=tile">All tiles</a><a href="#/shop?kind=set">Bathroom sets</a><a href="/assistant">Ceramica Nova AI</a><a href="#/cart">Cart</a>
+      <a href="#/shop?kind=tile">All tiles</a><a href="#/shop?kind=set">Bathroom sets</a><a href="#/shop?kind=acc">Grout &amp; adhesive</a><a href="/assistant">Ceramica Nova AI</a><a href="#/cart">Cart</a>
       <a href="/admin" rel="nofollow" title="For Ceramica Nova staff">Staff login</a>
     </div>
   </div>
@@ -313,6 +316,7 @@ function addToCart(item) {
 // ---------------------------------------------------------------- shared bits
 function availTag(a) { return `<span class="tag ${a === "In stock" ? "ok" : a === "Low stock" ? "low" : "out"}">${esc(a)}</span>`; }
 function subtitle(p) {
+  if (p.kind === "acc") return esc(cap(p.group)) + (p.colour ? ` · ${esc(cap(p.colour))}` : "") + (p.bag_kg ? ` · ${p.bag_kg} kg bag` : "");
   return p.kind === "tile" ? `${esc(p.size_cm)} cm · ${esc(cap(p.finish))} · ${esc(cap((p.locations || []).join(" & ")))}` : esc(cap(p.finish));
 }
 function card(p) {
@@ -320,7 +324,7 @@ function card(p) {
     <div class="img"><img src="${esc(p.image || IMG_BLANK)}" alt="${esc(p.name)}" loading="lazy" onerror="this.src='${IMG_BLANK}'">
       ${p.best_seller_rank && p.best_seller_rank <= 3 ? '<span class="tag best">Best seller</span>' : ""}</div>
     <div class="body"><b>${esc(p.name)}</b><small>${subtitle(p)}</small>
-      <div class="row"><span class="price">${money(p.price)} <span>/ ${p.unit === "m2" ? "m²" : "set"}</span></span>${availTag(p.availability)}</div>
+      <div class="row"><span class="price">${money(p.price)} <span>/ ${p.unit === "m2" ? "m²" : unitWord(p)}</span></span>${availTag(p.availability)}</div>
     </div></a>`;
 }
 const unitWord = l => l.unit === "bag" ? "bag" : "set";
@@ -370,14 +374,14 @@ async function home() {
 }
 
 const FILTERS = [
-  ["kind", "Product", [["tile", "Tiles"], ["set", "Bathroom sets"]]],
+  ["kind", "Product", [["tile", "Tiles"], ["set", "Bathroom sets"], ["acc", "Grout & adhesive"]]],
   ["location", "Use", [["indoor", "Indoor"], ["outdoor", "Outdoor"]]],
   ["surface", "Surface", [["floor", "Floor"], ["wall", "Wall"]]],
 ];
 async function listing(params) {
   const k = params.get("kind"), loc = params.get("location"), surf = params.get("surface");
-  setNav(k === "set" ? "set" : loc === "outdoor" ? "outdoor" : surf === "wall" ? "wall" : surf === "floor" ? "floor" : null);
-  const title = params.get("q") ? `Results for “${esc(params.get("q"))}”` : k === "set" ? "Bathroom sets" : loc === "outdoor" ? "Outdoor tiles"
+  setNav(k === "set" ? "set" : k === "acc" ? "acc" : loc === "outdoor" ? "outdoor" : surf === "wall" ? "wall" : surf === "floor" ? "floor" : null);
+  const title = params.get("q") ? `Results for “${esc(params.get("q"))}”` : k === "set" ? "Bathroom sets" : k === "acc" ? "Grout, adhesive and spacers" : loc === "outdoor" ? "Outdoor tiles"
     : surf === "wall" ? "Wall tiles" : surf === "floor" ? "Floor tiles" : "All products";
   const qs = new URLSearchParams([...params].filter(([, v]) => v));
   const { products } = await api("/api/shop/products?" + qs);
@@ -385,7 +389,7 @@ async function listing(params) {
   app.innerHTML = `
   <div class="listing">
     <aside class="filters">
-      ${FILTERS.filter(([key]) => key === "kind" || k !== "set").map(([key, label, opts]) => `<h3>${label}</h3><div class="chips">
+      ${FILTERS.filter(([key]) => key === "kind" || (k !== "set" && k !== "acc")).map(([key, label, opts]) => `<h3>${label}</h3><div class="chips">
         ${opts.map(([v, l]) => `<a class="chip ${params.get(key) === v ? "on" : ""}" href="${link(key, v)}">${l}</a>`).join("")}</div>`).join("")}
       ${[...params.keys()].some(x => x !== "sort") ? `<h3></h3><a class="link" href="#/shop">Clear filters</a>` : ""}
     </aside>
@@ -404,22 +408,25 @@ async function listing(params) {
 async function productPage(sku) {
   const p = await api("/api/shop/products/" + encodeURIComponent(sku));
   $("#bubble").href = "/assistant?sku=" + encodeURIComponent(p.sku);
-  setNav(p.kind === "set" ? "set" : null);
+  setNav(p.kind === "set" ? "set" : p.kind === "acc" ? "acc" : null);
+  const acc = p.kind === "acc", word = unitWord(p);
   const inCart = getCart().find(i => i.sku === p.sku);
   const specs = p.kind === "tile"
     ? [["Size", `${p.size_cm} cm`], ["Material", cap(p.material)], ["Finish", cap(p.finish)], ["Use", cap(p.surfaces.join(" and "))],
        ["Indoor / outdoor", cap(p.locations.join(" and "))], ["Slip rating", p.slip_rating || "Wall use only"], ["Style", p.category],
        ["Box", `${p.tiles_per_box} tiles = ${Number(p.box_m2).toFixed(2)} m²`], ["Product code", p.sku]]
+    : acc ? [["Type", cap(p.group)], ...(p.colour ? [["Colour", cap(p.colour)]] : []), ...(p.bag_kg ? [["Bag", `${p.bag_kg} kg`]] : []),
+             ...(p.group === "spacers" ? [["Bag", "250 spacers, 3 mm"]] : []), ["Product code", p.sku]]
     : [["Includes", p.includes.map(cap).join(", ")], ["Finish", cap(p.finish)], ["Type", cap(p.category)], ["Product code", p.sku]];
   app.innerHTML = `
-  <div class="crumbs"><a href="#/">Home</a> / <a href="#/shop?kind=${p.kind}">${p.kind === "tile" ? "Tiles" : "Bathroom sets"}</a> / ${esc(p.name)}</div>
+  <div class="crumbs"><a href="#/">Home</a> / <a href="#/shop?kind=${p.kind}">${p.kind === "tile" ? "Tiles" : acc ? "Grout & adhesive" : "Bathroom sets"}</a> / ${esc(p.name)}</div>
   <div class="pdp">
     <div class="photo"><img src="${esc(p.image || IMG_BLANK)}" alt="${esc(p.name)}" onerror="this.src='${IMG_BLANK}'"></div>
     <div>
-      <small class="muted">${esc(p.kind === "tile" ? p.category + " look" : "Bathroom set")}</small>
+      <small class="muted">${esc(p.kind === "tile" ? p.category + " look" : acc ? cap(p.group) : "Bathroom set")}</small>
       <h1>${esc(p.name)}</h1>
       <div>${availTag(p.availability)} ${p.best_seller_rank && p.best_seller_rank <= 3 ? '<span class="tag best">Best seller</span>' : ""}</div>
-      <div class="big">${money(p.price)} <span>per ${p.unit === "m2" ? "m²" : "set"}</span></div>
+      <div class="big">${money(p.price)} <span>per ${p.unit === "m2" ? "m²" : word}</span></div>
       <table class="specs">${specs.map(([a, b]) => `<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join("")}</table>
       ${p.kind === "tile" ? `
       <div class="calc">
@@ -433,9 +440,13 @@ async function productPage(sku) {
       </div>` : `
       <div class="calc">
         <h3>Quantity</h3>
+        ${acc ? `<details class="howmany"><summary>Not sure how many ${word}s? Work it out</summary>
+          <div class="inputs"><div><label for="earea">Area to tile (m²)</label><input class="f" id="earea" type="number" min="0.5" step="0.5" placeholder="e.g. 24"></div>
+          <div><label for="esize">Tile size</label><select id="esize">${["30x30", "30x60", "60x60", "60x120", "80x80", "120x120", "20x120"].map(z => `<option value="${z}" ${z === "60x60" ? "selected" : ""}>${z.replace("x", " × ")} cm</option>`).join("")}</select></div></div>
+          <div class="muted" id="eout" style="font-size:13px;margin-top:8px"></div></details>` : ""}
         <div class="qty"><button type="button" id="minus" aria-label="Less">−</button><input id="units" type="number" min="1" max="200" value="${inCart ? inCart.quantity : 1}" aria-label="Quantity"><button type="button" id="plus" aria-label="More">+</button></div>
         <div id="calcOut"></div>
-        <div class="addrow"><button class="btn" id="add">${inCart ? "Update cart" : "Add to cart"}</button><a class="btn ghost" href="/assistant?sku=${encodeURIComponent(p.sku)}">Ask Ceramica Nova AI</a></div>
+        <div class="addrow"><button class="btn" id="add">${inCart ? "Update cart" : "Add to cart"}</button>${acc ? "" : `<a class="btn ghost" href="/assistant?sku=${encodeURIComponent(p.sku)}">Ask Ceramica Nova AI</a>`}</div>
       </div>`}
     </div>
   </div>
@@ -457,7 +468,7 @@ async function productPage(sku) {
       const { lines: [l] } = await api("/api/shop/cart/price", { items: [item] });
       out.innerHTML = p.kind === "tile" ? `
         <div class="result"><div><span>Boxes</span><b>${l.boxes}</b></div><div><span>You get</span><b>${l.quantity_m2} m²</b></div><div><span>Price</span><b>${money(l.line_total)}</b></div></div>
-        ${batchNote(l)}` : `<div class="result" style="grid-template-columns:1fr 1fr"><div><span>Sets</span><b>${l.quantity}</b></div><div><span>Price</span><b>${money(l.line_total)}</b></div></div>`;
+        ${batchNote(l)}` : `<div class="result" style="grid-template-columns:1fr 1fr"><div><span>${cap(word)}s</span><b>${l.quantity}</b></div><div><span>Price</span><b>${money(l.line_total)}</b></div></div>`;
       add.disabled = false;
     } catch (e) { out.innerHTML = `<div class="err">${esc(e.message)}</div>`; add.disabled = true; }
   }
@@ -467,9 +478,23 @@ async function productPage(sku) {
     $("#units").oninput = later;
     $("#minus").onclick = () => { $("#units").value = Math.max(1, (+$("#units").value || 1) - 1); price(); };
     $("#plus").onclick = () => { $("#units").value = Math.min(200, (+$("#units").value || 1) + 1); price(); };
+    if (acc) {
+      let et = null;
+      const est = async () => {
+        const area = parseFloat($("#earea").value);
+        if (!(area > 0)) { $("#eout").textContent = ""; return; }
+        try {
+          const e = await api(`/api/shop/products/${encodeURIComponent(p.sku)}/estimate?area_m2=${area}&size_cm=${$("#esize").value}`);
+          $("#eout").textContent = e.why + " We set the quantity for you.";
+          $("#units").value = e.quantity; price();
+        } catch (ex) { $("#eout").textContent = ex.message; }
+      };
+      $("#earea").oninput = () => { clearTimeout(et); et = setTimeout(est, 300); };
+      $("#esize").onchange = est;
+    }
   }
   add.onclick = () => { if (!item) return; addToCart(item); add.textContent = "Added ✓"; setTimeout(() => location.hash = "#/cart", 350); };
-  if (inCart || p.kind === "set") price();
+  if (inCart || p.kind !== "tile") price();
 }
 
 function batchNote(l) {

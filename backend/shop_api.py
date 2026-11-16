@@ -8,6 +8,7 @@ Rules:
 - Every request or order becomes a customer + lead in Nova Studio, assigned to a salesperson.
 """
 import os
+import math
 import secrets
 from datetime import date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
@@ -106,8 +107,6 @@ def list_products(kind: Optional[Literal["tile", "set", "acc"]] = None, location
         a = p.attributes or {}
         if kind and p.kind != kind:
             continue
-        if not kind and p.kind == "acc":           # grout and adhesive are offered at checkout, not in the main list
-            continue
         if location and location not in a.get("locations", []):
             continue
         if surface and surface not in a.get("surfaces", []):
@@ -119,6 +118,32 @@ def list_products(kind: Optional[Literal["tile", "set", "acc"]] = None, location
     keys = {"popular": lambda x: (x["best_seller_rank"] or 999, x["name"]), "price_asc": lambda x: x["price"],
             "price_desc": lambda x: -x["price"], "name": lambda x: x["name"]}
     return {"currency": "QAR", "products": sorted(out, key=keys[sort])}
+
+
+@router.get("/products/{sku}/estimate")
+def accessory_estimate(sku: str, area_m2: float = Query(gt=0, le=5000), size_cm: str = Query(pattern=r"^\d{2,3}x\d{2,3}$"),
+                       tenant: Tenant = Depends(shop_tenant), db: Session = Depends(get_db)):
+    """How many bags of a grout, adhesive or spacers for an area of tiles of a given size (same rules as checkout)."""
+    from backend import accessories
+    p = db.scalar(select(Product).where(Product.tenant_id == tenant.id, Product.sku == sku.strip().upper(),
+                                        Product.kind == "acc", Product.active.is_(True)))
+    if p is None or p.sku not in accessories.BY_SKU:
+        raise HTTPException(status_code=404, detail="Product not found.")
+    w, l = map(int, size_cm.split("x"))
+    a = accessories.BY_SKU[p.sku]
+    if a["group"] == "grout":
+        kg = accessories.grout_kg_per_m2(w, l) * area_m2
+        n = accessories.bags(kg, a["bag_kg"])
+        why = (f"About {kg:.1f} kg for {area_m2:g} m² of {size_cm} cm tiles with {accessories.JOINT_MM} mm joints, "
+               f"so {n} bag{'s' if n > 1 else ''} with spare.")
+    elif a["group"] == "adhesive":
+        per = accessories.adhesive_kg_per_m2(w, l)
+        n = accessories.bags(per * area_m2, a["bag_kg"])
+        why = f"About {per:g} kg per m² for {size_cm} cm tiles, so {per * area_m2:.0f} kg for {area_m2:g} m²: {n} bag{'s' if n > 1 else ''}."
+    else:
+        n = max(1, math.ceil(area_m2 / 10))
+        why = f"About one bag per 10 m², so {n} bag{'s' if n > 1 else ''} for {area_m2:g} m²."
+    return {"sku": p.sku, "quantity": n, "why": why, "line_total": float(q2(p.price * n))}
 
 
 @router.get("/products/{sku}")

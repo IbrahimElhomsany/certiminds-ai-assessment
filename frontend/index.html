@@ -31,9 +31,8 @@
   .brand .product small { display:block; font-size:10.5px; letter-spacing:.16em; color:var(--gold); }
   .steps { margin:0 auto; display:flex; gap:4px; padding:5px; background:var(--cream); border-radius:99px; list-style:none; }
   .steps a { display:flex; align-items:center; gap:8px; padding:6px 14px; border-radius:99px; font-weight:500; color:var(--muted); white-space:nowrap; text-decoration:none; font-size:13px; }
-  .steps a .dot { width:20px; height:20px; border-radius:50%; border:1.5px solid #c9c4ba; display:grid; place-items:center; font-size:11px; font-weight:600; }
-  .steps a.done { color:var(--ink); } .steps a.done .dot { background:var(--green-2); border-color:var(--green-2); color:#fff; }
-  .steps a.now { background:var(--ink); color:#fff; } .steps a.now .dot { border-color:#fff; }
+  .steps a .dot { display:grid; place-items:center; } .steps a .dot .ico { width:16px; height:16px; }
+  .steps a.now { background:var(--ink); color:#fff; }
   .steps a:hover:not(.now) { color:var(--ink); }
   .hright { display:flex; align-items:center; gap:12px; flex:none; }
   .iconbtn { position:relative; width:38px; height:38px; border-radius:50%; border:1px solid var(--line); background:#fff; display:grid; place-items:center; color:var(--ink); }
@@ -68,7 +67,6 @@
   .choice { display:flex; flex-direction:column; text-decoration:none; color:inherit; border:1px solid var(--line); border-radius:20px; overflow:hidden; background:#fff; transition:box-shadow .2s, transform .2s, border-color .2s; }
   .choice:hover { border-color:var(--ink); box-shadow:0 14px 34px rgba(0,0,0,.08); transform:translateY(-2px); }
   .choice .img { aspect-ratio:16/10; background:#eee center/cover no-repeat; position:relative; }
-  .choice .num { position:absolute; top:12px; left:12px; width:30px; height:30px; border-radius:50%; background:#fff; color:var(--ink); display:grid; place-items:center; font-weight:700; box-shadow:0 2px 8px rgba(0,0,0,.15); }
   .choice .body { padding:16px 18px 18px; display:flex; flex-direction:column; gap:6px; flex:1; }
   .choice b { font-size:17px; color:var(--ink); }
   .choice p { margin:0; color:var(--muted); font-size:13px; }
@@ -370,10 +368,10 @@
     <span class="sep"></span>
     <span class="product"><b>AI CONCIERGE</b><small>DESIGN &amp; QUOTATIONS</small></span>
   </a>
-  <nav class="steps" id="steps" aria-label="Steps">
-    <a href="#/chat" data-p="chat"><span class="dot">1</span><span class="lbl">Find my tiles</span></a>
-    <a href="#/visual" data-p="visual"><span class="dot">2</span><span class="lbl">See it in a room</span></a>
-    <a href="#/project" data-p="project"><span class="dot">3</span><span class="lbl">Plan my project</span></a>
+  <nav class="steps" id="steps" aria-label="Sections">
+    <a href="#/chat" data-p="chat"><span class="dot"><svg class="ico" viewBox="0 0 24 24"><path d="M21 12a8 8 0 01-11.6 7.1L4 20l1-4.6A8 8 0 1121 12z"/></svg></span><span class="lbl">Find my tiles</span></a>
+    <a href="#/visual" data-p="visual"><span class="dot"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 16l5-5 4 4 3-3 6 6"/></svg></span><span class="lbl">See it in a room</span></a>
+    <a href="#/project" data-p="project"><span class="dot"><svg class="ico" viewBox="0 0 24 24"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4M9 13h6M9 17h6"/></svg></span><span class="lbl">Plan my project</span></a>
   </nav>
   <div class="hright">
     <a class="shoplink" href="/">&larr; Back to the shop</a>
@@ -384,15 +382,15 @@
 <!-- START -->
 <main class="page start" id="pStart">
   <h1>How would you like to start?</h1>
-  <p>Pick one. You can move between the steps at any time, and nothing you choose is lost.</p>
+  <p>Start wherever you like. Switch between them at any time, and nothing you choose is lost.</p>
   <div class="choices">
-    <a class="choice" href="#/chat"><div class="img" style="background-image:url('/images/CN006.jpg')"><span class="num">1</span></div>
+    <a class="choice" href="#/chat"><div class="img" style="background-image:url('/images/CN006.jpg')"></div>
       <div class="body"><b>Find my tiles</b><p>Tell Nova about your room, area and budget. It suggests tiles that suit it, checks stock and prices them.</p>
         <span class="go">Chat with Nova <svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
-    <a class="choice" href="#/rooms"><div class="img" style="background-image:url('/images/vis_living.jpg')"><span class="num">2</span></div>
+    <a class="choice" href="#/rooms"><div class="img" style="background-image:url('/images/vis_living.jpg')"></div>
       <div class="body"><b>See it in a room</b><p>Try any tile on the floor or wall of a sample room, at its real size, with your grout colour and layout.</p>
         <span class="go">Open the visualiser <svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
-    <a class="choice" href="#/project"><div class="img" style="background-image:url('/images/vis_kitchen.jpg')"><span class="num">3</span></div>
+    <a class="choice" href="#/project"><div class="img" style="background-image:url('/images/vis_kitchen.jpg')"></div>
       <div class="body"><b>Plan my project</b><p>Already know your tiles? Enter your area to get boxes, cutting waste, stock and a PDF quotation.</p>
         <span class="go">Plan and price it <svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div></a>
   </div>

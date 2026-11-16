@@ -61,7 +61,7 @@ def test_shop_is_the_home_page_and_assistant_moved():
 # ------------------------------------------------------------------ browsing
 def test_products_hide_cost_and_exact_stock():
     body = client.get("/api/shop/products").json()
-    assert body["currency"] == "QAR" and len(body["products"]) == 18
+    assert body["currency"] == "QAR" and len(body["products"]) == 24          # 12 tiles, 6 bathroom sets, 6 grout/adhesive/spacers
     text = str(body)
     assert "cost" not in text and "qty_left" not in text and "stock_m2" not in text
     assert {p["availability"] for p in body["products"]} <= {"In stock", "Low stock", "Out of stock"}

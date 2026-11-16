@@ -58,7 +58,9 @@ def build_receipt_pdf(d: dict) -> bytes:
     pdf.set_xy(M, 18)
     pdf.set_font("Helvetica", "B", 20)
     pdf.set_text_color(*INK)
-    pdf.cell(W, 9, "RECEIPT" if order else "QUOTATION", align="R")
+    # only a paid order is a receipt; an order paying on delivery is an order confirmation; an unpaid card order says so
+    title = ("QUOTATION" if not order else "RECEIPT" if paid else "ORDER" if pay["method"] == "on_delivery" else "ORDER - NOT PAID")
+    pdf.cell(W, 9, title, align="R")
     pdf.set_draw_color(*INK)
     pdf.set_line_width(0.8)
     pdf.line(M, 33, M + W, 33)

@@ -206,6 +206,7 @@
   @media (max-width:720px) { .rgrid { grid-template-columns:1fr; } .xcard { grid-template-columns:56px 1fr; } .xcard .act { grid-column:1/-1; flex-direction:row; justify-content:flex-end; } }
   .done .tick, .receipt .tick { width:64px; height:64px; border-radius:50%; background:var(--ok-soft); color:var(--ok); display:grid; place-items:center; margin:0 auto 16px; }
   .done .tick .ico, .receipt .tick .ico { width:30px; height:30px; }
+  .receipt .tick.wait { background:var(--warn-soft); color:var(--warn); }
   .done .box, .receipt .box { text-align:left; border:1px solid var(--line); border-radius:16px; padding:18px; margin:22px 0; }
 
   footer { border-top:1px solid var(--line); margin-top:40px; padding:28px 0 36px; color:var(--muted); font-size:13px; }
@@ -827,19 +828,28 @@ async function receiptPage(token) {
   const order = d.kind === "order", p = d.payment, paid = p.status === "paid", a = d.address;
   const fmtDay = iso => new Date(iso + "T12:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const fmtWhen = iso => new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  // The headline says what really happened: an order paying by card is only "confirmed" once Tap confirms the payment.
+  const waiting = order && p.method === "card" && !paid;
+  const who = d.salesperson ? `${esc(d.salesperson)} from our sales team` : "Our sales team";
+  const head = !order ? `Quotation ${esc(d.number)} is ready`
+    : paid ? `Thank you, your order ${esc(d.number)} is confirmed and paid`
+    : waiting ? (p.status === "pending" ? `Order ${esc(d.number)} is waiting for your payment` : "Your card payment did not go through")
+    : `Thank you, your order ${esc(d.number)} is confirmed`;
+  const sub = !order ? `${who} will call you to answer any questions. Prices are valid until ${fmtDay(d.valid_until.slice(0, 10))}.`
+    : waiting ? `Order ${esc(d.number)} is saved but not confirmed yet. Pay by card below, or choose to pay on delivery.`
+    : `${who} will call you before delivery.`;
   let banner = "";
   if (order && paid) banner = `<div class="paybanner ok">${ICON.check}<div class="grow"><b>Paid ${money(d.total)} by ${esc(p.card || "card")}</b><br><small>${fmtWhen(p.paid_at)} · payment reference ${esc(p.reference)}${p.test_mode ? " · test payment, no real money was taken" : ""}</small></div></div>`;
-  else if (order && p.method === "card") banner = `<div class="paybanner warn">${ICON.warn}<div class="grow"><b>${p.status === "pending" ? "We have not received the card payment yet" : "The card payment did not go through"}</b><br><small>Your order is saved. You can try the card again or pay when it is delivered.</small></div>
+  else if (order && p.method === "card") banner = `<div class="paybanner warn">${ICON.warn}<div class="grow"><b>${p.status === "pending" ? "We have not received the card payment yet" : "Nothing was charged to your card"}</b><br><small>To confirm the order, try the card again or pay when it is delivered.</small></div>
       ${p.can_pay_card ? '<button class="btn" id="payNow">Pay now by card</button>' : ""}<button class="btn ghost" id="payLater">Pay on delivery</button></div>`;
   else if (order) banner = `<div class="paybanner warn">${ICON.truck}<div class="grow"><b>To pay on delivery: ${money(d.total)}</b><br><small>By card or cash to our driver.</small></div>
       ${p.can_pay_card ? '<button class="btn" id="payNow">Pay now by card instead</button>' : ""}</div>`;
   app.innerHTML = `
   <div class="receipt">
     <div class="top">
-      <div class="tick">${ICON.check}</div>
-      <h1 style="margin:6px 0">${order ? `Thank you, your order ${esc(d.number)} is confirmed` : `Quotation ${esc(d.number)} is ready`}</h1>
-      <p class="muted" style="margin:0">${d.salesperson ? `${esc(d.salesperson)} from our sales team` : "Our sales team"} will call you ${order ? "before delivery" : "to answer any questions"}.
-        ${order ? "" : `Prices are valid until ${fmtDay(d.valid_until.slice(0, 10))}.`}</p>
+      <div class="tick ${waiting ? "wait" : ""}">${waiting ? ICON.warn : ICON.check}</div>
+      <h1 style="margin:6px 0">${head}</h1>
+      <p class="muted" style="margin:0">${sub}</p>
     </div>
     ${banner}
     <div class="rgrid">
@@ -855,7 +865,7 @@ async function receiptPage(token) {
     </div>
     <div class="err" id="rerr" role="alert" style="text-align:center"></div>
     <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:18px">
-      <a class="btn" href="/api/shop/receipt/${encodeURIComponent(token)}/pdf">${ICON.doc} Download ${order ? "receipt" : "quotation"} (PDF)</a>
+      <a class="btn" href="/api/shop/receipt/${encodeURIComponent(token)}/pdf">${ICON.doc} Download ${!order ? "quotation" : paid ? "receipt" : "order"} (PDF)</a>
       <a class="btn ghost" href="#/">Back to the shop</a>
     </div>
     <p class="muted" style="font-size:12.5px;text-align:center;margin-top:16px">Bookmark this page to see your ${order ? "order" : "quotation"} again. ${d.company.demo ? "Demo store: products, prices and stock are demonstration data." : ""}</p>

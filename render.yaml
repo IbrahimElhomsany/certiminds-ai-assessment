@@ -24,6 +24,8 @@ services:
         generateValue: true
       - key: ANTHROPIC_API_KEY
         sync: false          # you paste it in Render; never stored in the repo
+      - key: TAP_SECRET_KEY
+        sync: false          # Tap Payments secret key (sk_test_... for testing); empty = pay on delivery only
       - key: LLM_MODEL
         value: claude-opus-5-5
       - key: ADMIN_LLM_MODEL

@@ -42,9 +42,16 @@ def _check(auth: str | None):
         raise HTTPException(status_code=401, detail="Wrong token.")
 
 
+def smooth(mask: np.ndarray) -> np.ndarray:
+    """Straighten ragged cut-out edges (a torn-paper edge along the ceiling line) without moving them."""
+    from scipy.ndimage import gaussian_filter
+    sigma = max(1.0, mask.shape[1] / 400)
+    return gaussian_filter(mask.astype(np.float32), sigma) > 0.5
+
+
 def _mask_png(mask: np.ndarray) -> str:
     """White where the surface is, see-through elsewhere (the visualiser uses it as its area)."""
-    a = mask.astype(np.uint8) * 255
+    a = smooth(mask).astype(np.uint8) * 255
     im = Image.merge("LA", [Image.new("L", (a.shape[1], a.shape[0]), 255), Image.fromarray(a)])
     buf = io.BytesIO()
     im.save(buf, "PNG", optimize=True)

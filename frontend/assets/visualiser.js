@@ -78,6 +78,7 @@
   uniform int uPatch;          // 1 = the photo already shows several tiles: repeat it as a patch
   uniform vec2 uPatchSize;     // cm covered by the photo when uPatch = 1
   uniform float uMean;         // average brightness of the original surface (blurred)
+  uniform float uMaxLight;     // how much brighter than average a spot may get
   uniform float uUseLight, uGloss;
   uniform float uAngle;        // extra turn of the tiles, radians (any angle, e.g. 45 for diagonal)
   uniform vec2 uShift;         // move the tiles sideways / forwards, as a share of one tile
@@ -132,7 +133,7 @@
 
     if (uUseLight > 0.5) {
       float lum = luma(texture(uLight, vUv).rgb);
-      col *= clamp(lum / uMean, 0.28, 1.75);                // the room's light and shadows
+      col *= clamp(lum / uMean, 0.28, uMaxLight);           // the room's light and shadows
       float hi = luma(texture(uPhoto, vUv).rgb) - lum;      // bright reflections on a glossy floor
       col += smoothstep(0.10, 0.40, hi) * uGloss * 0.45;
     }
@@ -250,17 +251,35 @@
           m.globalCompositeOperation = "source-over";
           // average brightness of the original surface, so the new tiles keep their own colour
           const md = m.getImageData(0, 0, W, H).data; let sum = 0, n = 0;
-          for (let i = 0; i < md.length; i += 4 * 37) if (md[i + 3] > 200) { sum += (0.299 * small[i] + 0.587 * small[i + 1] + 0.114 * small[i + 2]) / 255; n++; }
+          // Room AI surfaces get their own light: blurred using only this surface's pixels, so a dark chair
+          // or a bright ceiling next to the wall doesn't leave a shadow or a glow on the tiles.
+          const own = pl.mask ? surfaceLight(im, m.canvas, W, H) : null, lp = own ? own.data : small;
+          for (let i = 0; i < md.length; i += 4 * 37) if (md[i + 3] > 200) { sum += (0.299 * lp[i] + 0.587 * lp[i + 1] + 0.114 * lp[i + 2]) / 255; n++; }
           const [w, d] = pl.size;
           const H2 = homography([[0, 0], [w, 0], [w, d], [0, d]], pl.quad.map(([x, y]) => [x * sx, y * sx]));
           const hit = new Uint8Array(Math.ceil(W / 4) * Math.ceil(H / 4));   // coarse copy of the mask, to know what was clicked
           for (let y = 0, k = 0; y < H; y += 4) for (let x = 0; x < W; x += 4, k++) hit[k] = md[(y * W + x) * 4 + 3];
-          planes.push({ surface, maskTex: texture(m.canvas), hinv: invert3(H2), mean: n ? Math.max(0.12, sum / n) : 0.6, hit });
+          planes.push({ surface, maskTex: texture(m.canvas), hinv: invert3(H2), mean: n ? Math.max(0.12, sum / n) : 0.6, hit,
+                        lightTex: own ? texture(own.canvas) : null, maxLight: own ? 1.2 : 1.75 });
         }
       }
       scene = { photoTex, lightTex, planes, W, H, closeup: !!room.closeup };
       render();
       return { width: W, height: H };
+    }
+
+    /* The light on one surface only. The canvas stores colour x coverage, so blurring the cut-out photo and
+       reading it back (which divides by the blurred coverage) gives the average of nearby SURFACE pixels only. */
+    function surfaceLight(im, maskCanvas, W, H) {
+      const p = Object.assign(document.createElement("canvas"), { width: W, height: H }).getContext("2d");
+      p.drawImage(im, 0, 0, W, H);
+      p.globalCompositeOperation = "destination-in"; p.drawImage(maskCanvas, 0, 0);
+      const b = Object.assign(document.createElement("canvas"), { width: W, height: H }).getContext("2d", { willReadFrequently: true });
+      b.filter = `blur(${Math.round(W / 45)}px)`; b.drawImage(p.canvas, 0, 0); b.filter = "none";
+      const img = b.getImageData(0, 0, W, H), d = img.data;
+      for (let i = 3; i < d.length; i += 4) d[i] = 255;
+      b.putImageData(img, 0, 0);
+      return { canvas: b.canvas, data: d };
     }
 
     /* "auto" keep boxes: inside each box, pixels that clearly aren't the plain surface (dark leaves,
@@ -311,7 +330,7 @@
         const t = chosen[pl.surface]; if (!t) continue;
         const so = { ...opts, ...(opts[pl.surface] || {}) };     // per-surface layout / rotation
         const tw = so.rotate ? t.h : t.w, th = so.rotate ? t.w : t.h;
-        [[scene.photoTex, "uPhoto"], [scene.lightTex, "uLight"], [pl.maskTex, "uMask"], [t.tex, "uTex"]].forEach(([tx, name], i) => {
+        [[scene.photoTex, "uPhoto"], [pl.lightTex || scene.lightTex, "uLight"], [pl.maskTex, "uMask"], [t.tex, "uTex"]].forEach(([tx, name], i) => {
           gl.activeTexture(gl.TEXTURE0 + i); gl.bindTexture(gl.TEXTURE_2D, tx); gl.uniform1i(u[name], i);
         });
         gl.uniformMatrix3fv(u.uHinv, true, new Float32Array(pl.hinv));
@@ -323,6 +342,7 @@
         gl.uniform1i(u.uPatch, t.patch ? 1 : 0);
         gl.uniform2f(u.uPatchSize, ...(t.patch || [100, 100]));
         gl.uniform1f(u.uMean, pl.mean);
+        gl.uniform1f(u.uMaxLight, pl.maxLight);
         gl.uniform1f(u.uUseLight, scene.closeup ? 0 : 1);
         gl.uniform1f(u.uGloss, t.gloss || 0);
         gl.uniform1f(u.uAngle, (so.angle || 0) * Math.PI / 180);

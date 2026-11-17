@@ -296,6 +296,9 @@
   .stagewrap.fs .pbar, .stagewrap.fs .rooms, .stagewrap.fs .visnote { display:none; }
   #pMark .stagewrap { padding:24px 24px 72px; }
   #mbrush { opacity:.5; }
+  .stage canvas.vbrush { opacity:.55; touch-action:none; cursor:crosshair; z-index:3; }
+  .rng { display:grid; grid-template-columns:120px 1fr; align-items:center; gap:8px; font-size:12.5px; margin:4px 0; }
+  .rng b { font-weight:600; } .rng input { width:100%; accent-color:var(--ink); }
   .spots { position:absolute; left:10px; top:10px; display:flex; gap:6px; flex-wrap:wrap; max-width:calc(100% - 20px); }
   .spots button { border:0; border-radius:99px; padding:6px 11px; font-size:12px; font-weight:500; background:rgba(17,17,17,.62); color:#fff; cursor:pointer; }
   .spots button.on { background:#fff; color:#111; }
@@ -544,6 +547,7 @@
           <span class="walkhint" id="walkhint" hidden></span>
           <div class="spots" id="vspots" hidden></div>
           <img class="before" id="before" alt="" hidden>
+          <canvas id="vbrush" class="vbrush" aria-label="Paint to fix where the tiles go" hidden></canvas>
           <svg class="outline" id="vout" preserveAspectRatio="none" aria-hidden="true"></svg>
           <div class="handle" id="handle" hidden></div>
           <span class="label" id="lblL" hidden>Before</span><span class="label r" id="lblR" hidden>With your tiles</span>
@@ -574,6 +578,24 @@
           <button class="tglbtn" type="button" id="vrot"><svg class="ico" viewBox="0 0 24 24"><path d="M20 11a8 8 0 10-2.3 5.7M20 4v7h-7"/></svg>Turn 90°</button>
         </div>
         <div class="hint" id="vpatchNote" hidden>This tile comes as a mesh sheet, so it is shown laid as supplied.</div>
+      </div>
+      <div id="vposBox" hidden>
+        <h4>Position</h4>
+        <label class="rng"><span>Angle <b id="vangV">0°</b></span><input type="range" id="vang" min="0" max="90" step="1" value="0"></label>
+        <label class="rng"><span>Move sideways</span><input type="range" id="vsx" min="0" max="1" step="0.01" value="0"></label>
+        <label class="rng"><span>Move forwards</span><input type="range" id="vsy" min="0" max="1" step="0.01" value="0"></label>
+        <label class="rng" id="vscaleRow" hidden><span>Room size <b id="vscaleV">100%</b></span><input type="range" id="vscale" min="0.6" max="1.6" step="0.01" value="1"></label>
+        <div class="hint" id="vscaleHint" hidden>If the tiles look too big or too small for your room, slide this until a tile matches something you know (a door is about 2 m high).</div>
+        <button class="linkbtn" type="button" id="vposReset">Reset position</button>
+      </div>
+      <div id="vfixBox" hidden>
+        <h4>Fix the area</h4>
+        <div class="ctl2">
+          <div class="seg" id="vtool"><button type="button" data-vtool="erase">Erase tiles</button><button type="button" data-vtool="add">Add tiles</button></div>
+          <div class="seg" id="vbsize"><button type="button" data-vbs="10">S</button><button type="button" data-vbs="24" class="on">M</button><button type="button" data-vbs="48">L</button></div>
+        </div>
+        <div class="hint" id="vfixHint">Tiles in the wrong place, or a spot missed? Pick a tool and paint on the picture.</div>
+        <div class="ctl2" style="margin-top:6px"><button class="tglbtn" type="button" id="vfixDone" hidden>Done</button><button class="linkbtn" type="button" id="vfixClear">Clear my fixes</button></div>
       </div>
       <div>
         <h4>Grout</h4>

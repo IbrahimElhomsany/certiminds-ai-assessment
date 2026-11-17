@@ -79,6 +79,9 @@
   uniform vec2 uPatchSize;     // cm covered by the photo when uPatch = 1
   uniform float uMean;         // average brightness of the original surface (blurred)
   uniform float uUseLight, uGloss;
+  uniform float uAngle;        // extra turn of the tiles, radians (any angle, e.g. 45 for diagonal)
+  uniform vec2 uShift;         // move the tiles sideways / forwards, as a share of one tile
+  uniform float uScale;        // room size correction for the customer's own photo (1 = as measured)
 
   float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
@@ -87,7 +90,9 @@
     vec2 px = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y);
     vec3 q = uHinv * vec3(px, 1.0);
     if (q.z <= 0.0) discard;
-    vec2 uv = q.xy / q.z;
+    vec2 uv = q.xy / q.z * uScale;
+    float ca = cos(uAngle), sa = sin(uAngle);
+    uv = vec2(ca * uv.x - sa * uv.y, sa * uv.x + ca * uv.y) + uShift * uTile;
     float m = texture(uMask, vUv).r;
     if (m < 0.004) discard;
 
@@ -222,15 +227,22 @@
       const small = c2.getImageData(0, 0, W, H).data;
 
       const keepMask = room.keepMask ? await loadImage(room.keepMask) : null;   // brush strokes from the customer
+      // "Fix the area" brush on the visualiser page: erased everywhere, added per surface
+      const ed = room.edits || {};
+      const removeMask = ed.remove ? await loadImage(ed.remove) : null;
+      const addMasks = {};
+      for (const [k, url] of Object.entries(ed.add || {})) if (url) addMasks[k] = await loadImage(url);
       const planes = [];
       for (const [surface, list] of Object.entries(room.surfaces || {})) {
         for (const pl of list) {
           const m = Object.assign(document.createElement("canvas"), { width: W, height: H }).getContext("2d", { willReadFrequently: true });
           m.fillStyle = "#fff"; m.filter = "blur(0.8px)";
           drawShapes(m, [pl.area], sx);
+          if (addMasks[surface]) m.drawImage(addMasks[surface], 0, 0, W, H);   // areas the customer painted in
           m.globalCompositeOperation = "destination-out";
           drawShapes(m, pl.keep, sx);
           if (keepMask) m.drawImage(keepMask, 0, 0, W, H);
+          if (removeMask) m.drawImage(removeMask, 0, 0, W, H);              // areas the customer erased
           m.filter = "none";
           if (pl.auto) m.drawImage(autoKeep(pl, sharp, W, H, sx), 0, 0);
           m.globalCompositeOperation = "source-over";
@@ -311,6 +323,9 @@
         gl.uniform1f(u.uMean, pl.mean);
         gl.uniform1f(u.uUseLight, scene.closeup ? 0 : 1);
         gl.uniform1f(u.uGloss, t.gloss || 0);
+        gl.uniform1f(u.uAngle, (so.angle || 0) * Math.PI / 180);
+        gl.uniform2f(u.uShift, so.shiftX || 0, so.shiftY || 0);
+        gl.uniform1f(u.uScale, so.scale || 1);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       }
     }

@@ -28,7 +28,7 @@ const STORE = "nova_assistant_v2";
 const fresh = () => ({
   sessionId: null, log: [], recs: [], selected: null, req: {}, quote: null, quoteSig: null, offers: null,
   vis: { room: "living", picked: false, surface: "floor", floor: null, wall: null, grout: 0.3, groutColor: "#d9d6cf",
-         opt: { floor: { layout: 0, rotate: false }, wall: { layout: 0, rotate: false } } },
+         opt: { floor: { layout: 0, rotate: false }, wall: { layout: 0, rotate: false } }, edits: {} },
   proj: { floor: { sku: null, area: null, layout: "simple" }, wall: { sku: null, area: null, layout: "simple" }, sets: {} },
 });
 let S = fresh();
@@ -308,7 +308,8 @@ async function loadRoom(room) {
       else if (!f.rect && S.vis.surface === "wall") toast("We couldn't work out the walls in this 360° photo, so only the floor can be tiled.");
       if (f) { room.mask = f.mask; room.floorMean = f.mean; room.wallMean = f.wallMean; room.rect = f.rect; }
     }
-    await viewer().setRoom(room);
+    // photo rooms carry the customer's "Fix the area" strokes (erased everywhere, added per surface)
+    await viewer().setRoom(is3d(room) ? room : { ...room, edits: (S.vis.edits || {})[roomKey(room)] || null });
     if (token !== roomToken) return;
     loadedKey = roomKey(room);
     await applyTiles();
@@ -368,6 +369,116 @@ function renderVisControls() {
   $("vgc").innerHTML = GROUTS.map(([c, n]) => `<button type="button" class="dotc ${c === S.vis.groutColor ? "on" : ""}" data-gc="${c}" style="background:${c}" title="${n}" aria-label="${n} grout"></button>`).join("");
   document.querySelectorAll("#vgw button").forEach(b => b.classList.toggle("on", +b.dataset.w === S.vis.grout));
   $("vuse").disabled = !(S.vis.floor || S.vis.wall);
+  renderPosFix(room, surf, p, patch);
+}
+// ---- Position sliders and the "Fix the area" brush (photo rooms only)
+const POS0 = { angle: 0, shiftX: 0, shiftY: 0, scale: 1 };
+function renderPosFix(room, surf, p, patch) {
+  const photo = !is3d(room);
+  if (vtool && !photo) { vtool = null; $("vbrush").hidden = true; }
+  if (vtool) { if (!vbr || vbr.key !== roomKey(room)) brushCanvases(room).then(drawBrushOverlay); else drawBrushOverlay(); }
+  $("vposBox").hidden = !photo || !p;
+  $("vfixBox").hidden = !photo;
+  const o = { ...POS0, ...S.vis.opt[surf] };
+  $("vang").value = o.angle; $("vangV").textContent = Math.round(o.angle) + "°";
+  $("vsx").value = o.shiftX; $("vsy").value = o.shiftY; $("vscale").value = o.scale;
+  $("vscaleV").textContent = Math.round(o.scale * 100) + "%";
+  $("vscaleRow").hidden = $("vscaleHint").hidden = room.id !== "own";
+  $("vang").disabled = !!patch;
+  document.querySelectorAll("#vtool button").forEach(b => b.classList.toggle("on", b.dataset.vtool === vtool));
+  $("vfixDone").hidden = !vtool;
+  $("vfixHint").textContent = vtool === "erase" ? "Paint over the places where tiles should NOT be (furniture, a mirror, a rug)."
+    : vtool === "add" ? `Paint over the ${surf} where tiles are missing.`
+    : "Tiles in the wrong place, or a spot missed? Pick a tool and paint on the picture.";
+  const ed = (S.vis.edits || {})[roomKey(room)];
+  $("vfixClear").hidden = !ed;
+}
+function wirePosition() {
+  const live = () => { if (V && loadedKey === roomKey(curRoom())) V.setOptions({ [S.vis.surface]: S.vis.opt[S.vis.surface] }); };
+  const bind = (id, key, show) => {
+    $(id).addEventListener("input", e => {
+      const o = S.vis.opt[S.vis.surface]; o[key] = +e.target.value;
+      if (show) show(o[key]);
+      live();
+    });
+    $(id).addEventListener("change", () => save());
+  };
+  bind("vang", "angle", v => { $("vangV").textContent = Math.round(v) + "°"; });
+  bind("vsx", "shiftX"); bind("vsy", "shiftY");
+  bind("vscale", "scale", v => { $("vscaleV").textContent = Math.round(v * 100) + "%"; });
+  $("vposReset").onclick = () => { Object.assign(S.vis.opt[S.vis.surface], POS0); save(); renderVisControls(); live(); };
+}
+let vtool = null, vbsize = 24, vbr = null;          // vbr = { key, remove, add: {floor, wall} } offscreen canvases
+async function brushCanvases(room) {
+  const key = roomKey(room);
+  if (vbr && vbr.key === key) return vbr;
+  const [w, h] = roomDims(room), W = Math.round(w / 2), H = Math.round(h / 2);
+  const mk = async url => {
+    const c = Object.assign(document.createElement("canvas"), { width: W, height: H });
+    if (url) await new Promise(ok => { const im = new Image(); im.onload = () => { c.getContext("2d").drawImage(im, 0, 0, W, H); ok(); }; im.onerror = ok; im.src = url; });
+    return c;
+  };
+  const ed = (S.vis.edits || {})[key] || {};
+  vbr = { key, remove: await mk(ed.remove), add: { floor: await mk((ed.add || {}).floor), wall: await mk((ed.add || {}).wall) } };
+  return vbr;
+}
+function drawBrushOverlay() {
+  const c = $("vbrush"); if (!vbr || c.hidden) return;
+  c.width = vbr.remove.width; c.height = vbr.remove.height;
+  const x = c.getContext("2d"); x.clearRect(0, 0, c.width, c.height);
+  const tint = (src, col) => {
+    const t = Object.assign(document.createElement("canvas"), { width: c.width, height: c.height }), tx = t.getContext("2d");
+    tx.drawImage(src, 0, 0); tx.globalCompositeOperation = "source-in"; tx.fillStyle = col; tx.fillRect(0, 0, c.width, c.height);
+    return t;
+  };
+  x.drawImage(tint(vbr.add[S.vis.surface], "#2e9e5b"), 0, 0);
+  x.drawImage(tint(vbr.remove, "#e0245e"), 0, 0);
+}
+const hasInk = c => { const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 64) if (d[i]) return true; return false; };
+async function commitBrush() {
+  const room = curRoom(), key = roomKey(room);
+  const add = {}; for (const k of ["floor", "wall"]) if (hasInk(vbr.add[k])) add[k] = vbr.add[k].toDataURL("image/png");
+  const remove = hasInk(vbr.remove) ? vbr.remove.toDataURL("image/png") : null;
+  S.vis.edits = S.vis.edits || {};
+  if (remove || Object.keys(add).length) S.vis.edits[key] = { remove, add }; else delete S.vis.edits[key];
+  save(); renderPosFix(room, S.vis.surface, null, null); renderVisControls();
+  loadedKey = null; await loadRoom(room);
+}
+function setTool(t) {
+  vtool = vtool === t ? null : t;
+  const c = $("vbrush"); c.hidden = !vtool;
+  if (vtool) { if (cmp) setCompare(false); brushCanvases(curRoom()).then(drawBrushOverlay); }
+  renderVisControls();
+}
+function wireBrush() {
+  const c = $("vbrush"); let painting = false, lastP = null;
+  const at = e => { const b = c.getBoundingClientRect(); return [(e.clientX - b.left) / b.width * c.width, (e.clientY - b.top) / b.height * c.height, vbsize * c.width / b.width]; };
+  const dab = e => {
+    if (!vbr || !vtool) return;
+    const [x, y, r] = at(e);
+    // erasing tiles paints the "remove" layer and wipes the same spot from "add", and the other way round
+    const [paint, wipe] = vtool === "erase" ? [vbr.remove, vbr.add[S.vis.surface]] : [vbr.add[S.vis.surface], vbr.remove];
+    for (const [cv, op] of [[paint, "source-over"], [wipe, "destination-out"]]) {
+      const ctx = cv.getContext("2d"); ctx.globalCompositeOperation = op;
+      ctx.strokeStyle = ctx.fillStyle = "#fff"; ctx.lineWidth = r * 2; ctx.lineCap = "round";
+      ctx.beginPath(); if (lastP) { ctx.moveTo(lastP[0], lastP[1]); ctx.lineTo(x, y); ctx.stroke(); } else { ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+    }
+    lastP = [x, y]; drawBrushOverlay();
+  };
+  c.addEventListener("pointerdown", e => { e.stopPropagation(); painting = true; lastP = null; c.setPointerCapture(e.pointerId); dab(e); });
+  c.addEventListener("pointermove", e => { if (painting) dab(e); });
+  const stop = () => { if (!painting) return; painting = false; lastP = null; commitBrush(); };
+  c.addEventListener("pointerup", stop); c.addEventListener("pointercancel", stop);
+  c.addEventListener("click", e => e.stopPropagation());
+  document.querySelectorAll("#vtool button").forEach(b => b.onclick = () => setTool(b.dataset.vtool));
+  document.querySelectorAll("#vbsize button").forEach(b => b.onclick = () => {
+    vbsize = +b.dataset.vbs; document.querySelectorAll("#vbsize button").forEach(x => x.classList.toggle("on", x === b)); });
+  $("vfixDone").onclick = () => setTool(vtool);
+  $("vfixClear").onclick = async () => {
+    const room = curRoom(); delete (S.vis.edits || {})[roomKey(room)]; vbr = null; save();
+    if (vtool) { await brushCanvases(room); drawBrushOverlay(); }
+    renderVisControls(); loadedKey = null; await loadRoom(room);
+  };
 }
 // under the picture: the tile on the selected surface, its price and stock, and "Add to project"
 function renderPbar(room, surf, p, unfit) {
@@ -421,7 +532,7 @@ function wirePicking() {
   const st = $("stage"); let last = null;
   const clear = () => { $("vout").innerHTML = ""; $("vhl").hidden = true; st.classList.remove("pick"); last = null; };
   st.addEventListener("pointermove", e => {
-    if (cmp || !V || !loadedKey || e.pointerType === "touch" || is3d(curRoom())) return;
+    if (cmp || vtool || !V || !loadedKey || e.pointerType === "touch" || is3d(curRoom())) return;
     const b = st.getBoundingClientRect(), u = (e.clientX - b.left) / b.width, v = (e.clientY - b.top) / b.height;
     const surf = V.surfaceAt(u, v), room = curRoom();
     if (!surf || !room.surfaces[surf]) { clear(); return; }
@@ -432,7 +543,7 @@ function wirePicking() {
   });
   st.addEventListener("pointerleave", clear);
   st.addEventListener("click", e => {
-    if (cmp || !V || !loadedKey || is3d(curRoom())) return;
+    if (cmp || vtool || !V || !loadedKey || is3d(curRoom())) return;
     const b = st.getBoundingClientRect(), surf = V.surfaceAt((e.clientX - b.left) / b.width, (e.clientY - b.top) / b.height);
     if (surf && curRoom().surfaces[surf] && surf !== S.vis.surface) {
       S.vis.surface = surf; save(); renderVisControls();
@@ -1017,7 +1128,7 @@ $("cbForm").onsubmit = async e => {
     $("cbName").disabled = $("cbPhone").disabled = true;
   } catch (ex) { msg.textContent = ex.message; $("cbSend").disabled = false; }
 };
-wireCompare(); wirePicking(); wireMark();
+wireCompare(); wirePicking(); wireMark(); wirePosition(); wireBrush();
 window.addEventListener("hashchange", route);
 window.addEventListener("storage", e => { if (e.key === "nova_cart_v1") renderSteps(); });
 

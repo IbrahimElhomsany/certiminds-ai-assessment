@@ -97,3 +97,19 @@ def depth(img: Image.Image) -> np.ndarray:
         pred = model(**_to(inputs)).predicted_depth
     pred = torch.nn.functional.interpolate(pred[:, None], size=img.size[::-1], mode="bicubic", align_corners=False)
     return pred[0, 0].cpu().numpy().astype(np.float64)
+
+
+def segment_points(img: Image.Image, points: list[list[float]], labels: list[int]) -> np.ndarray:
+    """One cut-out from taps: points = [[x, y], ...] in image pixels, labels 1 = "this", 0 = "not this".
+    SAM offers three sizes of cut-out for a tap (a part, the object, everything around); we keep the one it trusts most."""
+    torch = _torch()
+    from transformers import Sam2Model, Sam2Processor
+
+    proc, model = _get("seg", lambda: (Sam2Processor.from_pretrained(SEGMENTER),
+                                       Sam2Model.from_pretrained(SEGMENTER).eval().to(_dev())))
+    inputs = proc(images=img, input_points=[[points]], input_labels=[[labels]], return_tensors="pt")
+    with torch.no_grad():
+        out = model(**_to(inputs), multimask_output=True)
+    masks = proc.post_process_masks(out.pred_masks.cpu(), inputs["original_sizes"])[0][0]   # (3, H, W)
+    best = int(out.iou_scores[0, 0].argmax())
+    return masks[best].numpy().astype(bool)

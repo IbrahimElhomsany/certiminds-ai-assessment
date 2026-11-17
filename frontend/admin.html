@@ -261,6 +261,18 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
   .why { list-style:none; margin:8px 0 0; padding:0; font-size:12.5px; } .why li { padding:2px 0; }
   .why .up { color:var(--ok); font-weight:700; } .why .dn { color:var(--bad); font-weight:700; }
   .bigwin { font-size:30px; font-weight:700; color:var(--ink); line-height:1; }
+  .sr-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:14px; }
+  .sr-card { border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--panel); display:flex; flex-direction:column; }
+  .sr-card img { width:100%; aspect-ratio:16/10; object-fit:cover; display:block; background:var(--panel2); }
+  .sr-card .b { padding:10px 12px; display:flex; flex-direction:column; gap:6px; flex:1; }
+  .sr-card .actions { margin-top:auto; display:flex; gap:6px; flex-wrap:wrap; }
+  .field-err { color:var(--bad); font-size:12px; margin-top:3px; }
+  .is-bad { border-color:var(--bad) !important; box-shadow:0 0 0 1px var(--bad); }
+  .sr-stage { position:relative; display:inline-block; max-width:100%; border-radius:10px; overflow:hidden; touch-action:none; }
+  .sr-stage img { display:block; max-width:100%; max-height:70vh; }
+  .sr-stage canvas { position:absolute; inset:0; width:100%; height:100%; }
+  .sr-legend { display:flex; gap:14px; align-items:center; font-size:12.5px; }
+  .sr-legend i { display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
   .notice { background:var(--accent-soft); border:1px solid var(--accent); border-radius:10px; padding:9px 12px; font-size:12.5px; }
   .notice.warn { background:var(--warn-soft); border-color:var(--warn); }
   .notice.bad { background:var(--bad-soft); border-color:var(--bad); }
@@ -323,6 +335,7 @@ const ICONS = {
   approvals:'<path d="M12 3l7 3v6c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/>',
   audit:'<path d="M4 6h16M4 12h10M4 18h7"/><circle cx="18" cy="16" r="3"/><path d="M20.2 18.2L22 20"/>',
   team:'<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-3.6 3.8-5.5 7-5.5s6 1.9 7 5.5"/>',
+  samplerooms:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="15.5" cy="8.5" r="1.5"/>',
   rooms3d:'<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/>',
   moon:'<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>', sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   ask:'<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.3 2.4c-.5.2-.8.6-.8 1.1v.5M12 16h.01"/>',
@@ -451,6 +464,7 @@ function modules() {
     ["ask", "Ask your data", c("dashboard.view")],
     ["audit", "Audit log", c("audit.view")],
     ["team", "Team", c("users.manage")],
+    ["samplerooms", "Sample rooms", c("settings.manage")],
     ["rooms3d", "3D rooms", c("settings.manage")],
   ].filter(m => m[2]);
 }
@@ -1187,11 +1201,168 @@ async function rooms3dView() {
   });
   if (list.some(w => w.status === "pending")) setTimeout(() => { if (location.hash.startsWith("#/rooms3d")) rooms3dView(); }, 20000);
 }
+/* The owner's own sample rooms (backend/sample_rooms.py): upload a photo, the room AI marks the floor and walls,
+   the owner checks the colours, fixes anything with the brush or one tap, and publishes it to the shop. */
+const SR_STATUS = {analysing: ["pending", "The room AI is marking it (about 30 seconds)"], ready: ["ok", "Ready"], failed: ["lost", "Failed"]};
+async function sampleRoomsView() {
+  shell("samplerooms", topbar("Sample rooms") + loading());
+  const d = await api("/rooms");
+  const card = r => {
+    const [cls, txt] = SR_STATUS[r.status] || ["", r.status];
+    return `<div class="sr-card"><img src="${esc(r.thumb)}" alt=""><div class="b">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b>${esc(r.name)}</b>
+        ${r.published ? `<span class="tag ok">In the shop</span>` : `<span class="tag draft">Not published</span>`}</div>
+      <div class="small muted">${r.location === "outdoor" ? "Outdoor" : "Indoor"} · <span class="tag ${cls}">${esc(txt)}</span>
+        ${r.status === "ready" ? ` · found ${r.floors ? "floor" : "no floor"}${r.walls ? ` + ${r.walls} wall${r.walls > 1 ? "s" : ""}` : ""}${r.fixed ? " · fixed by you" : ""}` : ""}</div>
+      ${r.status === "failed" ? `<div class="small" style="color:var(--bad)">${esc(r.error || "")}</div>` : ""}
+      <div class="actions">
+        ${r.status === "ready" ? `<a class="btn sm" href="#/samplerooms/${r.id}">Check &amp; fix</a>
+          <button class="btn ghost sm" data-pub="${r.id}" data-on="${r.published ? 0 : 1}">${r.published ? "Take out of the shop" : "Publish to the shop"}</button>` : ""}
+        ${r.status === "failed" ? `<button class="btn sm" data-retry="${r.id}">Try again</button>` : ""}
+        <button class="btn ghost sm" data-del="${r.id}" data-name="${esc(r.name)}">Delete</button></div></div></div>`;
+  };
+  $("#view").innerHTML = topbar("Sample rooms", "Your own room photos for the tile visualiser") + `
+    ${d.room_ai ? "" : `<div class="notice warn" style="margin-bottom:12px">The room AI is not switched on, so new rooms can't be marked.
+      Add ROOMAI_URL and ROOMAI_TOKEN in Render (see backend/roomai/modal_app.py).</div>`}
+    <div class="card" style="margin-bottom:14px"><h3 style="margin:0 0 4px">Add a room</h3>
+      <p class="muted small" style="margin:0 0 10px">Use a normal (not 360°) photo of a real room, at least 1000 pixels wide, taken at standing height.
+      The room AI marks the floor and walls by itself; you check it before customers see it.</p>
+      <form id="srForm" novalidate style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start">
+        <div><input id="srName" placeholder="Room name, e.g. Showroom majlis" maxlength="40" style="width:240px"><div class="field-err" id="srNameErr"></div></div>
+        <div><select id="srLoc"><option value="indoor">Indoor</option><option value="outdoor">Outdoor</option></select></div>
+        <div><input id="srFile" type="file" accept="image/jpeg,image/png,image/webp"><div class="field-err" id="srFileErr"></div></div>
+        <button class="btn" id="srAdd">Upload and mark it</button></form></div>
+    ${d.rooms.length ? `<div class="sr-grid">${d.rooms.map(card).join("")}</div>`
+      : `<div class="card muted small">No rooms yet. Customers see the 9 built-in rooms until you publish your own.</div>`}
+    <div class="card" style="margin-top:14px"><h3 style="margin:0 0 4px">Fixes shared by customers</h3>
+      <p class="muted small" style="margin:0 0 8px">When customers fix an area on their own photo and tick "help improve the room AI",
+      their photo, what the AI found and their fix are kept here. They are the answer sheets for training the room AI later.</p>
+      <div style="display:flex;gap:12px;align-items:center"><b style="font-size:20px">${d.training_fixes}</b><span class="small muted">saved so far</span>
+      ${d.training_fixes ? `<button class="btn ghost sm" id="srZip">Download all (zip)</button>` : ""}</div></div>`;
+  const err = (id, msg) => { $("#" + id).classList.toggle("is-bad", !!msg); $("#" + id + "Err").textContent = msg || ""; };
+  $("#srName").oninput = () => err("srName", ""); $("#srFile").onchange = () => err("srFile", "");
+  $("#srForm").onsubmit = async e => {
+    e.preventDefault();
+    const name = $("#srName").value.trim(), file = $("#srFile").files[0];
+    err("srName", name.length < 2 ? "Give the room a name (at least 2 letters)." : "");
+    err("srFile", !file ? "Choose a photo." : file.size > 12e6 ? "That photo is larger than 12 MB." : "");
+    if (name.length < 2 || !file || file.size > 12e6) return;
+    const btn = $("#srAdd"); btn.disabled = true; btn.textContent = "Uploading…";
+    try {
+      const r = await fetch(`/api/admin/rooms?name=${encodeURIComponent(name)}&location=${$("#srLoc").value}`, {method: "POST",
+        headers: {"Content-Type": file.type || "image/jpeg", Authorization: "Bearer " + S.token}, body: file});
+      const out = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(typeof out.detail === "string" ? out.detail : "The photo could not be uploaded.");
+      toast("Uploaded. The room AI is marking it now.");
+    } catch (x) { toast(x.message, "bad"); }
+    sampleRoomsView();
+  };
+  document.querySelectorAll("[data-pub]").forEach(b => b.onclick = () => act(() => api(`/rooms/${b.dataset.pub}`,
+    {method: "PATCH", body: {published: b.dataset.on === "1"}}), b.dataset.on === "1" ? "Published. Customers now see it." : "Taken out of the shop."));
+  document.querySelectorAll("[data-retry]").forEach(b => b.onclick = () => act(() => api(`/rooms/${b.dataset.retry}/analyse`, {method: "POST"}), "Started again."));
+  document.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
+    const ok = await ask(`Delete “${b.dataset.name}”?`, [], "Delete", "The photo and your fixes are removed, and customers no longer see this room.");
+    if (ok) act(() => api(`/rooms/${b.dataset.del}`, {method: "DELETE"}), "Deleted.");
+  });
+  if ($("#srZip")) $("#srZip").onclick = async () => {
+    const r = await fetch("/api/admin/roomai/training.zip", {headers: {Authorization: "Bearer " + S.token}});
+    if (!r.ok) return toast("Could not download the fixes.", "bad");
+    const a = Object.assign(document.createElement("a"), {href: URL.createObjectURL(await r.blob()), download: "room-ai-fixes.zip"});
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  };
+  if (d.rooms.some(r => r.status === "analysing")) setTimeout(() => { if (location.hash === "#/samplerooms") sampleRoomsView(); }, 8000);
+}
+
+/* Check & fix one room: green = floor, blue = walls, as the shop will tile them. Paint or tap to add or remove. */
+async function sampleRoomView(id) {
+  shell("samplerooms", topbar("Sample room") + loading());
+  const d = await api(`/rooms/${id}`);
+  if (!d.room) throw new Error("This room has not been marked by the room AI yet.");
+  const room = d.room, W = Math.round(d.width / 2), H = Math.round(d.height / 2);
+  S.titles["#/samplerooms/" + id] = d.name;
+  const load = src => new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = src; });
+  const mk = async url => { const c = Object.assign(document.createElement("canvas"), {width: W, height: H}); if (url) c.getContext("2d").drawImage(await load(url), 0, 0, W, H); return c; };
+  const ed = room.baseEdits || {};
+  const E = {remove: await mk(ed.remove), add: {floor: await mk((ed.add || {}).floor), wall: await mk((ed.add || {}).wall)}};
+  const masks = {floor: [], wall: []};
+  for (const [k, list] of Object.entries(room.surfaces)) for (const s of list) masks[k].push(await load(s.mask));
+  let surf = "floor", tool = "add", size = 18, dirty = false, busy = false;
+  $("#view").innerHTML = topbar(d.name, "Check what the room AI marked, then fix it", `<a class="btn ghost" href="#/samplerooms">Back to sample rooms</a>`) + `
+    <div class="card"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+      <div class="sr-legend"><span><i style="background:#2ecc71"></i>Floor</span><span><i style="background:#3498db"></i>Walls</span><span class="muted">No colour = not tiled</span></div>
+      <div class="seg" id="srSurf"><button data-v="floor" class="on">Floor</button><button data-v="wall">Wall</button></div>
+      <div class="seg" id="srTool"><button data-v="add" class="on">Add</button><button data-v="erase">Erase</button></div>
+      <div class="seg" id="srSize"><button data-v="8">S</button><button data-v="18" class="on">M</button><button data-v="36">L</button>
+        ${d.room_ai === false ? "" : `<button data-v="smart" title="Tap once: the room AI picks the whole area or object">✨ Tap</button>`}</div>
+      <button class="btn" id="srSave" disabled>Save fixes</button><button class="btn ghost sm" id="srClear">Clear my fixes</button></div>
+      <div class="small muted" id="srHint" style="margin-bottom:8px">Paint with the mouse, or pick ✨ Tap and click once on an area: the room AI finds its whole outline.</div>
+      <div class="sr-stage" id="srStage"><img id="srImg" src="${esc(room.photo)}" alt=""><canvas id="srCv" width="${W}" height="${H}"></canvas></div>
+      <div class="actions" style="margin-top:12px">${d.published ? `<a class="btn ghost" href="/assistant#/rooms" target="_blank">See it in the shop</a>`
+        : `<button class="btn" id="srPub">Publish to the shop</button>`}</div></div>`;
+  const cv = $("#srCv"), ctx = cv.getContext("2d");
+  const layer = (kind, col) => {
+    const t = Object.assign(document.createElement("canvas"), {width: W, height: H}), x = t.getContext("2d");
+    for (const m of masks[kind]) x.drawImage(m, 0, 0, W, H);
+    x.drawImage(E.add[kind], 0, 0);
+    x.globalCompositeOperation = "destination-out"; x.drawImage(E.remove, 0, 0);
+    x.globalCompositeOperation = "source-in"; x.fillStyle = col; x.fillRect(0, 0, W, H);
+    return t;
+  };
+  const paint = () => { ctx.clearRect(0, 0, W, H); ctx.globalAlpha = 0.45; ctx.drawImage(layer("floor", "#2ecc71"), 0, 0); ctx.drawImage(layer("wall", "#3498db"), 0, 0); ctx.globalAlpha = 1; };
+  paint();
+  const changed = () => { dirty = true; $("#srSave").disabled = false; paint(); };
+  const seg = (id, fn) => document.querySelectorAll(`#${id} button`).forEach(b => b.onclick = () => {
+    document.querySelectorAll(`#${id} button`).forEach(x => x.classList.toggle("on", x === b)); fn(b.dataset.v); });
+  seg("srSurf", v => surf = v); seg("srTool", v => tool = v); seg("srSize", v => size = v === "smart" ? v : +v);
+  const at = e => { const b = cv.getBoundingClientRect(); return [(e.clientX - b.left) / b.width * W, (e.clientY - b.top) / b.height * H, (size === "smart" ? 0 : size) * W / b.width]; };
+  const layers = () => tool === "erase" ? [E.remove, E.add[surf]] : [E.add[surf], E.remove];
+  let down = false, last = null;
+  const dab = e => {
+    const [x, y, r] = at(e);
+    for (const [c, op] of [[layers()[0], "source-over"], [layers()[1], "destination-out"]]) {
+      const g = c.getContext("2d"); g.globalCompositeOperation = op; g.strokeStyle = g.fillStyle = "#fff"; g.lineWidth = r * 2; g.lineCap = "round";
+      g.beginPath(); if (last) { g.moveTo(last[0], last[1]); g.lineTo(x, y); g.stroke(); } else { g.arc(x, y, r, 0, Math.PI * 2); g.fill(); }
+      g.globalCompositeOperation = "source-over";
+    }
+    last = [x, y]; changed();
+  };
+  cv.addEventListener("pointerdown", async e => {
+    if (size !== "smart") { down = true; last = null; cv.setPointerCapture(e.pointerId); dab(e); return; }
+    if (busy) return;
+    const [x, y] = at(e); busy = true; $("#srHint").textContent = "The room AI is finding that area… (a few seconds)";
+    try {
+      const t = await api(`/rooms/${id}/tap`, {method: "POST", body: {points: [[x * 2, y * 2, 1]]}});
+      if (t.share > 0.6) throw new Error("That picked almost the whole photo. Click closer to the spot, or use the brush.");
+      const im = await load(t.mask);
+      for (const [c, op] of [[layers()[0], "source-over"], [layers()[1], "destination-out"]]) {
+        const g = c.getContext("2d"); g.globalCompositeOperation = op; g.drawImage(im, 0, 0, W, H); g.globalCompositeOperation = "source-over";
+      }
+      changed();
+    } catch (x) { toast(x.message, "bad"); }
+    busy = false; $("#srHint").textContent = "Paint with the mouse, or pick ✨ Tap and click once on an area: the room AI finds its whole outline.";
+  });
+  cv.addEventListener("pointermove", e => { if (down) dab(e); });
+  cv.addEventListener("pointerup", () => { down = false; last = null; });
+  const ink = c => { const p = c.getContext("2d").getImageData(0, 0, W, H).data; for (let i = 3; i < p.length; i += 64) if (p[i]) return true; return false; };
+  $("#srSave").onclick = async () => {
+    const add = {}; for (const k of ["floor", "wall"]) if (ink(E.add[k])) add[k] = E.add[k].toDataURL("image/png");
+    const remove = ink(E.remove) ? E.remove.toDataURL("image/png") : null;
+    try {
+      await api(`/rooms/${id}`, {method: "PATCH", body: (remove || Object.keys(add).length) ? {edits: {remove, add}} : {clear_edits: true}});
+      dirty = false; $("#srSave").disabled = true; toast(d.published ? "Saved. Customers see the fixed room now." : "Saved.");
+    } catch (x) { toast(x.message, "bad"); }
+  };
+  $("#srClear").onclick = () => { for (const c of [E.remove, E.add.floor, E.add.wall]) c.getContext("2d").clearRect(0, 0, W, H); changed(); };
+  if ($("#srPub")) $("#srPub").onclick = async () => {
+    if (dirty) await $("#srSave").onclick();
+    act(() => api(`/rooms/${id}`, {method: "PATCH", body: {published: true}}), "Published. Customers now see it.");
+  };
+}
 /* ------------------------------------------------------------------ router */
 /* Back = where you actually came from inside the admin (keeps list filters and page);
    opened directly from a link or bookmark, Back goes to that section's list. */
 const SECTION = {ask: "Ask your data", followups: "Follow-ups", dashboard: "Dashboard", leads: "Leads", quotes: "Quotations", orders: "Orders", inventory: "Inventory",
-                 approvals: "Approvals", audit: "Audit log", team: "Team", rooms3d: "3D rooms"};
+                 approvals: "Approvals", audit: "Audit log", team: "Team", rooms3d: "3D rooms", samplerooms: "Sample rooms"};
 function titleOf(hash) {
   if (S.titles[hash]) return S.titles[hash];
   const sec = hash.slice(2).split(/[/?]/)[0];
@@ -1231,6 +1402,7 @@ async function route() {
     else if (view === "audit") await auditView();
     else if (view === "team") await teamView();
     else if (view === "rooms3d") await rooms3dView();
+    else if (view === "samplerooms") await (parts[1] ? sampleRoomView(parts[1]) : sampleRoomsView());
     window.scrollTo(0, 0);
   } catch (e) {
     if (!S.token) return;

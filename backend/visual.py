@@ -19,6 +19,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response
+from pydantic import BaseModel, Field, conlist
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from backend.observability import log_event
@@ -128,14 +129,43 @@ def get_file(name: str):
 
 
 # ------------------------------------------------------------------ room AI for the customer's own photo
-@router.post("/api/v1/visual/photos/{fid}/analyse")
-def analyse_photo(fid: str, x_user_id: Optional[str] = Header(default=None)):
-    """Ask the room AI service (backend/roomai, running on a pay-per-use graphics card) where the floor and
-    walls are in this photo. The answer is saved next to the photo, so each photo is analysed only once.
-    503 when the service isn't set up: the browser then uses its own, simpler detection."""
-    owner = _visitor(x_user_id)
+def room_ai_on() -> bool:
+    return bool(os.getenv("ROOMAI_URL") and os.getenv("ROOMAI_TOKEN"))
+
+
+def ask_room_ai(path: str, image: bytes, params: Optional[dict] = None, timeout: float = 180) -> dict:
+    """Send a photo to the room AI service (backend/roomai/service.py, on a pay-per-use machine)."""
     url, token = os.getenv("ROOMAI_URL", "").rstrip("/"), os.getenv("ROOMAI_TOKEN", "")
-    if not FILE_ID.match(fid) or not (STORE / f"{fid}.jpg").exists():
+    if not url or not token:
+        raise HTTPException(status_code=503, detail="The room AI is not switched on.")
+    import httpx
+    t0 = time.time()
+    try:
+        r = httpx.post(f"{url}/{path}", content=image, params=params or {},
+                       headers={"Authorization": f"Bearer {token}", "Content-Type": "image/jpeg"},
+                       timeout=httpx.Timeout(timeout, connect=20), follow_redirects=True)
+    except httpx.HTTPError as e:
+        log_event("roomai_error", path=path, error=type(e).__name__)
+        raise HTTPException(status_code=502, detail="The room AI did not answer in time.")
+    if r.status_code != 200:
+        log_event("roomai_error", path=path, status=r.status_code)
+        raise HTTPException(status_code=502, detail="The room AI could not read this photo.")
+    log_event("roomai_done", path=path, seconds=round(time.time() - t0, 1))
+    return r.json()
+
+
+def clean_analysis(data: dict) -> dict:
+    """Keep only well-formed floor and wall surfaces from the service's answer."""
+    surfaces = [s for s in data.get("surfaces", []) if s.get("kind") in ("floor", "wall")
+                and isinstance(s.get("mask"), str) and s["mask"].startswith("data:image/png;base64,")
+                and len(s.get("quad") or []) == 4 and len(s.get("size") or []) == 2]
+    return {"width": data.get("width"), "height": data.get("height"), "scale": data.get("scale", 1.0),
+            "surfaces": surfaces, "timings": data.get("timings", {})}
+
+
+def _own_photo(fid: str, owner: str) -> Path:
+    path = STORE / f"{fid}.jpg"
+    if not FILE_ID.match(fid) or not path.exists():
         raise HTTPException(status_code=404, detail="This photo has expired or does not exist.")
     try:
         meta = json.loads((STORE / f"{fid}.json").read_text())
@@ -143,32 +173,84 @@ def analyse_photo(fid: str, x_user_id: Optional[str] = Header(default=None)):
         raise HTTPException(status_code=404, detail="This photo has expired or does not exist.")
     if meta.get("owner") != owner:
         raise HTTPException(status_code=403, detail="This photo belongs to another visitor.")
+    return path
+
+
+@router.get("/api/v1/visual/roomai")
+def room_ai_status():
+    """Whether the room AI is set up (the visualiser shows "tap to fix" only then)."""
+    return {"on": room_ai_on()}
+
+
+@router.post("/api/v1/visual/photos/{fid}/analyse")
+def analyse_photo(fid: str, x_user_id: Optional[str] = Header(default=None)):
+    """Where the floor and walls are in this photo. The answer is saved next to the photo, so each photo
+    is analysed only once. 503 when the service isn't set up: the browser then uses its own, simpler detection."""
+    path = _own_photo(fid, _visitor(x_user_id))
     cache = STORE / f"{fid}.roomai"
     if cache.exists():
         return json.loads(cache.read_text())
-    if not url or not token:
-        raise HTTPException(status_code=503, detail="The room AI is not switched on.")
-    import httpx
-    t0 = time.time()
-    try:
-        r = httpx.post(f"{url}/analyse", content=(STORE / f"{fid}.jpg").read_bytes(),
-                       headers={"Authorization": f"Bearer {token}", "Content-Type": "image/jpeg"},
-                       timeout=httpx.Timeout(180, connect=20), follow_redirects=True)
-    except httpx.HTTPError as e:
-        log_event("roomai_error", error=type(e).__name__)
-        raise HTTPException(status_code=502, detail="The room AI did not answer in time.")
-    if r.status_code != 200:
-        log_event("roomai_error", status=r.status_code)
-        raise HTTPException(status_code=502, detail="The room AI could not read this photo.")
-    data = r.json()
-    surfaces = [s for s in data.get("surfaces", []) if s.get("kind") in ("floor", "wall")
-                and isinstance(s.get("mask"), str) and s["mask"].startswith("data:image/png;base64,")
-                and len(s.get("quad") or []) == 4 and len(s.get("size") or []) == 2]
-    data = {"width": data.get("width"), "height": data.get("height"), "scale": data.get("scale", 1.0),
-            "surfaces": surfaces, "timings": data.get("timings", {})}
+    data = clean_analysis(ask_room_ai("analyse", path.read_bytes()))
     cache.write_text(json.dumps(data))
-    log_event("roomai_done", seconds=round(time.time() - t0, 1), surfaces=len(surfaces))
     return data
+
+
+class TapRequest(BaseModel):
+    points: list[conlist(float, min_length=3, max_length=3)] = Field(min_length=1, max_length=8)
+
+
+def tap_points(points: list, size: tuple[int, int]) -> str:
+    W, H = size
+    for x, y, _ in points:
+        if not (0 <= x <= W and 0 <= y <= H):
+            raise HTTPException(status_code=422, detail="Tap inside the photo.")
+    return json.dumps([[round(x, 1), round(y, 1), 1 if l else 0] for x, y, l in points])
+
+
+@router.post("/api/v1/visual/photos/{fid}/tap")
+def tap_photo(fid: str, req: TapRequest, x_user_id: Optional[str] = Header(default=None)):
+    """Tap to fix: the cut-out of the thing or area the customer tapped (x, y in photo pixels)."""
+    path = _own_photo(fid, _visitor(x_user_id))
+    with Image.open(path) as im:
+        size = im.size
+    return ask_room_ai("tap", path.read_bytes(), {"points": tap_points(req.points, size)}, timeout=90)
+
+
+# Fixes customers chose to share: the photo, what the AI found and what the customer corrected.
+# Kept apart from the 7-day photo store, because the customer agreed to it, for training the room AI later.
+def training_dir() -> Path:
+    return Path(os.getenv("ROOMAI_TRAINING_DIR") or STORE.parent / "roomai-training")
+
+
+class ShareFix(BaseModel):
+    consent: bool
+    remove: Optional[str] = Field(default=None, max_length=3_000_000)
+    add: dict[str, str] = Field(default_factory=dict)
+
+
+@router.post("/api/v1/visual/photos/{fid}/share-fix")
+def share_fix(fid: str, req: ShareFix, x_user_id: Optional[str] = Header(default=None)):
+    path = _own_photo(fid, _visitor(x_user_id))
+    if not req.consent:
+        raise HTTPException(status_code=422, detail="Only saved when you agree.")
+    edits = {"remove": req.remove, "add": {k: v for k, v in req.add.items() if k in ("floor", "wall") and len(v) < 3_000_000}}
+    for v in [edits["remove"], *edits["add"].values()]:
+        if v is not None and not v.startswith("data:image/png;base64,"):
+            raise HTTPException(status_code=422, detail="Fixes must be PNG pictures.")
+    out = training_dir() / fid
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "photo.jpg").write_bytes(path.read_bytes())
+    ai = STORE / f"{fid}.roomai"
+    if ai.exists():
+        (out / "ai.json").write_text(ai.read_text())
+    (out / "fix.json").write_text(json.dumps({"saved": time.time(), "consent": True, **edits}))
+    log_event("roomai_fix_shared")
+    return {"ok": True}
+
+
+def training_count() -> int:
+    d = training_dir()
+    return sum(1 for p in d.iterdir() if (p / "fix.json").exists()) if d.exists() else 0
 
 
 # ------------------------------------------------------------------ phone hand-off (QR code)

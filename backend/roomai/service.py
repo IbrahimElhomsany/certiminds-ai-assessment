@@ -7,6 +7,7 @@ shop's own server is too small for the three AI models. It works on any computer
     pip install -r requirements-roomai.txt
     ROOMAI_TOKEN=some-long-secret uvicorn backend.roomai.service:app --port 8078
 
+POST /tap?points=[[x,y,1],...]  (body = the photo) -> {"mask": "data:image/png...", "share"}: one cut-out for a tap
 POST /analyse  (body = the photo, header Authorization: Bearer <ROOMAI_TOKEN>)
 -> {"width", "height", "scale", "surfaces": [{"name", "kind": "floor"|"wall", "mask": "data:image/png;base64,...",
      "quad": [[x, y] x4], "size": [100, 100], "area_m2"}], "timings"}
@@ -22,7 +23,9 @@ import os
 import threading
 
 import numpy as np
-from fastapi import FastAPI, Header, HTTPException, Request
+import json
+
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from . import analyse as _analyse
@@ -111,15 +114,45 @@ def health():
     return {"ok": True}
 
 
-@app.post("/analyse")
-async def analyse_photo(request: Request, authorization: str | None = Header(default=None)):
-    _check(authorization)
+async def _photo(request: Request) -> Image.Image:
     data = await request.body()
     if not data or len(data) > MAX_BYTES:
         raise HTTPException(status_code=413, detail="Send one photo, at most 15 MB.")
     try:
-        photo = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
+        return ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
     except (UnidentifiedImageError, OSError):
         raise HTTPException(status_code=422, detail="Not a photo.")
+
+
+@app.post("/analyse")
+async def analyse_photo(request: Request, authorization: str | None = Header(default=None)):
+    _check(authorization)
+    photo = await _photo(request)
     with _busy:
         return run(photo)
+
+
+def tap(photo: Image.Image, points: list) -> dict:
+    """Tap to fix: the customer taps a spot ("this") and maybe spots that are NOT part of it.
+    points = [[x, y, 1 or 0], ...] in photo pixels. Returns the cut-out of that one thing or area."""
+    img = _analyse._resize(photo)
+    k = img.size[0] / photo.size[0]
+    pts = [[float(x) * k, float(y) * k] for x, y, _ in points]
+    labels = [1 if int(l) else 0 for _, _, l in points]
+    from . import models
+    m = models.segment_points(img, pts, labels)
+    return {"width": photo.size[0], "height": photo.size[1], "mask": _mask_png(m), "share": round(float(m.mean()), 4)}
+
+
+@app.post("/tap")
+async def tap_photo(request: Request, points: str = Query(..., max_length=400),
+                    authorization: str | None = Header(default=None)):
+    _check(authorization)
+    try:
+        pts = json.loads(points)
+        assert isinstance(pts, list) and 1 <= len(pts) <= 8 and all(len(p) == 3 for p in pts)
+    except (ValueError, AssertionError, TypeError):
+        raise HTTPException(status_code=422, detail="points must be [[x, y, 1|0], ...] (1 to 8 taps).")
+    photo = await _photo(request)
+    with _busy:
+        return tap(photo, pts)

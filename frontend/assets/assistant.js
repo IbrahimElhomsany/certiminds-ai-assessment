@@ -20,6 +20,16 @@ const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
 const money = v => "QAR " + Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const BLANK = "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#e9e4da"/></svg>');
 const ROOMS = window.NOVA_ROOMS || [], PATCHES = window.NOVA_TILE_PATCHES || {};
+let AI_ON = false;                                  // the room AI service is set up (tap to fix)
+fetch("/api/v1/visual/roomai").then(r => r.ok ? r.json() : null).then(d => { AI_ON = !!(d && d.on); }).catch(() => {});
+// the shop owner's own sample rooms (Admin > Sample rooms), shown before ours
+fetch("/api/rooms").then(r => r.ok ? r.json() : []).then(list => {
+  if (!Array.isArray(list) || !list.length) return;
+  ROOMS.unshift(...list);
+  if (document.body.dataset.page === "rooms") renderRoomsPage();
+  if (location.hash === "#/visual") renderVisControls();
+}).catch(() => {});
+const aiOwn = room => room && room.id === "own" && S.own && S.own.ai && S.own.photo && S.own.photo.id;
 const SURF = { floor: "Floor", wall: "Wall" };
 const GROUTS = [["#f2f0ea", "White"], ["#d9d6cf", "Light grey"], ["#a19d95", "Grey"], ["#cdbb9c", "Beige"], ["#4a4a48", "Charcoal"], ["#1d1d1d", "Black"]];
 
@@ -395,7 +405,14 @@ function renderPosFix(room, surf, p, patch) {
   $("vang").disabled = !!patch;
   document.querySelectorAll("#vtool button").forEach(b => b.classList.toggle("on", b.dataset.vtool === vtool));
   $("vfixDone").hidden = !vtool;
-  $("vfixHint").textContent = vtool === "erase" ? "Paint over the places where tiles should NOT be (furniture, a mirror, a rug)."
+  const smart = AI_ON && aiOwn(room);
+  $("vsmart").hidden = !smart;
+  if (!smart && vbsize === "smart") { vbsize = 24; document.querySelectorAll("#vbsize button").forEach(x => x.classList.toggle("on", x.dataset.vbs === "24")); }
+  $("vtrainRow").hidden = !aiOwn(room); $("vtrain").checked = !!S.vis.shareFix;
+  $("vfixHint").textContent = vtool && vbsize === "smart"
+    ? (vtool === "erase" ? "Tap a thing that should NOT get tiles (a cabinet, a mirror). The room AI finds its whole outline."
+                         : `Tap a part of the ${surf} that was missed. The room AI finds the whole area.`)
+    : vtool === "erase" ? "Paint over the places where tiles should NOT be (furniture, a mirror, a rug)."
     : vtool === "add" ? `Paint over the ${surf} where tiles are missing.`
     : "Tiles in the wrong place, or a spot missed? Pick a tool and paint on the picture.";
   const ed = (S.vis.edits || {})[roomKey(room)];
@@ -449,7 +466,7 @@ async function commitBrush() {
   const remove = hasInk(vbr.remove) ? vbr.remove.toDataURL("image/png") : null;
   S.vis.edits = S.vis.edits || {};
   if (remove || Object.keys(add).length) S.vis.edits[key] = { remove, add }; else delete S.vis.edits[key];
-  save(); renderPosFix(room, S.vis.surface, null, null); renderVisControls();
+  save(); shareFixLater(room); renderPosFix(room, S.vis.surface, null, null); renderVisControls();
   loadedKey = null; await loadRoom(room);
 }
 function setTool(t) {
@@ -457,6 +474,42 @@ function setTool(t) {
   const c = $("vbrush"); c.hidden = !vtool;
   if (vtool) { if (cmp) setCompare(false); brushCanvases(curRoom()).then(drawBrushOverlay); }
   renderVisControls();
+}
+// "✨ Tap": one tap, and the room AI (SAM on our server) returns the outline of the whole area or object there
+let tapBusy = false;
+async function smartTap(e) {
+  if (tapBusy || !vbr || !vtool) return;
+  const room = curRoom(); if (!aiOwn(room)) return;
+  const c = $("vbrush"), b = c.getBoundingClientRect();
+  const u = (e.clientX - b.left) / b.width, v = (e.clientY - b.top) / b.height;
+  const { width: W, height: H } = S.own.photo;
+  tapBusy = true; $("vfixHint").textContent = "The room AI is finding that area… (a few seconds)";
+  try {
+    const r = await fetch(`/api/v1/visual/photos/${S.own.photo.id}/tap`, { method: "POST",
+      headers: { "Content-Type": "application/json", "X-User-Id": USER_ID }, body: JSON.stringify({ points: [[u * W, v * H, 1]] }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(typeof d.detail === "string" ? d.detail : "The room AI couldn't do that right now.");
+    if (d.share > 0.6) throw new Error("That picked almost the whole photo. Try tapping a bit closer to the spot, or use the brush.");
+    const im = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = d.mask; });
+    const [paint, wipe] = vtool === "erase" ? [vbr.remove, vbr.add[S.vis.surface]] : [vbr.add[S.vis.surface], vbr.remove];
+    for (const [cv, op] of [[paint, "source-over"], [wipe, "destination-out"]]) {
+      const ctx = cv.getContext("2d"); ctx.globalCompositeOperation = op; ctx.drawImage(im, 0, 0, cv.width, cv.height);
+      ctx.globalCompositeOperation = "source-over";
+    }
+    drawBrushOverlay(); await commitBrush();
+  } catch (err) { toast(err.message || "The room AI couldn't do that right now."); }
+  finally { tapBusy = false; renderVisControls(); }
+}
+// fixes the customer agreed to share are sent a few seconds after the last change (for training the room AI)
+let shareTimer = null;
+function shareFixLater(room) {
+  clearTimeout(shareTimer);
+  if (!S.vis.shareFix || !aiOwn(room)) return;
+  const ed = (S.vis.edits || {})[roomKey(room)]; if (!ed) return;
+  const id = S.own.photo.id;
+  shareTimer = setTimeout(() => fetch(`/api/v1/visual/photos/${id}/share-fix`, { method: "POST",
+    headers: { "Content-Type": "application/json", "X-User-Id": USER_ID },
+    body: JSON.stringify({ consent: true, remove: ed.remove || null, add: ed.add || {} }) }).catch(() => {}), 3000);
 }
 function wireBrush() {
   const c = $("vbrush"); let painting = false, lastP = null;
@@ -473,14 +526,22 @@ function wireBrush() {
     }
     lastP = [x, y]; drawBrushOverlay();
   };
-  c.addEventListener("pointerdown", e => { e.stopPropagation(); painting = true; lastP = null; c.setPointerCapture(e.pointerId); dab(e); });
+  c.addEventListener("pointerdown", e => {
+    e.stopPropagation();
+    if (vbsize === "smart") { smartTap(e); return; }
+    painting = true; lastP = null; c.setPointerCapture(e.pointerId); dab(e);
+  });
   c.addEventListener("pointermove", e => { if (painting) dab(e); });
   const stop = () => { if (!painting) return; painting = false; lastP = null; commitBrush(); };
   c.addEventListener("pointerup", stop); c.addEventListener("pointercancel", stop);
   c.addEventListener("click", e => e.stopPropagation());
   document.querySelectorAll("#vtool button").forEach(b => b.onclick = () => setTool(b.dataset.vtool));
   document.querySelectorAll("#vbsize button").forEach(b => b.onclick = () => {
-    vbsize = +b.dataset.vbs; document.querySelectorAll("#vbsize button").forEach(x => x.classList.toggle("on", x === b)); });
+    vbsize = b.dataset.vbs === "smart" ? "smart" : +b.dataset.vbs;
+    document.querySelectorAll("#vbsize button").forEach(x => x.classList.toggle("on", x === b));
+    if (vbsize === "smart" && !vtool) setTool("add"); else renderVisControls();
+  });
+  $("vtrain").onchange = e => { S.vis.shareFix = e.target.checked; save(); if (e.target.checked) shareFixLater(curRoom()); };
   $("vfixDone").onclick = () => setTool(vtool);
   $("vfixClear").onclick = async () => {
     const room = curRoom(); delete (S.vis.edits || {})[roomKey(room)]; vbr = null; save();

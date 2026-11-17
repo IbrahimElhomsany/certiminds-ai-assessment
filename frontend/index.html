@@ -465,7 +465,7 @@
             <button class="linkbtn" type="button" id="qrNew">Make a new code</button></div>
         </div>
       </div>
-      <p class="fine">Your photo is only used for this preview. The phone link works once and expires after 15 minutes, and photos are deleted after 7 days.</p>
+      <p class="fine">Your photo is only used for this preview. The phone link works once and expires after 15 minutes, and photos are deleted after 7 days, unless you tick "help improve the room AI" when you fix an area.</p>
     </section>
     <section>
       <h2 class="ptitle muted">or try one of our rooms</h2>
@@ -592,10 +592,11 @@
         <h4>Fix the area</h4>
         <div class="ctl2">
           <div class="seg" id="vtool"><button type="button" data-vtool="erase">Erase tiles</button><button type="button" data-vtool="add">Add tiles</button></div>
-          <div class="seg" id="vbsize"><button type="button" data-vbs="10">S</button><button type="button" data-vbs="24" class="on">M</button><button type="button" data-vbs="48">L</button></div>
+          <div class="seg" id="vbsize"><button type="button" data-vbs="10">S</button><button type="button" data-vbs="24" class="on">M</button><button type="button" data-vbs="48">L</button><button type="button" data-vbs="smart" id="vsmart" hidden title="Tap once: the room AI picks the whole area or object">✨ Tap</button></div>
         </div>
         <div class="hint" id="vfixHint">Tiles in the wrong place, or a spot missed? Pick a tool and paint on the picture.</div>
         <div class="ctl2" style="margin-top:6px"><button class="tglbtn" type="button" id="vfixDone" hidden>Done</button><button class="linkbtn" type="button" id="vfixClear">Clear my fixes</button></div>
+        <label class="chk" id="vtrainRow" hidden style="margin-top:8px"><input type="checkbox" id="vtrain"> Keep my photo and fixes to help improve the room AI</label>
       </div>
       <div>
         <h4>Grout</h4>

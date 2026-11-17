@@ -230,10 +230,13 @@
 
       const keepMask = room.keepMask ? await loadImage(room.keepMask) : null;   // brush strokes from the customer
       // "Fix the area" brush on the visualiser page: erased everywhere, added per surface
-      const ed = room.edits || {};
-      const removeMask = ed.remove ? await loadImage(ed.remove) : null;
-      const addMasks = {};
-      for (const [k, url] of Object.entries(ed.add || {})) if (url) addMasks[k] = await loadImage(url);
+      // baseEdits = fixes the shop owner made to their own sample room; edits = this customer's fixes
+      const removeMasks = [], addMasks = {};
+      for (const ed of [room.baseEdits, room.edits]) {
+        if (!ed) continue;
+        if (ed.remove) removeMasks.push(await loadImage(ed.remove));
+        for (const [k, url] of Object.entries(ed.add || {})) if (url) (addMasks[k] = addMasks[k] || []).push(await loadImage(url));
+      }
       const planes = [];
       for (const [surface, list] of Object.entries(room.surfaces || {})) {
         for (const pl of list) {
@@ -241,11 +244,11 @@
           m.fillStyle = "#fff"; m.filter = "blur(0.8px)";
           if (pl.mask) m.drawImage(await loadImage(pl.mask), 0, 0, W, H);   // area found by the room AI (a cut-out picture)
           else drawShapes(m, [pl.area], sx);
-          if (addMasks[surface]) m.drawImage(addMasks[surface], 0, 0, W, H);   // areas the customer painted in
+          for (const a of addMasks[surface] || []) m.drawImage(a, 0, 0, W, H);   // areas painted in
           m.globalCompositeOperation = "destination-out";
           drawShapes(m, pl.keep, sx);
           if (keepMask) m.drawImage(keepMask, 0, 0, W, H);
-          if (removeMask) m.drawImage(removeMask, 0, 0, W, H);              // areas the customer erased
+          for (const r of removeMasks) m.drawImage(r, 0, 0, W, H);           // areas erased
           m.filter = "none";
           if (pl.auto) m.drawImage(autoKeep(pl, sharp, W, H, sx), 0, 0);
           m.globalCompositeOperation = "source-over";

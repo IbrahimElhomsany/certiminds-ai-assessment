@@ -20,6 +20,7 @@ from PIL import Image, ImageDraw, ImageFont
 from backend.roomai import analyse, render
 
 ROOT = Path(__file__).resolve().parents[1]
+GLOSS = {"polished": 1.0, "gloss": 1.0, "satin": 0.4}
 
 
 def load_rooms():
@@ -100,14 +101,17 @@ def main():
         for kind, surfs in room["surfaces"].items():
             for s in surfs:
                 m, uv = old_surface(s, photo.size)
-                old = render.tile(old, m, uv, ftex if kind == "floor" else wtex, fsize if kind == "floor" else wsize)
+                fl = kind == "floor"
+                old = render.tile(old, m, uv, ftex if fl else wtex, fsize if fl else wsize,
+                                  gloss=GLOSS.get((ft if fl else wt).get("finish"), 0.0))
         # new
         res = analyse.analyse(photo)
         img = res["image"]
         new = img
         for s in res["surfaces"]:
             fl = s["name"] == "floor"
-            new = render.tile(new, s["mask"], s["uv"], ftex if fl else wtex, fsize if fl else wsize)
+            new = render.tile(new, s["mask"], s["uv"], ftex if fl else wtex, fsize if fl else wsize,
+                              gloss=GLOSS.get((ft if fl else wt).get("finish"), 0.0))
         found = render.overlay(img, {k: v for k, v in res["layers"].items()})
         names = ", ".join(sorted(res["layers"]))
         size = img.size

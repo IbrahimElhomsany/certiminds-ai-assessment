@@ -31,7 +31,8 @@ def _resize(img: Image.Image) -> Image.Image:
     return img.resize((round(img.size[0] * s), round(img.size[1] * s)), Image.LANCZOS) if s < 1 else img
 
 
-def _split_walls(disp: np.ndarray, wall: np.ndarray, max_walls: int = 3) -> list[np.ndarray]:
+def _split_walls(disp: np.ndarray, wall: np.ndarray, max_walls: int = 3,
+                 grow: np.ndarray | None = None) -> list[np.ndarray]:
     """A room can show 2-3 walls at different angles: peel them off one flat plane at a time,
     then give every wall pixel to the plane it fits best and tidy the edges."""
     from scipy.ndimage import binary_closing, binary_opening
@@ -53,10 +54,13 @@ def _split_walls(disp: np.ndarray, wall: np.ndarray, max_walls: int = 3) -> list
     ys, xs = np.mgrid[0:H, 0:W]
     res = np.stack([np.abs(c[0] * xs + c[1] * ys + c[2] - disp) for c in coefs])
     best = res.argmin(0)
-    good = wall & (res.min(0) < 3 * tol * span)
+    # Pixels next to a wall that the cut-out model missed (veins, reflections, the strip above the
+    # floor) join the wall if they lie on its flat plane.
+    region = wall | grow if grow is not None else wall
+    good = region & (res.min(0) < 2 * tol * span)
     out = []
     for i in range(len(coefs)):
-        m = binary_closing(binary_opening(good & (best == i), iterations=2), iterations=3) & wall
+        m = binary_closing(binary_opening(good & (best == i), iterations=2), iterations=3) & region
         if m.sum() >= 0.01 * wall.size:
             out.append(m)
     return out
@@ -104,12 +108,14 @@ def analyse(photo: Image.Image, camera_height_cm: float = geometry.CAMERA_HEIGHT
     for name in OBJECTS:
         if name in layers:
             objects |= layers[name]
-    floor = layers.get("floor", np.zeros((H, W), bool)) & ~objects
-    ceiling = layers.get("ceiling", np.zeros((H, W), bool)) & ~objects & ~floor
-    wall = layers.get("wall", np.zeros((H, W), bool)) & ~objects & ~floor & ~ceiling
+    empty = np.zeros((H, W), bool)
+    floor = _fill(layers.get("floor", empty), objects)
+    ceiling = _fill(layers.get("ceiling", empty), objects) & ~floor
+    wall = _fill(layers.get("wall", empty), objects | floor | ceiling) & ~floor & ~ceiling
 
     t3 = time.perf_counter()
-    wall_parts = _split_walls(disp, wall)
+    free = ~(objects | floor | ceiling)
+    wall_parts = _split_walls(disp, wall, grow=free & _near(wall, max(4, W // 40)))
     K, floor_plane, wall_planes = geometry.solve_room(disp, floor, wall_parts, camera_height_cm=camera_height_cm)
     if len(wall_planes) > 1:
         merged = _merge_parallel([wall_parts[p.extra["part"]] for p in wall_planes], wall_planes)
@@ -124,7 +130,13 @@ def analyse(photo: Image.Image, camera_height_cm: float = geometry.CAMERA_HEIGHT
     surfaces = []
     if floor_plane is not None:
         # Keep only floor pixels that really lie on the flat floor (drops steps, low furniture edges).
-        surfaces.append({"name": "floor", "mask": floor & (floor_plane.inliers | _near(floor_plane.inliers)),
+        # Floor next to the cut-out that the model missed joins if it lies on the floor plane.
+        c = floor_plane.coef
+        ys, xs = np.mgrid[0:H, 0:W]
+        on_plane = np.abs(c[0] * xs + c[1] * ys + c[2] - disp) < 0.02 * (np.ptp(disp[floor]) or 1.0)
+        walls_any = np.any(wall_parts, 0) if wall_parts else np.zeros((H, W), bool)
+        floor = floor | (~(objects | ceiling | walls_any) & _near(floor, max(4, W // 40)) & on_plane)
+        surfaces.append({"name": "floor", "mask": floor & (floor_plane.inliers | _near(floor_plane.inliers)) | (floor & on_plane),
                          "uv": geometry.plane_uv(floor_plane, K, (H, W))})
         for p in wall_planes:
             part = wall_parts[p.extra["part"]]
@@ -137,6 +149,15 @@ def analyse(photo: Image.Image, camera_height_cm: float = geometry.CAMERA_HEIGHT
 
     return {"scale": scale, "scale_from": scale_from, "image": img, "disp": disp, "layers": layers, "found": found, "surfaces": surfaces,
             "objects": objects, "timings": timings, "K": K}
+
+
+def _fill(surface: np.ndarray, others: np.ndarray) -> np.ndarray:
+    """Close holes the cut-out model leaves in a surface (bright sun patches, reflections): any gap
+    surrounded by the surface and the things in front of it becomes surface, then the things are removed."""
+    from scipy.ndimage import binary_fill_holes
+    if not surface.any():
+        return surface
+    return binary_fill_holes(surface | (others & _near(surface, 8))) & ~others
 
 
 def _near(mask: np.ndarray, r: int = 3) -> np.ndarray:

@@ -11,8 +11,50 @@ def _luma(a):
     return a[..., 0] * 0.299 + a[..., 1] * 0.587 + a[..., 2] * 0.114
 
 
+def lighting(photo: Image.Image, mask: np.ndarray):
+    """The room's light on this surface, without the old surface's pattern.
+
+    - shade: how much brighter or darker each spot is than the surface's middle value. A median filter
+      first wipes out thin lines (old grout, marble veins) but keeps sun patches and shadows.
+    - tint: the colour of the light (warm sun, cool daylight), kept mild.
+    - shine: bright reflections (lamps, windows) for polished tiles.
+    Blurs only use pixels of this surface, so a dark sofa next to the floor doesn't darken it."""
+    from scipy.ndimage import gaussian_filter, median_filter
+
+    H0, W0 = mask.shape
+    if W0 > 512:                                              # light changes slowly: work small, then enlarge
+        size = (512, round(H0 * 512 / W0))
+        small = Image.fromarray(mask.astype(np.uint8) * 255).resize(size, Image.BILINEAR)
+        sh, ti, sn = lighting(photo.resize(size, Image.BILINEAR), np.asarray(small) > 127)
+        up = lambda x: np.asarray(Image.fromarray(x.astype(np.float32)).resize((W0, H0), Image.BILINEAR))
+        return up(sh), np.stack([up(ti[..., i]) for i in range(3)], -1), up(sn)
+
+    a = np.asarray(photo.convert("RGB"), dtype=np.float64) / 255
+    H, W = mask.shape
+    k = max(5, int(W * 0.025) | 1)                            # ~25 px on a 1024 px photo
+    m = mask.astype(np.float64)
+
+    def mblur(x, sigma):                                      # blur that ignores pixels off the surface
+        num = gaussian_filter(x * m, sigma)
+        den = gaussian_filter(m, sigma)
+        return num / np.maximum(den, 1e-4)
+
+    lum = _luma(a)
+    clean = median_filter(lum, size=k)                        # old pattern removed, light kept
+    near = mblur(clean, W * 0.003)
+    wide = mblur(clean, W * 0.03)
+    mid = float(np.median(near[mask])) or 0.5
+    shade = np.clip(near / mid, 0.25, 1.8)
+    rgb = np.stack([mblur(median_filter(a[..., i], size=k), W * 0.03) for i in range(3)], -1)
+    tint = rgb / np.maximum(_luma(rgb)[..., None], 1e-4)
+    tint = tint / np.maximum(np.median(tint[mask], 0), 1e-4)
+    tint = 1 + (tint - 1) * 0.6
+    shine = np.clip((lum - wide) / 0.35, 0, 1) * (lum > 0.75)
+    return shade, tint, gaussian_filter(shine, 1.0)
+
+
 def tile(photo: Image.Image, mask: np.ndarray, uv: np.ndarray, tex: Image.Image, tile_cm=(60.0, 60.0),
-         grout_cm=0.3, grout_rgb=(0.82, 0.80, 0.77), light=True) -> Image.Image:
+         grout_cm=0.3, grout_rgb=(0.82, 0.80, 0.77), light=True, gloss: float = 0.0) -> Image.Image:
     base = np.asarray(photo.convert("RGB"), dtype=np.float64) / 255
     H, W = mask.shape
     t = np.asarray(tex.convert("RGB").resize((512, 512), Image.LANCZOS), dtype=np.float64) / 255
@@ -31,11 +73,10 @@ def tile(photo: Image.Image, mask: np.ndarray, uv: np.ndarray, tex: Image.Image,
     d = np.minimum(np.minimum(lx, 1 - lx) * tile_cm[0], np.minimum(ly, 1 - ly) * tile_cm[1])
     inside = np.clip((d - grout_cm / 2) / 0.15 + 0.5, 0, 1)[:, None]
     col = col * inside + np.array(grout_rgb) * (1 - inside)
-    if light:
-        blur = np.asarray(photo.convert("RGB").filter(ImageFilter.GaussianBlur(6)), dtype=np.float64) / 255
-        lum = _luma(blur)
-        mean = float(np.median(lum[ok])) or 0.5
-        col = col * np.clip(lum[ok] / mean, 0.28, 1.75)[:, None]
+    if light and ok.any():
+        shade, tint, shine = lighting(photo, ok)
+        col = col * shade[ok][:, None] * tint[ok]
+        col = col + shine[ok][:, None] * gloss * 0.5
     out = base.copy()
     # soft edge: 1-px feather on the mask border
     soft = np.asarray(Image.fromarray((ok * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(0.8)),

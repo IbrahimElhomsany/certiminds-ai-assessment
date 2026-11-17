@@ -1,0 +1,5 @@
+# Room AI prototype (server-side floor/wall finding). Not needed to run the shop yet.
+# All three models are Apache 2.0: Grounding DINO tiny, SAM 2.1 tiny, Depth Anything V2 Small.
+torch>=2.4
+transformers>=4.56      # first version with SAM 2 built in
+scipy>=1.11

@@ -40,8 +40,9 @@ def intrinsics(w: int, h: int, focal_factor: float = FOCAL_FACTOR) -> np.ndarray
 
 
 def fit_plane_ransac(disp: np.ndarray, mask: np.ndarray, iters: int = 300, tol: float = 0.02,
-                     rng: np.random.Generator | None = None, max_pts: int = 20000):
-    """Fit d = a*x + b*y + c on pixels in mask. tol is relative to the disparity range. Returns (coef, inliers)."""
+                     rng: np.random.Generator | None = None, max_pts: int = 20000, span: float | None = None):
+    """Fit d = a*x + b*y + c on pixels in mask. tol is a share of `span` (default: the masked pixels'
+    disparity range). Returns (coef, inliers)."""
     rng = rng or np.random.default_rng(0)
     ys, xs = np.nonzero(mask)
     if len(xs) < 50:
@@ -53,7 +54,7 @@ def fit_plane_ransac(disp: np.ndarray, mask: np.ndarray, iters: int = 300, tol: 
     else:
         xs_s, ys_s, d_s = xs, ys, d
     A = np.stack([xs_s, ys_s, np.ones_like(xs_s)], 1).astype(np.float64)
-    span = float(np.percentile(d, 98) - np.percentile(d, 2)) or 1.0
+    span = span or float(np.percentile(d, 98) - np.percentile(d, 2)) or 1.0
     thr = tol * span
     best, best_n = None, -1
     for _ in range(iters):
@@ -136,7 +137,7 @@ def solve_room(disp: np.ndarray, floor_mask: np.ndarray, wall_masks: list[np.nda
     for i, m in enumerate(wall_masks):
         c, inl = fit_plane_ransac(disp, m, tol=0.03)
         if c is not None and inl.sum() > 400:
-            walls.append(Plane(f"wall{i}", c, inl))
+            walls.append(Plane(f"wall{i}", c, inl, extra={"part": i}))
     vals = disp[floor_mask | np.any(wall_masks, 0)] if wall_masks else disp[floor_mask]
     shift = solve_shift(fcoef, [p.coef for p in walls], K, (float(vals.min()), float(vals.max())))
 
@@ -159,3 +160,48 @@ def solve_room(disp: np.ndarray, floor_mask: np.ndarray, wall_masks: list[np.nda
         p.extra["angle_to_floor_deg"] = float(np.degrees(np.arccos(min(1.0, abs(float(nw @ floor.normal))))))
     floor.extra["shift"] = shift
     return K, floor, walls
+
+
+# Typical heights (cm) of things that stand on the floor. Used like a person judges size from a sofa:
+# measure each one in the photo, compare with its normal height, and fix the room's scale.
+KNOWN_HEIGHTS_CM = {"sofa": 82.0, "armchair": 80.0, "chair": 85.0, "door": 210.0,
+                    "kitchen counter": 90.0, "bathtub": 58.0}
+
+
+def object_height(floor: Plane, K: np.ndarray, mask: np.ndarray) -> float | None:
+    """Height in the current room units of an object standing on the floor (from its middle column)."""
+    ys, xs = np.nonzero(mask)
+    if len(xs) < 200:
+        return None
+    x0, x1 = np.percentile(xs, 35), np.percentile(xs, 65)
+    mid = (xs >= x0) & (xs <= x1)
+    yb, yt = np.percentile(ys[mid], 99), np.percentile(ys[mid], 1)
+    xc = float(np.median(xs[mid]))
+    Kinv = np.linalg.inv(K)
+    rb, rt = Kinv @ [xc, yb, 1.0], Kinv @ [xc, yt, 1.0]
+    denom = rb @ floor.normal
+    if denom <= 1e-6:
+        return None
+    Xb = rb * floor.dist / denom                       # where the object touches the floor
+    up = -floor.normal
+    # closest point between the vertical line Xb + h*up and the ray lam*rt
+    A = np.stack([up, -rt], 1)
+    sol, *_ = np.linalg.lstsq(A, -Xb, rcond=None)
+    h = float(sol[0])
+    return h if h > 0 else None
+
+
+def scale_from_objects(floor: Plane, K: np.ndarray, layers: dict) -> tuple[float, list]:
+    """Factor to multiply all distances by, from objects of known height. 1.0 if nothing usable."""
+    ratios = []
+    for name, true_h in KNOWN_HEIGHTS_CM.items():
+        m = layers.get(name)
+        if m is None:
+            continue
+        h = object_height(floor, K, m)
+        if h:
+            ratios.append((name, true_h / h))
+    if not ratios:
+        return 1.0, []
+    f = float(np.median([r for _, r in ratios]))
+    return float(np.clip(f, 0.3, 3.0)), ratios

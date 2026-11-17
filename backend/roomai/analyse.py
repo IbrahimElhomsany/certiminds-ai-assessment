@@ -32,17 +32,49 @@ def _resize(img: Image.Image) -> Image.Image:
 
 
 def _split_walls(disp: np.ndarray, wall: np.ndarray, max_walls: int = 3) -> list[np.ndarray]:
-    """A room can show 2-3 walls at different angles: peel them off one flat plane at a time."""
-    left, out = wall.copy(), []
+    """A room can show 2-3 walls at different angles: peel them off one flat plane at a time,
+    then give every wall pixel to the plane it fits best and tidy the edges."""
+    from scipy.ndimage import binary_closing, binary_opening
+
+    span = float(np.percentile(disp, 99) - np.percentile(disp, 1)) or 1.0
+    tol = 0.012
+    left, coefs = wall.copy(), []
     for _ in range(max_walls):
         if left.sum() < 0.01 * wall.size:
             break
-        coef, inl = geometry.fit_plane_ransac(disp, left, tol=0.03)
-        if coef is None or inl.sum() < 0.005 * wall.size:
+        coef, inl = geometry.fit_plane_ransac(disp, left, tol=tol, span=span)
+        if coef is None or inl.sum() < 0.01 * wall.size:
             break
-        out.append(inl)
+        coefs.append(coef)
         left &= ~inl
+    if not coefs:
+        return []
+    H, W = disp.shape
+    ys, xs = np.mgrid[0:H, 0:W]
+    res = np.stack([np.abs(c[0] * xs + c[1] * ys + c[2] - disp) for c in coefs])
+    best = res.argmin(0)
+    good = wall & (res.min(0) < 3 * tol * span)
+    out = []
+    for i in range(len(coefs)):
+        m = binary_closing(binary_opening(good & (best == i), iterations=2), iterations=3) & wall
+        if m.sum() >= 0.01 * wall.size:
+            out.append(m)
     return out
+
+
+def _merge_parallel(parts, walls, max_deg=12.0):
+    """Two pieces of the same wall (same direction, same distance) become one."""
+    groups = []
+    for m, p in zip(parts, walls):
+        for g in groups:
+            q = g["plane"]
+            ang = np.degrees(np.arccos(min(1.0, abs(float(p.normal @ q.normal)))))
+            if ang < max_deg and abs(p.dist - q.dist) / max(q.dist, 1e-6) < 0.15:
+                g["mask"] |= m
+                break
+        else:
+            groups.append({"mask": m.copy(), "plane": p})
+    return [g["mask"] for g in groups]
 
 
 def analyse(photo: Image.Image, camera_height_cm: float = geometry.CAMERA_HEIGHT_CM) -> dict:
@@ -51,7 +83,7 @@ def analyse(photo: Image.Image, camera_height_cm: float = geometry.CAMERA_HEIGHT
     W, H = img.size
     timings = {}
 
-    found = models.detect(img, SURFACES + OBJECTS)
+    found = [f for f in models.detect(img, SURFACES + OBJECTS) if f[0] in SURFACES or f[1] >= 0.3]
     timings["find_s"] = time.perf_counter() - t0
 
     t1 = time.perf_counter()
@@ -79,12 +111,23 @@ def analyse(photo: Image.Image, camera_height_cm: float = geometry.CAMERA_HEIGHT
     t3 = time.perf_counter()
     wall_parts = _split_walls(disp, wall)
     K, floor_plane, wall_planes = geometry.solve_room(disp, floor, wall_parts, camera_height_cm=camera_height_cm)
+    if len(wall_planes) > 1:
+        merged = _merge_parallel([wall_parts[p.extra["part"]] for p in wall_planes], wall_planes)
+        if len(merged) < len(wall_planes):
+            wall_parts = merged
+            K, floor_plane, wall_planes = geometry.solve_room(disp, floor, wall_parts, camera_height_cm=camera_height_cm)
+    scale, scale_from = 1.0, []
+    if floor_plane is not None:
+        scale, scale_from = geometry.scale_from_objects(floor_plane, K, layers)
+        for p in [floor_plane, *wall_planes]:
+            p.dist *= scale
     surfaces = []
     if floor_plane is not None:
         # Keep only floor pixels that really lie on the flat floor (drops steps, low furniture edges).
         surfaces.append({"name": "floor", "mask": floor & (floor_plane.inliers | _near(floor_plane.inliers)),
                          "uv": geometry.plane_uv(floor_plane, K, (H, W))})
-        for p, part in zip(wall_planes, wall_parts):
+        for p in wall_planes:
+            part = wall_parts[p.extra["part"]]
             if abs(p.extra["angle_to_floor_deg"] - 90) > 20:      # not standing upright: not a usable wall
                 continue
             surfaces.append({"name": p.name, "mask": part, "uv": geometry.plane_uv(p, K, (H, W)),
@@ -92,7 +135,7 @@ def analyse(photo: Image.Image, camera_height_cm: float = geometry.CAMERA_HEIGHT
     timings["geometry_s"] = time.perf_counter() - t3
     timings["total_s"] = time.perf_counter() - t0
 
-    return {"image": img, "disp": disp, "layers": layers, "found": found, "surfaces": surfaces,
+    return {"scale": scale, "scale_from": scale_from, "image": img, "disp": disp, "layers": layers, "found": found, "surfaces": surfaces,
             "objects": objects, "timings": timings, "K": K}
 
 

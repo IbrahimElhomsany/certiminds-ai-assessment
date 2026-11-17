@@ -118,6 +118,7 @@ def main():
             sheet.paste(p, ((i % 2) * size[0], (i // 2) * size[1]))
         sheet.save(out / f"{room['id']}.jpg", quality=88)
         timings[room["id"]] = {k: round(v, 1) for k, v in res["timings"].items()}
+        timings[room["id"]]["scale_fix"] = round(res["scale"], 2)
         timings[room["id"]]["walls_found"] = sum(1 for s in res["surfaces"] if s["name"] != "floor")
         print(room["id"], timings[room["id"]], flush=True)
     (out / "timings.json").write_text(json.dumps(timings, indent=2))

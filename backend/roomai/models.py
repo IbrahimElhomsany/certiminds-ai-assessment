@@ -35,19 +35,30 @@ def _torch():
     return torch
 
 
+def _dev():
+    """A graphics card (GPU) when the machine has one, otherwise the normal processor."""
+    import torch
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def _to(inputs):
+    d = _dev()
+    return {k: (v.to(d) if hasattr(v, "to") else v) for k, v in inputs.items()}
+
+
 def detect(img: Image.Image, labels: list[str], box_threshold=0.25, text_threshold=0.2):
     """Boxes for every label found: [(label, score, [x0, y0, x1, y1])]."""
     torch = _torch()
     from transformers import AutoModelForZeroShotObjectDetection, AutoProcessor
 
     proc, model = _get("det", lambda: (AutoProcessor.from_pretrained(DETECTOR),
-                                       AutoModelForZeroShotObjectDetection.from_pretrained(DETECTOR).eval()))
+                                       AutoModelForZeroShotObjectDetection.from_pretrained(DETECTOR).eval().to(_dev())))
     text = ". ".join(labels) + "."
     inputs = proc(images=img, text=text, return_tensors="pt")
     with torch.no_grad():
-        out = model(**inputs)
+        out = model(**_to(inputs))
     res = proc.post_process_grounded_object_detection(
-        out, inputs.input_ids, threshold=box_threshold, text_threshold=text_threshold,
+        out, inputs.input_ids.to(_dev()), threshold=box_threshold, text_threshold=text_threshold,
         target_sizes=[img.size[::-1]])[0]
     names = res.get("text_labels") or res.get("labels")
     found = []
@@ -66,10 +77,10 @@ def segment(img: Image.Image, boxes: list[list[float]]) -> np.ndarray:
     from transformers import Sam2Model, Sam2Processor
 
     proc, model = _get("seg", lambda: (Sam2Processor.from_pretrained(SEGMENTER),
-                                       Sam2Model.from_pretrained(SEGMENTER).eval()))
+                                       Sam2Model.from_pretrained(SEGMENTER).eval().to(_dev())))
     inputs = proc(images=img, input_boxes=[boxes], return_tensors="pt")
     with torch.no_grad():
-        out = model(**inputs, multimask_output=False)
+        out = model(**_to(inputs), multimask_output=False)
     masks = proc.post_process_masks(out.pred_masks.cpu(), inputs["original_sizes"])[0]
     return masks[:, 0].numpy().astype(bool)
 
@@ -80,9 +91,9 @@ def depth(img: Image.Image) -> np.ndarray:
     from transformers import AutoImageProcessor, AutoModelForDepthEstimation
 
     proc, model = _get("depth", lambda: (AutoImageProcessor.from_pretrained(DEPTH),
-                                         AutoModelForDepthEstimation.from_pretrained(DEPTH).eval()))
+                                         AutoModelForDepthEstimation.from_pretrained(DEPTH).eval().to(_dev())))
     inputs = proc(images=img, return_tensors="pt")
     with torch.no_grad():
-        pred = model(**inputs).predicted_depth
+        pred = model(**_to(inputs)).predicted_depth
     pred = torch.nn.functional.interpolate(pred[:, None], size=img.size[::-1], mode="bicubic", align_corners=False)
-    return pred[0, 0].numpy().astype(np.float64)
+    return pred[0, 0].cpu().numpy().astype(np.float64)

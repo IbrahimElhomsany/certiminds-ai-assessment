@@ -190,6 +190,12 @@ let V = null, vReady = false, roomToken = 0, loadedKey = null, AVAIL = {};
 const SAMPLE_W = 1672, SAMPLE_H = 941;          // our sample room photos
 function ownRoom() {
   const o = S.own;
+  if (o && o.photo && o.ai && o.ai.surfaces.length) {          // the room AI found the surfaces (cut-out pictures)
+    const surfaces = {};
+    for (const a of o.ai.surfaces) (surfaces[a.kind] = surfaces[a.kind] || []).push({ quad: a.quad, size: a.size, mask: a.mask, keep: [] });
+    return { id: "own", name: "Your room", location: o.location || "indoor", photo: o.photo.url,
+             width: o.photo.width, height: o.photo.height, surfaces, keepMask: null };
+  }
   if (!o || !o.photo || !o.floor || !o.floor.size) return null;
   // tiles cover the floor between the far dots and the bottom of the photo, not only up to the near dots
   const down = (a, b) => { const y = o.photo.height * 1.05, t = (y - a[1]) / ((b[1] - a[1]) || 1e-6); return t > 1 ? [a[0] + (b[0] - a[0]) * t, y] : b; };
@@ -349,6 +355,8 @@ function renderVisControls() {
     ? "A 360° room by Ceramica Nova, with the tiles laid on the floor the AI found in the picture. Drag to look all around. Colours on screen can look slightly different from the real tile."
     : room.kind === "pano"
     ? "Your 360° photo, with the tiles laid on a flat floor about 1.5 m below the camera. Look all around; measure your room before you order."
+    : room.id === "own" && S.own.ai
+    ? `Your photo. Our room AI found the floor${S.own.ai.surfaces.some(a => a.kind === "wall") ? " and walls" : ""} and keeps the furniture in front${S.own.ai.floorM2 ? `; the floor it can see is about <b>${S.own.ai.floorM2.toFixed(1)} m²</b>` : ""}. Tiles too big or small? Use <b>Room size</b> under Position. A spot missed? Use <b>Fix the area</b>. Or <a href="#/mark">place the dots by hand</a>. Measure your room before you order.`
     : room.id === "own"
     ? `Your photo. The tiles follow the dots you placed${S.own.areaM2 ? `, and your floor is about <b>${S.own.areaM2.toFixed(1)} m²</b>` : ""}. <a href="#/mark">Adjust the dots</a>. Measure your room before you order.`
     : "Sample room. Tiles are drawn at their real size and follow the room's light, but colours on screen can look slightly different from the real tile. Ask for a sample in the showroom before you order.";
@@ -721,8 +729,20 @@ function showAuto() {
 async function autoDetect() {
   const o = S.own, url = o.photo.url, rev = o.rev;
   const say = (text, kind = "") => { autoMsg = { url, text, kind }; if (S.own && S.own.rev === rev) showAuto(); };
-  if (!window.NovaSegment) { o.auto = "failed"; save(); return; }
   o.auto = "running";
+  // 1. the room AI on our server (sharper, finds every wall and real sizes); 2. the simpler detector in the browser
+  if (o.photo.id && !o.aiTried) {
+    o.aiTried = true; save();
+    say("Our room AI is looking at your photo: floor, walls and furniture. This can take up to a minute the first time…");
+    try {
+      const r = await fetch(`/api/v1/visual/photos/${o.photo.id}/analyse`, { method: "POST", headers: { "X-User-Id": USER_ID } });
+      const d = r.ok ? await r.json() : null;
+      if (!S.own || S.own.rev !== rev) return;
+      if (d && d.surfaces.some(a => a.kind === "floor")) { useAi(d); return; }
+    } catch {}
+    if (!S.own || S.own.rev !== rev) return;
+  }
+  if (!window.NovaSegment) { o.auto = "failed"; save(); say("Place the 4 dots by hand.", "bad"); return; }
   say("Finding the floor and walls…");
   try {
     const seg = await NovaSegment.detect(url, f => say(`Getting the room detector ready (first time only)… ${Math.round(f * 100)}%`));
@@ -740,6 +760,16 @@ async function autoDetect() {
     o.auto = "failed"; save();
     say("Automatic detection isn't available right now. Place the 4 dots by hand.", "bad");
   }
+}
+function useAi(d) {
+  const o = S.own, sum = k => d.surfaces.filter(a => a.kind === k).reduce((t, a) => t + (a.area_m2 || 0), 0);
+  o.ai = { surfaces: d.surfaces.map(a => ({ kind: a.kind, quad: a.quad, size: a.size, mask: a.mask })),
+           floorM2: sum("floor") || null, wallM2: sum("wall") || null };
+  o.auto = "done"; o.keep = null; o.areaM2 = null; o.wallM2 = null; o.rev = (o.rev || 0) + 1;
+  S.vis.room = "own"; S.vis.picked = true; S.vis.surface = "floor";
+  autoMsg = { url: o.photo.url, text: "The room AI found your floor. Showing it with tiles.", kind: "ok" };
+  save();
+  if (location.hash === "#/mark") location.hash = "#/visual";
 }
 function sizeMark() {
   if (!S.own || !S.own.photo) return;
@@ -827,7 +857,7 @@ function wireMark() {
   $("mredo").onclick = () => { if (S.own && S.own.auto !== "running") autoDetect(); };
   $("mdone").onclick = () => {
     const m = measureOwn(); if (!m.floor) return;
-    const o = S.own;
+    const o = S.own; o.ai = null;                          // the customer's own dots replace the room AI's result
     o.floor.size = [Math.round(m.floor.w * 100), Math.round(m.floor.d * 100)];
     o.areaM2 = m.floor.w * m.floor.d;
     if (m.wall) { o.wall.size = [Math.round(m.wall.w * 100), Math.round(m.wall.h * 100)]; o.wallM2 = m.wall.w * m.wall.h; }

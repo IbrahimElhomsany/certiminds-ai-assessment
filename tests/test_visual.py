@@ -140,3 +140,32 @@ def test_3d_viewer_files_are_served():
         assert client.get("/assets/" + f).status_code == 200
     for img in ("walk_living.jpg", "walk_bath.jpg"):
         assert client.get("/images/" + img).status_code == 200
+
+
+def test_room_ai_is_asked_once_per_photo_and_only_by_its_owner(monkeypatch, tmp_path):
+    fid = upload(jpeg()).json()["id"]
+    path = f"/api/v1/visual/photos/{fid}/analyse"
+    monkeypatch.delenv("ROOMAI_URL", raising=False)
+    assert client.post(path, headers={"X-User-Id": ME}).status_code == 503       # not set up: browser falls back
+    monkeypatch.setenv("ROOMAI_URL", "https://roomai.example")
+    monkeypatch.setenv("ROOMAI_TOKEN", "t0ken")
+    assert client.post(path, headers={"X-User-Id": OTHER}).status_code == 403
+    calls = []
+
+    class Answer:
+        status_code = 200
+        def json(self):
+            return {"width": 1200, "height": 900, "scale": 1.1, "surfaces": [
+                {"kind": "floor", "mask": "data:image/png;base64,AAAA", "quad": [[0, 0], [1, 0], [1, 1], [0, 1]], "size": [100, 100]},
+                {"kind": "door", "mask": "x", "quad": [], "size": []}]}
+
+    def fake_post(url, content, headers, **kw):
+        calls.append((url, headers["Authorization"]))
+        return Answer()
+    import httpx
+    monkeypatch.setattr(httpx, "post", fake_post)
+    for _ in range(2):
+        r = client.post(path, headers={"X-User-Id": ME})
+        assert r.status_code == 200 and [s["kind"] for s in r.json()["surfaces"]] == ["floor"]
+    assert calls == [("https://roomai.example/analyse", "Bearer t0ken")]           # second time from the saved answer
+    assert (tmp_path / f"{fid}.roomai").exists()

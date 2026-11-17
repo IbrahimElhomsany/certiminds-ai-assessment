@@ -53,3 +53,27 @@ def test_no_floor_returns_none():
     disp = np.ones((50, 60))
     K, fl, walls = solve_room(disp, np.zeros_like(disp, bool), [])
     assert fl is None and walls == []
+
+
+def test_service_square_matches_the_floor():
+    """The 100 x 100 cm square the service sends to the browser must stretch tiles exactly like the AI's own cm grid."""
+    from backend.roomai.service import area_m2, square_on_plane
+    disp, floor, wall, world = synthetic_room()
+    K, fl, _ = solve_room(disp, floor, [wall], camera_height_cm=HEIGHT)
+    uv = plane_uv(fl, K, disp.shape)
+    quad = square_on_plane(uv, floor, fl, K, 1.0)
+    assert quad is not None
+    # homography square (cm) -> photo px, then back for some floor pixels
+    A, b = [], []
+    for (x, y), (u, v) in zip([[0, 0], [100, 0], [100, 100], [0, 100]], quad):
+        A += [[x, y, 1, 0, 0, 0, -u * x, -u * y], [0, 0, 0, x, y, 1, -v * x, -v * y]]
+        b += [u, v]
+    Hm = np.append(np.linalg.solve(np.array(A), np.array(b)), 1).reshape(3, 3)
+    ys, xs = np.nonzero(floor)
+    pick = np.linspace(0, len(xs) - 1, 50).astype(int)
+    p = np.linalg.inv(Hm) @ np.stack([xs[pick], ys[pick], np.ones(50)])
+    got = (p[:2] / p[2]).T
+    want = uv[ys[pick], xs[pick]]
+    d = got - want
+    assert np.abs(d - d.mean(0)).max() < 0.5          # same grid, only shifted
+    assert area_m2(uv, floor, 1.0) > 1

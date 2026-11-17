@@ -137,12 +137,12 @@ def analyse(photo: Image.Image, camera_height_cm: float = geometry.CAMERA_HEIGHT
         walls_any = np.any(wall_parts, 0) if wall_parts else np.zeros((H, W), bool)
         floor = floor | (~(objects | ceiling | walls_any) & _near(floor, max(4, W // 40)) & on_plane)
         surfaces.append({"name": "floor", "mask": floor & (floor_plane.inliers | _near(floor_plane.inliers)) | (floor & on_plane),
-                         "uv": geometry.plane_uv(floor_plane, K, (H, W))})
+                         "uv": geometry.plane_uv(floor_plane, K, (H, W)), "plane": floor_plane})
         for p in wall_planes:
             part = wall_parts[p.extra["part"]]
             if abs(p.extra["angle_to_floor_deg"] - 90) > 20:      # not standing upright: not a usable wall
                 continue
-            surfaces.append({"name": p.name, "mask": part, "uv": geometry.plane_uv(p, K, (H, W)),
+            surfaces.append({"name": p.name, "mask": part, "uv": geometry.plane_uv(p, K, (H, W)), "plane": p,
                              "angle_to_floor_deg": p.extra["angle_to_floor_deg"]})
     timings["geometry_s"] = time.perf_counter() - t3
     timings["total_s"] = time.perf_counter() - t0

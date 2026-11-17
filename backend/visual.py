@@ -69,6 +69,7 @@ def _clean_old() -> int:
             days = RENDER_DAYS if m.get("kind") == "render" else PHOTO_DAYS
             if now - m.get("created", 0) > days * 86400:
                 meta.with_suffix(".jpg").unlink(missing_ok=True)
+                meta.with_suffix(".roomai").unlink(missing_ok=True)
                 meta.unlink(missing_ok=True)
                 removed += 1
         except Exception:
@@ -124,6 +125,50 @@ def get_file(name: str):
         raise HTTPException(status_code=404, detail="This image has expired or does not exist.")
     return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400",
                                                                 "X-Robots-Tag": "noindex"})
+
+
+# ------------------------------------------------------------------ room AI for the customer's own photo
+@router.post("/api/v1/visual/photos/{fid}/analyse")
+def analyse_photo(fid: str, x_user_id: Optional[str] = Header(default=None)):
+    """Ask the room AI service (backend/roomai, running on a pay-per-use graphics card) where the floor and
+    walls are in this photo. The answer is saved next to the photo, so each photo is analysed only once.
+    503 when the service isn't set up: the browser then uses its own, simpler detection."""
+    owner = _visitor(x_user_id)
+    url, token = os.getenv("ROOMAI_URL", "").rstrip("/"), os.getenv("ROOMAI_TOKEN", "")
+    if not FILE_ID.match(fid) or not (STORE / f"{fid}.jpg").exists():
+        raise HTTPException(status_code=404, detail="This photo has expired or does not exist.")
+    try:
+        meta = json.loads((STORE / f"{fid}.json").read_text())
+    except (OSError, ValueError):
+        raise HTTPException(status_code=404, detail="This photo has expired or does not exist.")
+    if meta.get("owner") != owner:
+        raise HTTPException(status_code=403, detail="This photo belongs to another visitor.")
+    cache = STORE / f"{fid}.roomai"
+    if cache.exists():
+        return json.loads(cache.read_text())
+    if not url or not token:
+        raise HTTPException(status_code=503, detail="The room AI is not switched on.")
+    import httpx
+    t0 = time.time()
+    try:
+        r = httpx.post(f"{url}/analyse", content=(STORE / f"{fid}.jpg").read_bytes(),
+                       headers={"Authorization": f"Bearer {token}", "Content-Type": "image/jpeg"},
+                       timeout=httpx.Timeout(180, connect=20), follow_redirects=True)
+    except httpx.HTTPError as e:
+        log_event("roomai_error", error=type(e).__name__)
+        raise HTTPException(status_code=502, detail="The room AI did not answer in time.")
+    if r.status_code != 200:
+        log_event("roomai_error", status=r.status_code)
+        raise HTTPException(status_code=502, detail="The room AI could not read this photo.")
+    data = r.json()
+    surfaces = [s for s in data.get("surfaces", []) if s.get("kind") in ("floor", "wall")
+                and isinstance(s.get("mask"), str) and s["mask"].startswith("data:image/png;base64,")
+                and len(s.get("quad") or []) == 4 and len(s.get("size") or []) == 2]
+    data = {"width": data.get("width"), "height": data.get("height"), "scale": data.get("scale", 1.0),
+            "surfaces": surfaces, "timings": data.get("timings", {})}
+    cache.write_text(json.dumps(data))
+    log_event("roomai_done", seconds=round(time.time() - t0, 1), surfaces=len(surfaces))
+    return data
 
 
 # ------------------------------------------------------------------ phone hand-off (QR code)

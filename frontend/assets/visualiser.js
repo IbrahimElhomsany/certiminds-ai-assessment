@@ -210,7 +210,8 @@
     let opts = { layout: 0, rotate: false, grout: 0.3, groutColor: "#d9d6cf" };
 
     /** Load a room: { photo, width?, surfaces: { floor: [plane...], wall: [...] } }
-     *  plane = { quad: [[x,y] x4 far-left, far-right, near-right, near-left], size: [w_cm, d_cm], area: [[x,y]...], keep: [shape...] } */
+     *  plane = { quad: [[x,y] x4 far-left, far-right, near-right, near-left], size: [w_cm, d_cm], area: [[x,y]...], keep: [shape...] }
+     *  or, from the room AI: { quad, size, mask: "data:image/png..." } where mask is white where the surface is. */
     async function setRoom(room) {
       const im = await loadImage(room.photo);
       const maxW = room.closeup ? 1600 : Math.min(1800, im.naturalWidth);
@@ -237,7 +238,8 @@
         for (const pl of list) {
           const m = Object.assign(document.createElement("canvas"), { width: W, height: H }).getContext("2d", { willReadFrequently: true });
           m.fillStyle = "#fff"; m.filter = "blur(0.8px)";
-          drawShapes(m, [pl.area], sx);
+          if (pl.mask) m.drawImage(await loadImage(pl.mask), 0, 0, W, H);   // area found by the room AI (a cut-out picture)
+          else drawShapes(m, [pl.area], sx);
           if (addMasks[surface]) m.drawImage(addMasks[surface], 0, 0, W, H);   // areas the customer painted in
           m.globalCompositeOperation = "destination-out";
           drawShapes(m, pl.keep, sx);

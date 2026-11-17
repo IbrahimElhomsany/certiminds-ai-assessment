@@ -37,7 +37,9 @@ def _download():
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
-    .pip_install("torch>=2.4", "transformers>=4.56", "scipy>=1.11", "numpy", "pillow", "fastapi[standard]")
+    # the same versions that were tested (torchvision is needed by SAM 2's image preparation)
+    .pip_install("torch==2.15.0", "torchvision==0.29.2", "transformers==5.23.0", "scipy==1.18.1",
+                 "numpy==2.5.5", "pillow==13.0.0", "fastapi[standard]")
     .env({"HF_HOME": "/models"})
     .run_function(_download)
     .run_commands("mkdir -p /root/backend && touch /root/backend/__init__.py")

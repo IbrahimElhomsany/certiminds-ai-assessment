@@ -3,3 +3,4 @@
 torch>=2.4
 transformers>=4.56      # first version with SAM 2 built in
 scipy>=1.11
+torchvision>=0.19

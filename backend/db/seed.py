@@ -20,7 +20,7 @@ from backend.auth import audit, hash_password
 from backend.accessories import ACCESSORIES
 from backend.catalog import CATALOG, SANITARY
 from backend.db.database import Base, SessionLocal, engine, init_db, local_now
-from backend.db.models import (Activity, Batch, Customer, DiscountRequest, Lead, Order, OrderLine, Product,
+from backend.db.models import (Activity, AiFeedback, Batch, Customer, DiscountRequest, Lead, Order, OrderLine, Product,
                                Quote, QuoteLine, StockMovement, Tenant, User)
 from backend.tools import compute_quantity
 
@@ -355,10 +355,30 @@ def seed_tenant(db: Session, slug: str = "ceramica-nova", name: str = "Ceramica 
                 quote.status = "expired"                     # old quote nobody followed up
 
     seed_batches(db, tenant, products, sold, start, rng, users["warehouse@ceramicanova.demo"])
+    seed_ai_ratings(db, tenant, users, now)
     audit(db, tenant.id, "seed", user_id=owner.id, entity="tenant", entity_id=tenant.slug,
           after={"days": DAYS, "leads": counters["L"], "quotes": counters["Q"], "orders": counters["O"]}, at=now)
     db.commit()
     return tenant
+
+
+def seed_ai_ratings(db: Session, tenant: Tenant, users: dict[str, User], now: datetime) -> None:
+    """A few demo 👍/👎 on the admin AI (D2), so "What the AI has learned" isn't empty on a fresh demo."""
+    rows = [
+        ("manager@ceramicanova.demo", "Which products bring the most profit?", 1, None, None,
+         [{"tool": "sales_breakdown", "input": {"group_by": "product", "days": 30}}], 9),
+        ("owner@ceramicanova.demo", "How are we doing this month compared with last month?", 1, None, None,
+         [{"tool": "get_kpis", "input": {"days": 30}}], 6),
+        ("manager@ceramicanova.demo", "Why are we losing leads?", 1, None, None,
+         [{"tool": "leads_breakdown", "input": {"group_by": "lost_reason", "days": 30}}], 4),
+        ("lina@ceramicanova.demo", "Which of my quotations need a call today?", -1, "too_long", "Just give me the names",
+         [{"tool": "waiting_quotes", "input": {}}], 2),
+    ]
+    for email, question, rating, reason, comment, tools, days_ago in rows:
+        at = now - timedelta(days=days_ago)
+        db.add(AiFeedback(tenant_id=tenant.id, user_id=users[email].id, kind="ask", question=question,
+                          answer="(demo answer)", tools=tools, mode="claude", rating=rating, reason=reason,
+                          comment=comment, created_at=at, rated_at=at))
 
 
 def seed_batches(db: Session, tenant: Tenant, products: dict[str, Product], sold, start: date,

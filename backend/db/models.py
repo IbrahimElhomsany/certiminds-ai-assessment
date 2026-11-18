@@ -264,6 +264,27 @@ class ChoiceEvent(TenantMixin, Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
 
 
+class AiFeedback(TenantMixin, Base):
+    """One answer from "Ask your data" or one follow-up draft, and what the staff member thought of it (D2).
+    rating: 1 helpful, -1 not helpful, 0 not rated yet. For drafts, sent_text is what was finally sent (staff's own
+    edit of the draft), which is the best example of how the team writes. The AI reuses these (backend/crm/learning.py)."""
+    __tablename__ = "ai_feedback"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(10), index=True)          # ask | draft
+    question: Mapped[str] = mapped_column(Text)                        # the question, or "WhatsApp to <customer> on Q-..."
+    answer: Mapped[Optional[str]] = mapped_column(Text)
+    tools: Mapped[Optional[list]] = mapped_column(JSON(none_as_null=True))   # [{"tool": ..., "input": {...}}]
+    mode: Mapped[str] = mapped_column(String(20))                      # claude | offline | checked_fallback | template
+    channel: Mapped[Optional[str]] = mapped_column(String(10))
+    rating: Mapped[int] = mapped_column(Integer, default=0, index=True)
+    reason: Mapped[Optional[str]] = mapped_column(String(40))
+    comment: Mapped[Optional[str]] = mapped_column(String(300))
+    sent_text: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    rated_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+
+
 class ShopCheckout(TenantMixin, Base):
     """What the customer gave at the shop checkout and how they paid. Its random token is the customer's private
     link to their receipt or quotation (order numbers are easy to guess, the token is not)."""

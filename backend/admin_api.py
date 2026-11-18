@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from backend.auth import (PERMISSIONS, audit, authenticate, create_token, current_user, hash_password, has_permission,
                           require)
 from backend.db.database import get_db, local_now
-from backend.db.models import LEAD_STAGES, AuditLog, Lead, Tenant, User
+from backend.db.models import LEAD_STAGES, AiFeedback, AuditLog, Lead, Tenant, User
 from backend.ratelimit import RateLimiter
 
 router = APIRouter(prefix="/api/admin", tags=["Nova Studio admin"])
@@ -725,6 +725,7 @@ import os  # noqa: E402
 
 from backend.crm import ask as ask_data  # noqa: E402
 from backend.crm import followups  # noqa: E402
+from backend.crm import learning  # noqa: E402
 
 ai_limiter = RateLimiter(max_requests=12, window_seconds=60)   # per user: keeps API costs predictable
 _ai_client = None
@@ -748,8 +749,10 @@ def ai_allowed(user: User) -> None:
 
 
 @router.get("/ask")
-def ask_info(user: User = Depends(require("dashboard.view"))):
-    return {"ai_available": ai_client() is not None, "suggestions": ask_data.SUGGESTIONS,
+def ask_info(user: User = Depends(require("dashboard.view")), db: Session = Depends(get_db)):
+    liked = learning.popular_questions(db, user.tenant_id, 3)       # the team's favourite questions first (D2)
+    rest = [q for q in ask_data.SUGGESTIONS if q not in liked]
+    return {"ai_available": ai_client() is not None, "suggestions": (liked + rest)[:6], "liked": liked,
             "scope": "company" if analytics.own_leads(user) is None else "my leads"}
 
 
@@ -785,10 +788,37 @@ def followup_draft(quote_id: int, req: DraftRequest, user: User = Depends(requir
 class SentRequest(BaseModel):
     channel: Literal["whatsapp", "email"] = "whatsapp"
     text: str = Field(min_length=10, max_length=2000)
+    feedback_id: Optional[int] = None
 
 
 @router.post("/followups/{quote_id}/sent")
 def followup_sent(quote_id: int, req: SentRequest, user: User = Depends(require("quotes.edit")),
                   db: Session = Depends(get_db)):
-    run(followups.mark_sent, db, user, get_quote(db, user, quote_id), req.text, req.channel)
+    run(followups.mark_sent, db, user, get_quote(db, user, quote_id), req.text, req.channel, req.feedback_id)
     return {"ok": True}
+
+
+# ---- D2: staff rate AI answers and drafts; the AI learns from it (backend/crm/learning.py)
+class RateRequest(BaseModel):
+    rating: Literal[1, -1]
+    reason: Optional[str] = Field(default=None, max_length=40)
+    comment: Optional[str] = Field(default=None, max_length=300)
+
+
+@router.post("/ai/feedback/{feedback_id}")
+def ai_rate(feedback_id: int, req: RateRequest, user: User = Depends(require("dashboard.view")),
+            db: Session = Depends(get_db)):
+    row = db.get(AiFeedback, feedback_id)
+    if row is None or row.tenant_id != user.tenant_id or row.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Answer not found.")
+    if req.rating < 0 and req.reason and req.reason not in learning.REASONS:
+        raise field_error("reason", "Pick one of the reasons.", 422)
+    learning.rate(db, user, row, req.rating, req.reason, req.comment)
+    audit(db, user.tenant_id, "ai.rate", user.id, row.kind, str(row.id), after={"rating": row.rating, "reason": row.reason})
+    db.commit()
+    return {"id": row.id, "rating": row.rating, "reason": row.reason}
+
+
+@router.get("/ai/learning")
+def ai_learning(user: User = Depends(require("dashboard.view")), db: Session = Depends(get_db)):
+    return {"reasons": learning.REASONS, **learning.summary(db, user.tenant_id)}

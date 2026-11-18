@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from backend.auth import audit, has_permission
 from backend.crm import analytics as A
+from backend.crm import learning
 from backend.db.database import local_now
 from backend.db.models import Customer, Lead, Product, Quote, Tenant, User
 
@@ -242,10 +243,10 @@ def _period(question: str) -> Optional[int]:
     return None
 
 
-def offline_pick(question: str) -> tuple[Optional[str], dict]:
+def offline_pick(question: str, avoid: frozenset = frozenset()) -> tuple[Optional[str], dict]:
     q = question.lower()
     for pattern, tool, args in OFFLINE_RULES:
-        if re.search(pattern, q):
+        if tool not in avoid and re.search(pattern, q):
             args = dict(args)
             if "days" in TOOLS[tool][2]:
                 args["days"] = _period(question) or 30
@@ -266,10 +267,16 @@ def ask(db: Session, user: User, question: str, client=None, model: Optional[str
         return out
 
     mode, answer, note, usage = "offline", None, None, None
+    hints = learning.ask_hints(db, user.tenant_id, question)          # what the team's earlier ratings say (D2)
+    learned = learning.learned_note(hints)
     if client is not None:
         model = model or os.getenv("ADMIN_LLM_MODEL") or os.getenv("LLM_MODEL", "claude-opus-5-5")
+        system = _system(db, user)
+        extra = learning.prompt_block(hints)
+        if extra:
+            system += "\n\n" + extra
         try:
-            answer, usage = _claude(client, model, _system(db, user), question, call)
+            answer, usage = _claude(client, model, system, question, call)
             mode = "claude"
             bad = ungrounded(answer, [c["output"] for c in calls], question)
             if bad:
@@ -280,7 +287,14 @@ def ask(db: Session, user: User, question: str, client=None, model: Optional[str
             note = f"Claude was not reachable ({type(e).__name__}), so this is the offline answer."
             calls.clear()
     if mode == "offline":
-        tool, args = offline_pick(question)
+        route = hints["route"]
+        if route and route["tool"] in TOOLS and route["tool"] not in hints["avoid"]:
+            tool, args = route["tool"], dict(route["input"])
+            if "days" in TOOLS[tool][2] and _period(question):
+                args["days"] = _period(question)
+            learned = f'Looked up the same figures as for "{route["from"]}", which your team marked helpful.'
+        else:
+            tool, args = offline_pick(question, frozenset(hints["avoid"]))
         if tool:
             call(tool, args)
         else:
@@ -288,8 +302,11 @@ def ask(db: Session, user: User, question: str, client=None, model: Optional[str
                             "leads, lost reasons, the pipeline and quotations waiting for a reply.")
     audit(db, user.tenant_id, "ai.ask", user.id, after={"question": question, "mode": mode,
                                                          "tools": [c["tool"] for c in calls]})
+    row = learning.record(db, user, "ask", question, answer, mode,
+                          tools=[{"tool": c["tool"], "input": c["input"]} for c in calls] or None)
     db.commit()
     return {"question": question, "answer": answer, "mode": mode, "note": note, "calls": calls, "usage": usage,
+            "feedback_id": row.id, "learned": learned,
             "scope": "company" if A.own_leads(user) is None else "my leads"}
 
 

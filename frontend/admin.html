@@ -314,6 +314,17 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
     .chev { flex-direction:column; gap:4px; } .cv, .cv:first-child { clip-path:none; border-radius:9px; margin:0; padding:8px 12px; display:flex; justify-content:space-between; align-items:center; text-align:left; }
     .cv b { font-size:17px; } .dash-a > :last-child .snap { flex-direction:column; }
   }
+  /* D2: rating AI answers */
+  .raterow { display:flex; align-items:center; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid var(--line); flex-wrap:wrap; }
+  .raterow .rate { border:1px solid var(--line); background:var(--panel); border-radius:999px; padding:4px 12px; font-size:15px; cursor:pointer; line-height:1.4; }
+  .raterow .rate:hover { transform:scale(1.08); }
+  .raterow .rate.on { border-color:var(--accent); background:var(--accent-soft); }
+  .learned { display:inline-block; padding:5px 10px; border-radius:8px; background:var(--accent-soft); color:var(--ink); }
+  .learncard summary { cursor:pointer; list-style:none; display:flex; align-items:center; flex-wrap:wrap; gap:4px; }
+  .learncard summary::-webkit-details-marker { display:none; }
+  .learngrid { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:12px; }
+  .learncard .up { color:#1d8a4f; } .learncard .down { color:#c0392b; }
+  @media (max-width: 700px) { .learngrid { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
@@ -1170,7 +1181,61 @@ function askResult(r) {
     ${r.note ? `<div class="notice ${r.mode === "claude" ? "" : "warn"} small" style="margin-top:8px">${esc(r.note)}</div>` : ""}
     ${r.calls.length ? `<details class="data" ${r.answer ? "" : "open"}><summary>Data used (${r.calls.map(c => TOOL_NAMES[c.tool] || c.tool).join(", ")})</summary>
       ${r.calls.map(c => `<div style="margin-top:8px"><b>${esc(TOOL_NAMES[c.tool] || c.tool)}</b> <span class="muted">${esc(Object.entries(c.input).map(([k, v]) => label(k) + ": " + v).join(", "))}</span>${dataTable(c.output)}</div>`).join("")}</details>` : ""}
-    <div class="muted small" style="margin-top:8px">${r.scope === "company" ? "Whole company" : "Your leads only"} · demo data${r.usage ? ` · ${num(r.usage.input_tokens + r.usage.output_tokens)} tokens, about $${r.usage.cost_usd.toFixed(3)}` : ""}</div></div>`;
+    ${r.learned ? `<div class="learned small" style="margin-top:8px">${ICON_LEARN} ${esc(r.learned)}</div>` : ""}
+    <div class="muted small" style="margin-top:8px">${r.scope === "company" ? "Whole company" : "Your leads only"} · demo data${r.usage ? ` · ${num(r.usage.input_tokens + r.usage.output_tokens)} tokens, about $${r.usage.cost_usd.toFixed(3)}` : ""}</div>
+    ${rateRow(r)}</div>`;
+}
+/* D2: thumbs up / down on AI answers and drafts. The AI reuses what the team liked and avoids what it didn't. */
+const ICON_LEARN = `<svg class="ico" viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-3px"><path d="M12 3a6 6 0 00-3.5 10.9V17h7v-3.1A6 6 0 0012 3z"/><path d="M9.5 20.5h5"/></svg>`;
+let LEARN_REASONS = null;
+function rateRow(r) {
+  if (!r.feedback_id) return "";
+  const done = r.rating ? `<span class="muted small">${r.rating > 0 ? "Thanks, the AI will reuse this approach." : "Thanks, the AI will avoid this next time."}</span>` : "";
+  return `<div class="raterow" data-fb="${r.feedback_id}"><span class="muted small">Was this helpful?</span>
+    <button type="button" class="rate ${r.rating > 0 ? "on" : ""}" data-rate="1" aria-label="Helpful" title="Helpful">👍</button>
+    <button type="button" class="rate ${r.rating < 0 ? "on" : ""}" data-rate="-1" aria-label="Not helpful" title="Not helpful">👎</button>${done}</div>`;
+}
+async function rateIt(item, rating, redraw) {
+  if (rating < 0) {
+    if (!LEARN_REASONS) LEARN_REASONS = (await api("/ai/learning")).reasons;
+    const v = await ask("What was wrong?", [
+      {name: "reason", label: "Reason", type: "select", required: true, value: "", options: [["", "Choose…"], ...Object.entries(LEARN_REASONS)]},
+      {name: "comment", label: "What did you expect?", type: "textarea", max: 300}],
+      "Send", "Your answer teaches the AI. It is only used inside your company.",
+      v => api(`/ai/feedback/${item.feedback_id}`, {method: "POST", body: {rating, reason: v.reason, comment: v.comment || null}}));
+    if (!v) return;
+  } else {
+    try { await api(`/ai/feedback/${item.feedback_id}`, {method: "POST", body: {rating}}); } catch (e) { return toast(e.message, "bad"); }
+  }
+  item.rating = rating; redraw();
+}
+function wireRates(list, redraw) {
+  document.querySelectorAll("[data-fb] [data-rate]").forEach(b => b.onclick = () => {
+    const item = list.find(x => String(x.feedback_id) === b.closest("[data-fb]").dataset.fb);
+    if (item) rateIt(item, +b.dataset.rate, redraw);
+  });
+}
+async function learningCard() {
+  let L; try { L = await api("/ai/learning"); } catch { return ""; }
+  LEARN_REASONS = L.reasons;
+  const pct = w => w.helpful_pct == null ? "–" : w.helpful_pct + "%";
+  const trend = (a, b) => a.helpful_pct == null || b.helpful_pct == null ? "" : a.helpful_pct > b.helpful_pct ? ` <span class="up">▲ from ${b.helpful_pct}%</span>`
+    : a.helpful_pct < b.helpful_pct ? ` <span class="down">▼ from ${b.helpful_pct}%</span>` : "";
+  const total = L.ask.helpful + L.ask.not_helpful + L.draft.helpful + L.draft.not_helpful;
+  const list = (title, items) => items.length ? `<div class="muted small" style="margin-top:12px">${title}</div><ul class="small" style="margin:4px 0 0 18px;padding:0">${items.join("")}</ul>` : "";
+  return `<details class="card learncard" style="margin-top:14px"><summary><b>${ICON_LEARN} What the AI has learned from your team</b>
+      <span class="muted small">&nbsp;${total ? `${total} ratings · answers helpful this week: ${pct(L.ask.this_week)}` : "No ratings yet: use 👍 / 👎 under each answer"}</span></summary>
+    <div class="learngrid">
+      <div><div class="muted small">Ask your data</div><div class="kv" style="margin:6px 0">
+        <span>Helpful</span><span>${L.ask.helpful}</span><span>Not helpful</span><span>${L.ask.not_helpful}</span>
+        <span>Helpful this week</span><span>${pct(L.ask.this_week)}${trend(L.ask.this_week, L.ask.last_week)}</span></div></div>
+      <div><div class="muted small">Follow-up drafts</div><div class="kv" style="margin:6px 0">
+        <span>Sent</span><span>${L.draft.sent}</span><span>Sent without changes</span><span>${L.draft.sent_as_is}</span>
+        <span>Helpful / not</span><span>${L.draft.helpful} / ${L.draft.not_helpful}</span></div></div></div>
+    ${list("Team's favourite questions (shown first above)", L.favourite_questions.map(q => `<li>${esc(q)}</li>`))}
+    ${list("Recently marked not helpful (the AI now avoids these)", L.recent_not_helpful.map(x => `<li>${esc(x.question)}: <b>${esc(x.reason || "no reason")}</b>${x.comment ? ` · “${esc(x.comment)}”` : ""}</li>`))}
+    ${list("Questions it couldn't answer yet", L.unanswered.map(q => `<li>${esc(q)}</li>`))}
+    <p class="muted small" style="margin:12px 0 0">How it learns: a new question is matched with similar questions your team rated before. Claude is shown what was liked (which figures, which style) and what was not, and why. Without an AI key, the lookup your team liked is reused. Follow-up drafts copy the style of messages your team actually sent. Figures are always looked up fresh and checked. Nothing leaves your company.</p></details>`;
 }
 async function askView() {
   shell("ask", topbar("Ask your data") + loading());
@@ -1183,12 +1248,15 @@ async function askView() {
       <p class="muted small" style="margin:10px 0 0">${info.ai_available
         ? "Claude reads the figures through fixed, read-only lookups (it never sees the database and can't change anything). Every number in its answer is checked against the data; open “Data used” to see where it came from."
         : "No Anthropic API key is set, so this page uses simple keyword matching and shows the figures directly. Add ANTHROPIC_API_KEY to .env to get written answers from Claude."}</p></div>
+    <div id="learn"></div>
     <div id="answers">${S.asks.map(askResult).join("")}</div>`;
+  const redraw = () => { $("#answers").innerHTML = S.asks.map(askResult).join(""); wireRates(S.asks, redraw); learningCard().then(h => { if ($("#learn")) $("#learn").innerHTML = h; }); };
+  redraw();
   const go = async q => {
     if (!q.trim()) return;
     $("#ab").disabled = true; $("#ab").textContent = "Thinking…";
     try { const r = await api("/ask", {method: "POST", body: {question: q}}); S.asks.unshift(r); S.asks = S.asks.slice(0, 10);
-          $("#answers").innerHTML = S.asks.map(askResult).join(""); $("#aq").value = ""; }
+          redraw(); $("#aq").value = ""; }
     catch (e) { toast(e.message, "bad"); }
     $("#ab").disabled = false; $("#ab").textContent = "Ask";
   };
@@ -1222,7 +1290,9 @@ function showDraft(d) {
   const wa = d.channel === "whatsapp", tag = d.mode === "claude" ? `<span class="ai-tag">AI draft · Claude · check before sending</span>` : `<span class="ai-tag off">Standard template</span>`;
   $("#editor").innerHTML = `<div class="card" style="margin-bottom:14px"><div class="head"><h2 class="grow">${wa ? "WhatsApp" : "Email"} to ${esc(d.customer)} · ${esc(d.quote)}</h2>${tag}</div>
     ${d.note ? `<div class="notice warn small" style="margin-bottom:10px">${esc(d.note)}</div>` : ""}
+    ${d.learned ? `<div class="learned small" style="margin-bottom:8px">${ICON_LEARN} ${esc(d.learned)}</div>` : ""}
     <textarea class="draft" id="dt">${esc(d.text)}</textarea>
+    <div id="drate" style="margin-top:6px">${rateRow(d)}</div>
     <div class="actions" style="margin-top:10px">
       ${wa ? (d.whatsapp_number ? `<a class="btn ghost sm" id="open" target="_blank" rel="noopener">Open in WhatsApp</a>` : `<span class="muted small">No phone number on file.</span>`)
            : (d.email ? `<a class="btn ghost sm" id="open">Open in email app</a>` : `<span class="muted small">No email on file.</span>`)}
@@ -1234,7 +1304,8 @@ function showDraft(d) {
   if ($("#open")) { $("#open").href = link(); $("#dt").oninput = () => $("#open").href = link(); }
   $("#copy").onclick = () => { navigator.clipboard?.writeText($("#dt").value).then(() => toast("Copied"), () => toast("Couldn't copy", "bad")); };
   $("#close").onclick = () => $("#editor").innerHTML = "";
-  $("#sent").onclick = () => act(() => api(`/followups/${d.quote_id}/sent`, {method: "POST", body: {channel: d.channel, text: $("#dt").value}}),
+  const redraw = () => { $("#drate").innerHTML = rateRow(d); wireRates([d], redraw); }; wireRates([d], redraw);
+  $("#sent").onclick = () => act(() => api(`/followups/${d.quote_id}/sent`, {method: "POST", body: {channel: d.channel, text: $("#dt").value, feedback_id: d.feedback_id}}),
                                  "Logged on the lead's timeline");
   $("#editor").scrollIntoView({behavior: "smooth", block: "start"});
 }

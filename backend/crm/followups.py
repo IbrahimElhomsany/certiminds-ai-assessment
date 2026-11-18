@@ -15,10 +15,11 @@ from sqlalchemy.orm import Session
 
 from backend.auth import audit
 from backend.crm import analytics as A
+from backend.crm import learning
 from backend.crm.ask import numbers_in
 from backend.crm.operations import OpError, can_see_quote, note
 from backend.db.database import local_now
-from backend.db.models import Customer, Lead, Product, Quote, Tenant, User
+from backend.db.models import AiFeedback, Customer, Lead, Product, Quote, Tenant, User
 
 CHANNELS = ("whatsapp", "email")
 BANNED = re.compile(r"\b(discount|% off|percent off|reduc|cheaper|lower (the )?price|special (price|offer|deal)|free)\w*", re.I)
@@ -71,10 +72,12 @@ Rules:
 - Sign with the salesperson's name. Output only the message."""
 
 
-def ai_draft(client, model: str, f: dict, channel: str) -> str:
+def ai_draft(client, model: str, f: dict, channel: str, learned: str = "") -> str:
     lines = "\n".join(f"- {k}: {v}" for k, v in f.items() if k not in ("phone", "email") and v not in (None, [], ""))
-    resp = client.messages.create(model=model, max_tokens=500, messages=[{"role": "user", "content": PROMPT.format(
-        channel=channel, email_note=" (start with a 'Subject:' line)" if channel == "email" else "", facts=lines)}])
+    prompt = PROMPT.format(channel=channel, email_note=" (start with a 'Subject:' line)" if channel == "email" else "", facts=lines)
+    if learned:
+        prompt += "\n\n" + learned
+    resp = client.messages.create(model=model, max_tokens=500, messages=[{"role": "user", "content": prompt}])
     from backend.observability import METRICS
     from backend.providers import estimate_cost
     METRICS.record_llm(model, resp.usage.input_tokens, resp.usage.output_tokens,
@@ -106,28 +109,35 @@ def draft(db: Session, user: User, quote: Quote, channel: str = "whatsapp", clie
         raise OpError(409, f"Quotation {quote.number} is {quote.status}; no follow-up needed.")
     f = facts(db, quote)
     text, mode, note_ = None, "template", None
+    examples = learning.draft_examples(db, quote.tenant_id, channel)       # the team's own sent messages (D2)
+    learned = None
     if client is not None:
         model = os.getenv("ADMIN_LLM_MODEL") or os.getenv("LLM_MODEL", "claude-opus-5-5")
         try:
-            text = ai_draft(client, model, f, channel)
+            text = ai_draft(client, model, f, channel, learning.draft_block(examples))
             problem = safe(text, f)
             if problem:
                 note_ = f"The AI draft {problem}, so the standard template is shown instead."
                 text = None
             else:
                 mode = "claude"
+                if examples["sent"] or examples["avoid"]:
+                    learned = (f"Written in the style of {len(examples['sent'])} message(s) your team sent before"
+                               + (" and avoiding what the team disliked." if examples["avoid"] else "."))
         except Exception as e:
             note_ = f"Claude was not reachable ({type(e).__name__}); this is the standard template."
     text = text or template(f, channel)
     audit(db, quote.tenant_id, "ai.followup_draft", user.id, "quote", quote.number, after={"mode": mode, "channel": channel})
+    row = learning.record(db, user, "draft", f"{channel.capitalize()} follow-up to {f['customer']} on {quote.number}",
+                          text, mode, channel=channel)
     db.commit()
     phone = re.sub(r"\D", "", f["phone"] or "")
     return {"quote": quote.number, "quote_id": quote.id, "channel": channel, "text": text, "mode": mode, "note": note_,
             "customer": f["customer"], "phone": f["phone"], "email": f["email"],
-            "whatsapp_number": phone if len(phone) >= 8 else None}
+            "whatsapp_number": phone if len(phone) >= 8 else None, "feedback_id": row.id, "learned": learned}
 
 
-def mark_sent(db: Session, user: User, quote: Quote, text: str, channel: str) -> None:
+def mark_sent(db: Session, user: User, quote: Quote, text: str, channel: str, feedback_id: Optional[int] = None) -> None:
     if channel not in CHANNELS:
         raise OpError(422, "channel must be whatsapp or email")
     if not can_see_quote(db, user, quote):
@@ -139,5 +149,8 @@ def mark_sent(db: Session, user: User, quote: Quote, text: str, channel: str) ->
     if lead is None:
         raise OpError(409, "This quotation has no lead to log the follow-up on.")
     note(db, user, lead, "follow_up", f"Follow-up on {quote.number} sent by {channel.capitalize()}: {text[:600]}")
+    row = db.get(AiFeedback, feedback_id) if feedback_id else None
+    if row and row.tenant_id == quote.tenant_id and row.user_id == user.id and row.kind == "draft":
+        learning.sent(db, row, text)                                     # what staff really sent teaches the next draft
     audit(db, quote.tenant_id, "followup.sent", user.id, "quote", quote.number, after={"channel": channel})
     db.commit()

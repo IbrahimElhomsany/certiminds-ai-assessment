@@ -467,7 +467,7 @@ async function showroom(products) {
   if (!cv.getContext("webgl2") && !cv.getContext("webgl")) return flat();
   box.prepend(cv);
   const nav = document.createElement("div"); nav.className = "nav";
-  nav.innerHTML = `<button type="button" class="again" id="srAgain" title="Go back outside and walk in again">↻ Walk in again</button><button type="button" aria-label="Previous display" data-go="-1">‹</button><button type="button" aria-label="Next display" data-go="1">›</button>`;
+  nav.innerHTML = `<button type="button" class="again" id="srAgain" title="Go back outside and walk in again">↻ Walk in again</button><button type="button" aria-label="Previous view" data-go="-1">‹</button><button type="button" aria-label="Next view" data-go="1">›</button>`;
   box.append(nav);
   const tip = document.createElement("div"); tip.className = "tip"; tip.hidden = true; box.append(tip);
   cv.addEventListener("pointermove", e => { const r = box.getBoundingClientRect(); tip.style.left = (e.clientX - r.left) + "px"; tip.style.top = (e.clientY - r.top) + "px"; });
@@ -490,14 +490,17 @@ async function showroom(products) {
   box.append(back);
   try {
     if (SR) SR.stop();
-    const mod = await import("/assets/showroom.js");
+    // the photo-real showroom (360° pictures rendered in Blender); the live-3D one if those pictures are missing
+    const real = await fetch("/images/showroom/spots.json", { method: "HEAD" }).then(r => r.ok).catch(() => false);
+    const mod = await import(real ? "/assets/showroom360.js" : "/assets/showroom.js");
     if (!document.body.contains(cv)) return;          // the visitor already left the home page
     SR = await mod.create(cv, products, {
       onPick: p => { hint.style.opacity = 0; card(p); sec.classList.toggle("picked", !!p || sec.classList.contains("picked")); },
       onHover: p => { tip.hidden = !p; if (p) tip.textContent = p.name + " · tap to see it"; },
       onEntered: () => {
         sec.classList.add("inside"); hint.style.opacity = 1;
-        hint.textContent = matchMedia("(pointer: fine)").matches ? "Drag to look around · arrow keys to walk · click a display to see the tile"
+        hint.textContent = real ? "Drag to look around · tap a circle to walk there · tap + to see a tile · ‹ › for the next view"
+          : matchMedia("(pointer: fine)").matches ? "Drag to look around · arrow keys to walk · click a display to see the tile"
           : "Drag to look around · tap the floor to walk · tap a display to see the tile";
       },
     });

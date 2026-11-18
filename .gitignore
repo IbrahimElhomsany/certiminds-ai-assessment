@@ -11,3 +11,5 @@ data/uploads/
 
 # World Labs rooms are downloaded at run time (backend/worlds.py), never committed
 data/worlds/
+images/showroom/_tex/
+images/showroom/_check.jpg

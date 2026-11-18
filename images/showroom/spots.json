@@ -1,0 +1,480 @@
+{
+ "spots": [
+  {
+   "id": "s0",
+   "name": "Outside the shop",
+   "image": "/images/showroom/s0.jpg",
+   "small": "/images/showroom/s0_s.jpg",
+   "look_u": 0.0,
+   "links": [
+    {
+     "to": "s1",
+     "u": 0.0,
+     "v": 0.564,
+     "dist": 7.6
+    }
+   ],
+   "booths": []
+  },
+  {
+   "id": "s1",
+   "name": "Entrance",
+   "image": "/images/showroom/s1.jpg",
+   "small": "/images/showroom/s1_s.jpg",
+   "look_u": 0.0,
+   "links": [
+    {
+     "to": "s0",
+     "u": 0.5,
+     "v": 0.564,
+     "dist": 7.6
+    },
+    {
+     "to": "s7",
+     "u": 0.0,
+     "v": 0.6125,
+     "dist": 4.2
+    },
+    {
+     "to": "s5",
+     "u": 0.1494,
+     "v": 0.5699,
+     "dist": 6.94
+    },
+    {
+     "to": "s6",
+     "u": 0.8506,
+     "v": 0.5699,
+     "dist": 6.94
+    }
+   ],
+   "booths": []
+  },
+  {
+   "id": "s2",
+   "name": "Bathrooms, left",
+   "image": "/images/showroom/s2.jpg",
+   "small": "/images/showroom/s2_s.jpg",
+   "look_u": 0.125,
+   "links": [
+    {
+     "to": "s3",
+     "u": 0.7571,
+     "v": 0.6055,
+     "dist": 4.5
+    },
+    {
+     "to": "s5",
+     "u": 0.4384,
+     "v": 0.6555,
+     "dist": 2.92
+    },
+    {
+     "to": "s7",
+     "u": 0.6666,
+     "v": 0.5923,
+     "dist": 5.2
+    }
+   ],
+   "booths": [
+    {
+     "id": "b_metro",
+     "u": 0.0738,
+     "v": 0.5,
+     "dist": 3.13
+    },
+    {
+     "id": "b_aqua",
+     "u": 0.9174,
+     "v": 0.5,
+     "dist": 3.22
+    },
+    {
+     "id": "b_concrete",
+     "u": 0.288,
+     "v": 0.5,
+     "dist": 3.81
+    },
+    {
+     "id": "b_sand",
+     "u": 0.3851,
+     "v": 0.5,
+     "dist": 5.6
+    }
+   ]
+  },
+  {
+   "id": "s3",
+   "name": "Marble booth",
+   "image": "/images/showroom/s3.jpg",
+   "small": "/images/showroom/s3_s.jpg",
+   "look_u": 0.0,
+   "links": [
+    {
+     "to": "s2",
+     "u": 0.2571,
+     "v": 0.6055,
+     "dist": 4.5
+    },
+    {
+     "to": "s4",
+     "u": 0.7429,
+     "v": 0.6055,
+     "dist": 4.5
+    },
+    {
+     "to": "s7",
+     "u": 0.5,
+     "v": 0.6609,
+     "dist": 2.8
+    }
+   ],
+   "booths": [
+    {
+     "id": "b_aqua",
+     "u": 0.1337,
+     "v": 0.5,
+     "dist": 3.89
+    },
+    {
+     "id": "b_calacatta",
+     "u": 0.9939,
+     "v": 0.5,
+     "dist": 2.6
+    },
+    {
+     "id": "b_concrete",
+     "u": 0.2712,
+     "v": 0.5,
+     "dist": 8.27
+    },
+    {
+     "id": "b_ocean",
+     "u": 0.725,
+     "v": 0.5,
+     "dist": 8.3
+    }
+   ]
+  },
+  {
+   "id": "s4",
+   "name": "Bathrooms, right",
+   "image": "/images/showroom/s4.jpg",
+   "small": "/images/showroom/s4_s.jpg",
+   "look_u": 0.875,
+   "links": [
+    {
+     "to": "s3",
+     "u": 0.2429,
+     "v": 0.6055,
+     "dist": 4.5
+    },
+    {
+     "to": "s6",
+     "u": 0.5616,
+     "v": 0.6555,
+     "dist": 2.92
+    },
+    {
+     "to": "s7",
+     "u": 0.3334,
+     "v": 0.5923,
+     "dist": 5.2
+    }
+   ],
+   "booths": [
+    {
+     "id": "b_onyx",
+     "u": 0.0738,
+     "v": 0.5,
+     "dist": 3.13
+    },
+    {
+     "id": "b_mosaic",
+     "u": 0.9174,
+     "v": 0.5,
+     "dist": 3.22
+    },
+    {
+     "id": "b_ocean",
+     "u": 0.704,
+     "v": 0.5,
+     "dist": 3.86
+    }
+   ]
+  },
+  {
+   "id": "s5",
+   "name": "Floor tiles",
+   "image": "/images/showroom/s5.jpg",
+   "small": "/images/showroom/s5_s.jpg",
+   "look_u": 0.25,
+   "links": [
+    {
+     "to": "s2",
+     "u": 0.9384,
+     "v": 0.6555,
+     "dist": 2.92
+    },
+    {
+     "to": "s7",
+     "u": 0.7528,
+     "v": 0.5859,
+     "dist": 5.6
+    },
+    {
+     "to": "s1",
+     "u": 0.6494,
+     "v": 0.5699,
+     "dist": 6.94
+    }
+   ],
+   "booths": [
+    {
+     "id": "b_metro",
+     "u": 0.0087,
+     "v": 0.5,
+     "dist": 5.51
+    },
+    {
+     "id": "b_aqua",
+     "u": 0.9274,
+     "v": 0.5,
+     "dist": 6.13
+    },
+    {
+     "id": "b_concrete",
+     "u": 0.1536,
+     "v": 0.5,
+     "dist": 3.16
+    },
+    {
+     "id": "b_sand",
+     "u": 0.3333,
+     "v": 0.5,
+     "dist": 3.0
+    }
+   ]
+  },
+  {
+   "id": "s6",
+   "name": "Outdoor and floor",
+   "image": "/images/showroom/s6.jpg",
+   "small": "/images/showroom/s6_s.jpg",
+   "look_u": 0.75,
+   "links": [
+    {
+     "to": "s4",
+     "u": 0.0616,
+     "v": 0.6555,
+     "dist": 2.92
+    },
+    {
+     "to": "s7",
+     "u": 0.2472,
+     "v": 0.5859,
+     "dist": 5.6
+    },
+    {
+     "to": "s1",
+     "u": 0.3506,
+     "v": 0.5699,
+     "dist": 6.94
+    }
+   ],
+   "booths": [
+    {
+     "id": "b_calacatta",
+     "u": 0.125,
+     "v": 0.5,
+     "dist": 7.78
+    },
+    {
+     "id": "b_onyx",
+     "u": 0.0679,
+     "v": 0.5,
+     "dist": 6.04
+    },
+    {
+     "id": "b_mosaic",
+     "u": 0.9856,
+     "v": 0.5,
+     "dist": 5.52
+    },
+    {
+     "id": "b_ocean",
+     "u": 0.8378,
+     "v": 0.5,
+     "dist": 3.05
+    },
+    {
+     "id": "b_terra",
+     "u": 0.6578,
+     "v": 0.5,
+     "dist": 3.11
+    }
+   ]
+  },
+  {
+   "id": "s7",
+   "name": "Ceramica Nova AI desk",
+   "image": "/images/showroom/s7.jpg",
+   "small": "/images/showroom/s7_s.jpg",
+   "look_u": 0.0,
+   "links": [
+    {
+     "to": "s1",
+     "u": 0.5,
+     "v": 0.6125,
+     "dist": 4.2
+    },
+    {
+     "to": "s3",
+     "u": 0.0,
+     "v": 0.6609,
+     "dist": 2.8
+    },
+    {
+     "to": "s2",
+     "u": 0.1666,
+     "v": 0.5923,
+     "dist": 5.2
+    },
+    {
+     "to": "s4",
+     "u": 0.8334,
+     "v": 0.5923,
+     "dist": 5.2
+    },
+    {
+     "to": "s5",
+     "u": 0.2528,
+     "v": 0.5859,
+     "dist": 5.6
+    },
+    {
+     "to": "s6",
+     "u": 0.7472,
+     "v": 0.5859,
+     "dist": 5.6
+    }
+   ],
+   "booths": [
+    {
+     "id": "b_metro",
+     "u": 0.132,
+     "v": 0.5,
+     "dist": 8.0
+    },
+    {
+     "id": "b_aqua",
+     "u": 0.0784,
+     "v": 0.5,
+     "dist": 6.13
+    },
+    {
+     "id": "b_calacatta",
+     "u": 0.9971,
+     "v": 0.5,
+     "dist": 5.4
+    },
+    {
+     "id": "b_onyx",
+     "u": 0.9171,
+     "v": 0.5,
+     "dist": 6.23
+    },
+    {
+     "id": "b_concrete",
+     "u": 0.2175,
+     "v": 0.5,
+     "dist": 8.37
+    },
+    {
+     "id": "b_sand",
+     "u": 0.2807,
+     "v": 0.5,
+     "dist": 8.35
+    },
+    {
+     "id": "b_ocean",
+     "u": 0.7788,
+     "v": 0.5,
+     "dist": 8.34
+    },
+    {
+     "id": "b_terra",
+     "u": 0.7156,
+     "v": 0.5,
+     "dist": 8.4
+    }
+   ]
+  }
+ ],
+ "booths": [
+  {
+   "id": "b_metro",
+   "sku": "CN010",
+   "floor": "CN003",
+   "set": "SN001",
+   "title": "Metro White"
+  },
+  {
+   "id": "b_aqua",
+   "sku": "CN008",
+   "floor": "CN007",
+   "set": "SN002",
+   "title": "Aqua Shield"
+  },
+  {
+   "id": "b_calacatta",
+   "sku": "CN006",
+   "floor": "CN006",
+   "set": null,
+   "title": "Royal Calacatta"
+  },
+  {
+   "id": "b_onyx",
+   "sku": "CN011",
+   "floor": "CN005",
+   "set": null,
+   "title": "Black Onyx"
+  },
+  {
+   "id": "b_mosaic",
+   "sku": "CN013",
+   "floor": "CN012",
+   "set": "SN003",
+   "title": "Pearl Mosaic"
+  },
+  {
+   "id": "b_concrete",
+   "sku": "CN015",
+   "floor": "CN015",
+   "set": null,
+   "title": "Concrete Light"
+  },
+  {
+   "id": "b_sand",
+   "sku": "CN002",
+   "floor": "CN002",
+   "set": null,
+   "title": "Desert Sand"
+  },
+  {
+   "id": "b_ocean",
+   "sku": "CN014",
+   "floor": "CN004",
+   "set": null,
+   "title": "Garden Slate"
+  },
+  {
+   "id": "b_terra",
+   "sku": "CN001",
+   "floor": "CN009",
+   "set": null,
+   "title": "Arctic Pearl"
+  }
+ ],
+ "closed": "/images/showroom/s0_closed.jpg"
+}

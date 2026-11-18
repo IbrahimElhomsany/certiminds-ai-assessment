@@ -221,11 +221,11 @@ window.NOVA_ROOMS.push(
   // picture is turned from the first one. Worked out from where the door, TV, armchair and console appear in each picture.
   { id: "pano_tvroom", kind: "pano", name: "TV lounge 360°", location: "indoor", photo: "/images/pano_tvroom.jpg", thumb: "/images/pano_tvroom_thumb.jpg",
     from: "tvroom", width: 1600, height: 900, surfaces: { floor: [{}], wall: [{}] },
-    // "By the garden door" and "Reading corner" were taken out 2026-11-18: their floor/wall finding spilled onto the
-    // sofa and table. They come back once the new room AI has been run on them.
     spots: [
       { name: "Middle of the room", photo: "/images/pano_tvroom.jpg", at: [0, 0], turn: 0 },
+      { name: "By the garden door", photo: "/images/pano_tvroom_door.jpg", at: [-0.65, 1.8], turn: 57.1 },
       { name: "By the TV", photo: "/images/pano_tvroom_tv.jpg", at: [0.75, -0.55], turn: -54.2 },
+      { name: "Reading corner", photo: "/images/pano_tvroom_corner.jpg", at: [0.5, -1.65], turn: 0.3 },
     ] },
   // a walkable version of the TV lounge, made by World Labs from the 360° picture (backend/worlds.py). It is only
   // listed once it has been made (GET /api/worlds/tvroom says "ready").

@@ -54,6 +54,8 @@
            background:var(--accent); color:#fff; font-size:11px; font-weight:600; display:grid; place-items:center; }
   .count[hidden] { display:none; }
   .askai .short { display:none; }
+  nav a.vizlink { color:var(--accent); font-weight:600; }
+  @media (max-width: 1720px) { nav.main a.vizlink { display:none; } }
   @media (max-width: 1380px) {              /* keep the header on one line on laptop screens */
     header .bar { gap:14px; } nav.main a { padding:8px 9px; } .search { max-width:260px; }
     .askai .long { display:none; } .askai .short { display:inline; }
@@ -69,11 +71,12 @@
   @media (prefers-reduced-motion: reduce) { .hero .cta .btn, .hero .cta .btn:hover { transition:none; transform:none; } }
   .hero img { width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:18px; }
   /* the 3D showroom on the home page (assets/showroom.js) */
-  .showroom { position:relative; margin:22px 0 30px; height:min(74vh, 640px); min-height:460px; border-radius:20px; overflow:hidden; background:#e9e5de; }
+  .showroom { position:relative; width:100vw; margin:0 calc(50% - 50vw) 30px; height:calc(100svh - 140px); min-height:520px; overflow:hidden; background:#e9e5de; }
+  body { overflow-x:clip; }
   .showroom .stage { position:absolute; inset:0; }
   .showroom .intro { z-index:2; }
   .showroom canvas { position:absolute; inset:0; width:100%; height:100%; display:block; cursor:grab; touch-action:none; }
-  .showroom .intro { position:absolute; left:0; top:0; bottom:0; width:min(440px, 46%); padding:34px 34px; display:flex; flex-direction:column; justify-content:center;
+  .showroom .intro { position:absolute; left:0; top:0; bottom:0; --side:max(34px, calc(50vw - 596px)); width:calc(var(--side) + min(460px, 34vw)); padding:34px 34px 34px var(--side); display:flex; flex-direction:column; justify-content:center;
     background:linear-gradient(90deg, rgba(255,255,255,.94) 0%, rgba(255,255,255,.86) 70%, rgba(255,255,255,0)); pointer-events:none; }
   .showroom .intro > * { pointer-events:auto; }
   .showroom .intro { transition:opacity .35s ease, transform .35s ease; }
@@ -86,7 +89,7 @@
   .showroom h1 { font-size:38px; margin:0 0 12px; letter-spacing:-.01em; }
   .showroom .intro p { margin:0 0 20px; color:var(--muted); font-size:15px; }
   .showroom .cta { display:flex; gap:10px; flex-wrap:wrap; }
-  .showroom .hint { position:absolute; left:50%; bottom:16px; transform:translateX(-50%); background:rgba(17,17,17,.78); color:#fff; font-size:12.5px;
+  .showroom .hint { position:absolute; left:50%; top:16px; transform:translateX(-50%); background:rgba(17,17,17,.78); color:#fff; font-size:12.5px;
     padding:8px 14px; border-radius:999px; white-space:nowrap; pointer-events:none; transition:opacity .4s; }
   .showroom .skip { position:absolute; right:16px; bottom:16px; z-index:3; border:0; border-radius:999px; background:rgba(17,17,17,.78); color:#fff;
     padding:8px 14px; font:inherit; font-size:13px; cursor:pointer; }
@@ -97,6 +100,12 @@
   .showroom .nav button { width:42px; height:42px; border-radius:50%; border:0; background:rgba(255,255,255,.92); box-shadow:0 2px 10px rgba(0,0,0,.15);
     font-size:18px; cursor:pointer; color:var(--ink); }
   .showroom .nav button:hover { background:#fff; transform:scale(1.06); }
+  .showroom .viz { position:absolute; right:16px; top:74px; z-index:3; display:none; align-items:center; gap:8px; border-radius:999px; padding:11px 18px;
+    background:var(--accent); color:#fff; font-weight:600; font-size:14px; text-decoration:none; box-shadow:0 6px 20px rgba(61,111,216,.45); transition:transform .18s ease; }
+  .showroom .viz:hover { transform:scale(1.05); }
+  .showroom .viz .ico { width:18px; height:18px; stroke:#fff; }
+  .showroom.inside .viz { display:inline-flex; }
+  .showroom .stage:has(.pcard) .viz { display:none; }
   .showroom .tip { position:absolute; pointer-events:none; background:#111; color:#fff; font-size:12px; padding:5px 9px; border-radius:7px; transform:translate(12px, 12px); }
   .showroom .pcard { position:absolute; right:16px; bottom:16px; width:300px; background:#fff; border-radius:16px; box-shadow:0 12px 34px rgba(0,0,0,.22);
     padding:14px; display:grid; grid-template-columns:84px 1fr; gap:12px; animation:pop .25s ease; }
@@ -273,11 +282,12 @@
   }
   @media (max-width: 640px) {
     .showroom { height:auto; min-height:0; display:flex; flex-direction:column; background:none; border-radius:0; overflow:visible; }
-    .showroom .stage { position:relative; height:62vh; min-height:380px; border-radius:16px; overflow:hidden; background:#e9e5de; }
-    .showroom .intro { position:static; width:auto; padding:6px 0 16px; background:none; }
+    .showroom .stage { position:relative; height:72svh; min-height:420px; overflow:hidden; background:#e9e5de; }
+    .showroom .intro { position:static; width:auto; padding:16px 16px 14px; background:none; }
+    .showroom .viz { right:10px; top:10px; padding:9px 14px; font-size:13px; }
     .showroom h1 { font-size:28px; }
     .showroom .pcard { left:10px; right:10px; bottom:10px; width:auto; }
-    .showroom .hint { bottom:auto; top:12px; left:12px; transform:none; white-space:normal; max-width:60%; }
+    .showroom .hint { top:auto; bottom:112px; left:12px; transform:none; white-space:normal; max-width:calc(100% - 24px); }
     .showroom .nav { top:auto; bottom:12px; right:12px; }
     .showroom .stage:has(.pcard) .nav { display:none; }
     .showroom.picked .intro, .showroom.picked .intro > * { opacity:1; transform:none; pointer-events:auto; }
@@ -312,6 +322,7 @@
       <a href="#/shop?kind=tile&location=outdoor" data-k="outdoor">Outdoor</a>
       <a href="#/shop?kind=set" data-k="set">Bathroom sets</a>
       <a href="#/shop?kind=acc" data-k="acc">Grout &amp; adhesive</a>
+      <a href="/assistant#/rooms" class="vizlink">Room visualiser</a>
     </nav>
     <form class="search" id="searchForm" role="search">
       <svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
@@ -326,6 +337,7 @@
     <a href="#/shop?kind=tile&location=outdoor" data-k="outdoor">Outdoor</a>
     <a href="#/shop?kind=set" data-k="set">Bathroom sets</a>
     <a href="#/shop?kind=acc" data-k="acc">Grout &amp; adhesive</a>
+    <a href="/assistant#/rooms" class="vizlink">Room visualiser</a>
     <a href="#/shop" data-k="all">All products</a>
   </nav>
 </header>
@@ -419,12 +431,13 @@ async function home() {
     <div class="intro">
       <div class="kicker">THE CERAMICA NOVA SHOWROOM</div>
       <h1>Walk into our showroom</h1>
-      <p>Look around, tap any display to see the tile, its price and stock, then try it in a photo of your own room.</p>
-      <div class="cta"><a class="btn" href="#/shop?kind=tile">Shop tiles ${ICON.arrow}</a><a class="btn ghost" href="/assistant#/rooms">Try tiles in my room</a></div>
+      <p>Look around, tap any + to see the tile, its price and stock. Then use our room visualiser to see it in a photo of your own room.</p>
+      <div class="cta"><a class="btn" href="#/shop?kind=tile">Shop tiles ${ICON.arrow}</a><a class="btn ghost" href="/assistant#/rooms"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><circle cx="12" cy="12.5" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/></svg> Room visualiser</a></div>
     </div>
     <div class="stage" id="srStage">
       <div class="hint" id="srHint">Welcome to Ceramica Nova</div>
       <button class="skip" type="button" id="srSkip">Skip ›</button>
+      <a class="viz" href="/assistant#/rooms"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><circle cx="12" cy="12.5" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/></svg>See our tiles in your room</a>
     </div>
   </section>
   <section class="usp">

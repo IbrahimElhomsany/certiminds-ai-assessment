@@ -232,7 +232,8 @@ for (const r of ROOMS) if (r.world && !(r.world in worlds)) {
   }).catch(() => {});
 }
 const worldReady = key => !!worlds[key];
-const allRooms = () => [ownRoom(), panoRoom(), ...ROOMS.filter(r => !r.world || worldReady(r.world))].filter(Boolean);
+// the live-3D rooms (kind "3d") looked like a game next to the photos, so they are no longer offered (2026-11-18)
+const allRooms = () => [ownRoom(), panoRoom(), ...ROOMS.filter(r => r.kind !== "3d" && (!r.world || worldReady(r.world)))].filter(Boolean);
 const is3d = r => r && (r.kind === "3d" || r.kind === "pano" || r.kind === "splat");
 const curRoom = () => atSpot(allRooms().find(r => r.id === S.vis.room) || ROOMS[0]);
 const roomKey = r => r.id === "own" ? "own:" + (S.own.rev || 0) : r.id === "pano" ? "pano:" + (S.pano.rev || 0) : r.spots ? r.id + ":" + (r.spot || 0) : r.id;
@@ -353,7 +354,8 @@ function sizeStage() {
 function renderVisControls() {
   const room = curRoom(), surf = S.vis.surface;
   $("vtitle").textContent = room.name;
-  $("v3d").querySelector("span").textContent = is3d(room) ? "Photo rooms" : room.view360 ? "360° view" : "Walk in 3D";
+  $("v3d").querySelector("span").textContent = is3d(room) ? "Photo rooms" : "360° view";
+  $("v3d").hidden = !is3d(room) && !room.view360;      // only rooms with a real 360° picture of the same room
   $("rooms").innerHTML = allRooms().map(r => `<button type="button" class="room ${r.id === room.id ? "on" : ""}" data-room="${r.id}">
       <img src="${r.thumb || r.photo}" alt="" loading="lazy"><span>${esc(r.name)}</span>${is3d(r) ? `<i class="b3d">${r.kind === "pano" ? "360°" : r.kind === "splat" ? "Walk" : "3D"}</i>` : ""}</button>`).join("") +
     `<a class="room" href="#/rooms" style="display:grid;place-items:center;text-decoration:none;color:var(--ink);border:1.5px dashed #ccc;min-height:92px"><span style="text-align:center">+ Your own<br>photo</span></a>`;

@@ -267,6 +267,13 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
   .sr-card .b { padding:10px 12px; display:flex; flex-direction:column; gap:6px; flex:1; }
   .sr-card .actions { margin-top:auto; display:flex; gap:6px; flex-wrap:wrap; }
   .field-err { color:var(--bad); font-size:12px; margin-top:3px; }
+  .field-err:empty { display:none; }
+  .set-grid { grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); }
+  .set-card { display:flex; gap:14px; align-items:flex-start; color:inherit; text-decoration:none; transition:border-color .15s, transform .15s; }
+  .set-card:hover { border-color:var(--accent); transform:translateY(-2px); }
+  .set-card b { font-size:15px; } .set-card p { margin:4px 0 0; }
+  .set-ico { flex:none; width:40px; height:40px; border-radius:10px; display:grid; place-items:center; background:var(--accent-soft, rgba(61,111,216,.12)); color:var(--accent); }
+  .set-ico .ico { width:20px; height:20px; }
   .is-bad { border-color:var(--bad) !important; box-shadow:0 0 0 1px var(--bad); }
   .sr-stage { position:relative; display:inline-block; max-width:100%; border-radius:10px; overflow:hidden; touch-action:none; }
   .sr-stage img { display:block; max-width:100%; max-height:70vh; }
@@ -335,6 +342,7 @@ const ICONS = {
   approvals:'<path d="M12 3l7 3v6c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/>',
   audit:'<path d="M4 6h16M4 12h10M4 18h7"/><circle cx="18" cy="16" r="3"/><path d="M20.2 18.2L22 20"/>',
   team:'<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-3.6 3.8-5.5 7-5.5s6 1.9 7 5.5"/>',
+  settings:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   samplerooms:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="15.5" cy="8.5" r="1.5"/>',
   rooms3d:'<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/>',
   moon:'<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>', sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
@@ -371,7 +379,11 @@ async function api(path, opts = {}) {
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
     const d = data.detail;
-    throw new Error(Array.isArray(d) ? d.map(x => x.msg).join(", ") : (d || "Something went wrong."));
+    // {field, message}: the screen shows it next to that box. A list comes from the server's own form checks.
+    const err = new Error(d && d.message ? d.message : Array.isArray(d) ? d.map(x => x.msg.replace(/^Value error, /, "")).join(", ")
+      : typeof d === "string" ? d : r.status >= 500 ? "The server had a problem with this. Please try again in a minute." : `The server said no (${r.status}).`);
+    err.field = d && d.field ? d.field : Array.isArray(d) && d[0] && d[0].loc ? String(d[0].loc[d[0].loc.length - 1]) : null;
+    throw err;
   }
   return data;
 }
@@ -381,27 +393,62 @@ function toast(msg, kind = "ok") {
   clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = "none", 3800);
 }
 
-/* A small form dialog. fields: [{name, label, type, options, value, required, hint}] -> resolves with values or null */
-function ask(title, fields, okText = "Save", note = "") {
+/* A small form dialog. fields: [{name, label, type, options, value, required, hint, min, max, check(v, all)}].
+   Every box is checked at once and each problem is shown in red under its own box (Ibrahim's form rule).
+   submit(values), when given, runs before the dialog closes: if the server says no about one box
+   (error.field), that box turns red and the dialog stays open. Resolves with submit's result (or the values), or null. */
+function ask(title, fields, okText = "Save", note = "", submit = null) {
   return new Promise(resolve => {
     const f = $("#dlgForm");
+    f.noValidate = true;
     f.innerHTML = `<h2>${esc(title)}</h2>${note ? `<p class="muted small" style="margin:6px 0 0">${note}</p>` : ""}` +
-      fields.map(x => `<label class="f" for="fx_${x.name}">${esc(x.label)}</label>` + (
-        x.type === "select" ? `<select id="fx_${x.name}" name="${x.name}" ${x.required ? "required" : ""}>${x.options.map(o =>
+      `<div class="field-err" id="fe__form" style="margin-top:8px"></div>` +
+      fields.map(x => `<label class="f" for="fx_${x.name}">${esc(x.label)}${x.required ? "" : x.type === "checkbox" ? "" : ' <span class="muted">(optional)</span>'}</label>` + (
+        x.type === "select" ? `<select id="fx_${x.name}" name="${x.name}">${x.options.map(o =>
           `<option value="${esc(o[0])}" ${String(o[0]) === String(x.value ?? "") ? "selected" : ""}>${esc(o[1])}</option>`).join("")}</select>`
-        : x.type === "textarea" ? `<textarea id="fx_${x.name}" name="${x.name}" rows="3" maxlength="${x.max || 300}" ${x.required ? "required" : ""}>${esc(x.value || "")}</textarea>`
-        : x.type === "checkbox" ? `<label class="small"><input type="checkbox" id="fx_${x.name}" name="${x.name}"> ${esc(x.hint || "")}</label>`
-        : `<input id="fx_${x.name}" name="${x.name}" type="${x.type || "text"}" step="any" value="${esc(x.value ?? "")}" ${x.required ? "required" : ""} ${x.min != null ? `min="${x.min}"` : ""} ${x.max != null ? `max="${x.max}"` : ""}>`)
+        : x.type === "textarea" ? `<textarea id="fx_${x.name}" name="${x.name}" rows="3" maxlength="${x.max || 300}">${esc(x.value || "")}</textarea>`
+        : x.type === "checkbox" ? `<label class="small"><input type="checkbox" id="fx_${x.name}" name="${x.name}" ${x.value ? "checked" : ""}> ${esc(x.hint || "")}</label>`
+        : `<input id="fx_${x.name}" name="${x.name}" type="${x.type || "text"}" step="any" value="${esc(x.value ?? "")}" ${x.min != null ? `min="${x.min}"` : ""} ${x.max != null ? `max="${x.max}"` : ""} ${x.auto ? `autocomplete="${x.auto}"` : ""}>`)
+        + `<div class="field-err" id="fe_${x.name}"></div>`
         + (x.hint && x.type !== "checkbox" ? `<div class="muted small" style="margin-top:3px">${esc(x.hint)}</div>` : "")).join("") +
       `<div class="actions" style="justify-content:flex-end;margin-top:18px">
-         <button class="btn ghost" value="cancel" formnovalidate>Cancel</button><button class="btn" value="ok">${esc(okText)}</button></div>`;
+         <button class="btn ghost" value="cancel" formnovalidate>Cancel</button><button class="btn" value="ok" id="dlgOk">${esc(okText)}</button></div>`;
     const d = $("#dlg");
-    d.onclose = () => {
-      if (d.returnValue !== "ok") return resolve(null);
-      const out = {};
-      fields.forEach(x => { const el = $("#fx_" + x.name); out[x.name] = x.type === "checkbox" ? el.checked : el.value; });
-      resolve(out);
+    const values = () => { const out = {}; fields.forEach(x => { const el = $("#fx_" + x.name); out[x.name] = x.type === "checkbox" ? el.checked : el.value.trim(); }); return out; };
+    const mark = (name, msg) => {
+      const el = $("#fx_" + name), e = $("#fe_" + name) || $("#fe__form");
+      if (el && el.type !== "checkbox") el.classList.toggle("is-bad", !!msg);
+      e.textContent = msg || "";
     };
+    fields.forEach(x => $("#fx_" + x.name).addEventListener("input", () => { mark(x.name, ""); mark("_form", ""); }));
+    let result;
+    f.onsubmit = async e => {
+      if (!e.submitter || e.submitter.value !== "ok") return;          // Cancel closes as usual
+      e.preventDefault();
+      const v = values();
+      let bad = false;
+      for (const x of fields) {
+        let msg = "";
+        const val = v[x.name];
+        if (x.required && x.type !== "checkbox" && val === "") msg = x.type === "select" ? "Please choose one." : "Please fill this in.";
+        else if (x.required && x.type === "checkbox" && !val) msg = "Please tick this to go on.";
+        else if (x.type === "number" && val !== "" && isNaN(+val)) msg = "Please enter a number.";
+        else if (x.type === "number" && val !== "" && x.min != null && +val < x.min) msg = `At least ${x.min}.`;
+        else if (x.type === "number" && val !== "" && x.max != null && +val > x.max) msg = `At most ${x.max}.`;
+        else if (x.check && val !== "") msg = x.check(val, v) || "";
+        mark(x.name, msg); if (msg) bad = true;
+      }
+      if (bad) { const first = f.querySelector(".is-bad"); if (first) first.focus(); return; }
+      if (!submit) { result = v; return d.close("ok"); }
+      const ok = $("#dlgOk"); ok.disabled = true; ok.textContent = "Saving…";
+      try { result = await submit(v); d.close("ok"); }
+      catch (err) {
+        const known = err.field && fields.some(x => x.name === err.field);
+        mark(known ? err.field : "_form", err.message);
+        ok.disabled = false; ok.textContent = okText;
+      }
+    };
+    d.onclose = () => resolve(d.returnValue === "ok" ? result : null);
     d.returnValue = ""; d.showModal();
   });
 }
@@ -463,9 +510,11 @@ function modules() {
     ["approvals", "Approvals", c("discounts.approve")],
     ["ask", "Ask your data", c("dashboard.view")],
     ["audit", "Audit log", c("audit.view")],
-    ["team", "Team", c("users.manage")],
-    ["samplerooms", "Sample rooms", c("settings.manage")],
-    ["rooms3d", "3D rooms", c("settings.manage")],
+    ["settings", "Settings", c("users.manage") || c("settings.manage") || c("inventory.edit")],
+    // opened from Settings (not listed in the side menu)
+    ["team", "Staff accounts", c("users.manage"), true],
+    ["samplerooms", "Sample rooms", c("settings.manage"), true],
+    ["rooms3d", "3D rooms", c("settings.manage"), true],
   ].filter(m => m[2]);
 }
 function shell(active, inner) {
@@ -473,13 +522,14 @@ function shell(active, inner) {
   $("#root").innerHTML = `<div class="app">
     <aside id="side">
       <div class="brand"><div class="logo">N</div><div><b>Nova Studio</b><small>${esc(S.me.company.name)}</small></div></div>
-      <nav>${modules().map(m => `<a href="#/${m[0]}" class="${m[0] === active ? "on" : ""}">${icon(m[0])}${m[1]}${
+      <nav>${modules().filter(m => !m[3]).map(m => `<a href="#/${m[0]}" class="${m[0] === active || (m[0] === "settings" && UNDER_SETTINGS.has(active)) ? "on" : ""}">${icon(m[0])}${m[1]}${
         m[0] === "approvals" && S.pending ? `<span class="count">${S.pending}</span>` : ""}</a>`).join("")}</nav>
       ${showcase("", false)}
     </aside>
     <main><div id="view">${inner}</div></main></div>`;
   paintShowcase();
 }
+const UNDER_SETTINGS = new Set(["team", "samplerooms", "rooms3d"]);
 function topbar(title, sub = "", right = "") {
   return `<div class="top"><button class="btn ghost sm menu-btn" onclick="document.getElementById('side').classList.toggle('open')">${icon("menu")}</button>
     <div class="grow"><h1>${title}</h1>${sub ? `<div class="muted small">${sub}</div>` : ""}</div>${right}
@@ -493,6 +543,7 @@ function profile() {
       <svg class="ico chev-d" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
     <div class="prof-menu" role="menu"><div class="prof-head"><b>${esc(u.name)}</b><span class="muted small">${esc(label(u.role))}${u.branch ? " · " + esc(u.branch) : ""}</span>
       <span class="muted small">${esc(u.email || "")}</span></div>
+      ${S.can.has("users.manage") || S.can.has("settings.manage") || S.can.has("inventory.edit") ? `<button role="menuitem" onclick="location.hash='#/settings'">${icon("settings")} Settings</button>` : ""}
       <button role="menuitem" onclick="logout()">${icon("out")} Log out</button></div></div>`;
 }
 document.addEventListener("click", () => document.querySelectorAll(".prof.open").forEach(p => p.classList.remove("open")));
@@ -563,7 +614,7 @@ async function dashboardView() {
     ["inventory", "Receive stock", "#/inventory", S.can.has("inventory.edit")],
     ["ask", "Ask your data", "#/ask", S.can.has("dashboard.view")],
     ["leads", "Find a lead", "#/leads", S.can.has("leads.view_all") || S.can.has("leads.view_own")],
-    ["team", "Manage team", "#/team", S.can.has("users.manage")],
+    ["team", "Manage staff", "#/team", S.can.has("users.manage")],
     ["shop", "Open the shop", "/", true],
   ].filter(q => q[3]).slice(0, 6);
 
@@ -963,7 +1014,8 @@ async function inventoryView(p) {
   const r = await api("/inventory");
   const show = r.items.filter(s => !p.status || s.status === p.status);
   const counts = r.items.reduce((a, s) => (a[s.status] = (a[s.status] || 0) + 1, a), {});
-  $("#view").innerHTML = topbar("Inventory", "Stock by batch. Days left = stock ÷ average sold per day over the last 30 days") + `
+  $("#view").innerHTML = topbar("Inventory", "Stock by batch. Days left = stock ÷ average sold per day over the last 30 days",
+      r.can.receive ? `<div class="actions"><button class="btn sm" id="invAdd">+ Add stock</button></div>` : "") + `
     <div class="filters"><div class="chips"><a class="chip ${!p.status ? "on" : ""}" href="#/inventory">All ${r.items.length}</a>
       ${["out", "critical", "low", "ok"].map(s => `<a class="chip ${p.status === s ? "on" : ""}" href="#/inventory?status=${s}">${label(s)} ${counts[s] || 0}</a>`).join("")}</div></div>
     <div class="card"><div class="tablewrap"><table><tr><th>Product</th><th class="right">Price</th><th class="right">In stock</th><th class="right">Largest batch</th><th class="right">Batches</th><th class="right">Sold / day</th><th class="right">Days left</th><th>Status</th></tr>
@@ -974,6 +1026,21 @@ async function inventoryView(p) {
         <td class="right">${s.batches}</td><td class="right">${num(s.sold_per_day, 1)}</td>
         <td class="right">${s.days_of_stock != null ? num(s.days_of_stock) : "-"}</td><td><span class="tag ${s.status}">${label(s.status)}</span></td></tr>`).join("")}</table></div></div>
     ${await choicesCard()}`;
+  if ($("#invAdd")) $("#invAdd").onclick = () => receiveDialog(r.items);
+}
+/* Receive a delivery: pick the product (or it is given), quantity, shade and batch code. */
+async function receiveDialog(items, sku = null) {
+  const one = sku ? items.find(s => s.sku === sku) : null;
+  const unitName = s => s && s.unit === "m2" ? "m²" : "sets";
+  const r = await ask(one ? `Receive ${one.name}` : "Add stock", [
+    ...(one ? [] : [{name: "sku", label: "Product", type: "select", required: true,
+      options: [["", "Choose a product"], ...items.slice().sort((a, b) => a.name.localeCompare(b.name)).map(s => [s.sku, `${s.name} (${s.sku}) · ${num(s.stock, 1)} ${unitName(s)} now`])]}]),
+    {name: "qty", label: one ? `Quantity received (${unitName(one)})` : "Quantity received (m² for tiles, sets for bathroom sets)", type: "number", min: 0.01, max: 100000, required: true},
+    {name: "shade", label: "Shade", hint: "As printed on the boxes, e.g. Warm A2"},
+    {name: "code", label: "Batch code", hint: "Left empty, one is made for you"},
+  ], "Receive", "A delivery becomes a new batch, because tiles from different production runs can differ in shade. It is added to the stock straight away.",
+  v => api(`/inventory/${encodeURIComponent(one ? one.sku : v.sku)}/receive`, {method: "POST", body: {qty: +v.qty, shade: v.shade || null, code: v.code || null}}));
+  if (r) { toast(`Received ${num(r.qty, 1)} as batch ${r.code}.`); route(); }
 }
 async function choicesCard() {
   let c; try { c = await api("/choices"); } catch (e) { return ""; }
@@ -994,7 +1061,7 @@ async function productView(sku) {
   S.titles[location.hash] = p.name;
   $("#view").innerHTML = backLink("#/inventory") +
     topbar(esc(p.name), `${esc(p.sku)} · ${qar(p.price, 2)} per ${p.unit === "m2" ? "m²" : "set"}${p.cost_price != null ? " · cost " + qar(p.cost_price, 2) : ""}`,
-      `<div class="actions">${inv.can.receive ? `<button class="btn sm" id="bRec">Receive new batch</button>` : ""}
+      `<div class="actions">${inv.can.receive ? `<button class="btn sm" id="bRec">Receive new batch</button>${p.batches.length ? `<button class="btn ghost sm" id="bFix">Correct a quantity</button>` : ""}<button class="btn ghost sm" id="bReo">Reorder point</button>` : ""}
        ${inv.can.price ? `<button class="btn ghost sm" id="bPrice">Change price</button>` : ""}</div>`) + `
     <div class="grid kpis">
       <div class="card kpi"><div class="label">In stock</div><div class="value">${num(lv.stock, 1)} ${u}</div></div>
@@ -1011,10 +1078,25 @@ async function productView(sku) {
       <div class="card"><div class="head"><h2>Stock movements</h2></div><div class="tablewrap"><table><tr><th>Date</th><th>What</th><th>Batch</th><th class="right">Qty</th></tr>
         ${p.movements.map(m => `<tr><td class="small">${dateTime(m.at)}</td><td class="small">${label(m.reason)} <span class="muted">${esc(m.reference || "")}</span>${m.by ? `<br><span class="muted">${esc(m.by)}</span>` : ""}</td>
           <td class="small">${esc(m.batch || "")}</td><td class="right num ${m.qty < 0 ? "delta down" : "delta up"}">${m.qty > 0 ? "+" : ""}${num(m.qty, 2)}</td></tr>`).join("")}</table></div></div></div>`;
-  if ($("#bRec")) $("#bRec").onclick = async () => {
-    const v = await ask(`Receive ${p.name}`, [{name: "qty", label: `Quantity (${u})`, type: "number", min: 0.01, required: true},
-      {name: "shade", label: "Shade (optional)", hint: "As printed on the boxes, e.g. Warm A2"}, {name: "code", label: "Batch code (optional)", hint: "Left empty, one is made for you"}], "Receive");
-    if (v) act(() => api(`/inventory/${encodeURIComponent(sku)}/receive`, {method: "POST", body: {qty: +v.qty, shade: v.shade || null, code: v.code || null}}), "Batch received");
+  if ($("#bRec")) $("#bRec").onclick = () => receiveDialog(inv.items, sku);
+  if ($("#bFix")) $("#bFix").onclick = async () => {
+    const r = await ask(`Correct a quantity: ${p.name}`, [
+      {name: "batch", label: "Batch", type: "select", required: true, value: p.batches.length === 1 ? p.batches[0].code : "",
+       options: [["", "Choose a batch"], ...p.batches.map(b => [b.code, `${b.code}${b.shade ? " · " + b.shade : ""} · ${num(b.left, 2)} ${u} left now`])]},
+      {name: "counted", label: `Quantity really left (${u})`, type: "number", min: 0, max: 100000, required: true,
+       check: (v, all) => { const b = p.batches.find(x => x.code === all.batch); return b && +v === b.left ? `That is already the quantity of ${b.code}.` : ""; }},
+      {name: "reason", label: "Why", type: "select", required: true, options: [["", "Choose a reason"], ["count", "Stock count (the shelf has a different amount)"],
+        ["damaged", "Damaged or broken"], ["returned", "Returned by a customer"], ["found", "Found in the store"], ["other", "Other"]]},
+      {name: "note", label: "Note", type: "textarea", max: 200, hint: "e.g. 3 boxes broken when unloading"},
+    ], "Save", "Enter what is really there. The difference is recorded as a stock movement with your name and kept in the audit log.",
+    v => api(`/inventory/${encodeURIComponent(sku)}/adjust`, {method: "POST", body: {batch: v.batch, counted: +v.counted, reason: v.reason, note: v.note || null}}));
+    if (r) { toast(`Batch ${r.code} now has ${num(r.left, 2)} ${u}.`); route(); }
+  };
+  if ($("#bReo")) $("#bReo").onclick = async () => {
+    const r = await ask("Reorder point", [{name: "reorder_point", label: `Reorder when stock falls below (${u})`, type: "number", min: 0, max: 100000, value: lv.reorder_point ?? 0, required: true}],
+      "Save", "Below this amount the product shows as Critical on the dashboard and here, so you know to order more.",
+      v => api(`/inventory/${encodeURIComponent(sku)}/reorder`, {method: "POST", body: {reorder_point: +v.reorder_point}}));
+    if (r) { toast("Reorder point saved."); route(); }
   };
   if ($("#bPrice")) $("#bPrice").onclick = async () => {
     const v = await ask("Change price", [{name: "price", label: "Selling price (QAR)", type: "number", value: p.price, min: 0.01, required: true},
@@ -1167,12 +1249,92 @@ async function auditView() {
         <td><span class="tag">${esc(a.action)}</span></td><td class="small">${esc(a.entity || "")} ${esc(a.entity_id || "")}</td>
         <td class="small muted">${esc(a.after ? Object.entries(a.after).map(([k, v]) => k + ": " + (typeof v === "object" ? JSON.stringify(v) : v)).join(", ") : "")}</td></tr>`).join("")}</table></div></div>`;
 }
+/* ------------------------------------------------------------------ settings */
+/* One place for the owner's admin jobs: staff accounts, stock, the sample rooms and the 3D rooms. */
+async function settingsView() {
+  const items = [
+    ["team", "Staff accounts", "Add people, change their role and discount limit, reset a password or switch an account off.", "#/team", S.can.has("users.manage")],
+    ["inventory", "Stock and quantities", "Receive new stock, correct a count after breakage or a stock take, and set when to reorder.", "#/inventory", S.can.has("inventory.edit")],
+    ["samplerooms", "Sample rooms", "Upload your own room photos. The room AI marks floor and walls, you check them and publish.", "#/samplerooms", S.can.has("settings.manage")],
+    ["rooms3d", "3D rooms", "Rooms customers can walk around in, made from 360° pictures.", "#/rooms3d", S.can.has("settings.manage")],
+    ["audit", "Audit log", "Who changed what and when: logins, prices, stock, staff.", "#/audit", S.can.has("audit.view")],
+  ].filter(x => x[4]);
+  shell("settings", topbar("Settings", "Admin jobs for " + esc(S.me.company.name)) + `<div class="grid set-grid">
+    ${items.map(([ic, t, d, href]) => `<a class="card set-card" href="${href}"><span class="set-ico">${icon(ic)}</span><div><b>${t}</b><p class="muted small">${d}</p></div></a>`).join("")}</div>`);
+}
+
+/* ------------------------------------------------------------------ staff accounts (owner) */
+const ROLE_INFO = {
+  owner: ["Owner", "Everything, including prices, staff and settings. Discount limit up to 15%."],
+  sales_manager: ["Sales manager", "All leads, quotations and orders; approves discounts; reports. Usual discount limit 10%."],
+  salesperson: ["Salesperson", "Their own leads, quotations and orders. Usual discount limit 5%."],
+  warehouse: ["Warehouse", "Stock: receive and correct quantities, deliver orders. No prices or customers' quotes."],
+  viewer: ["Viewer", "Can look at the dashboard, reports and stock. Can't change anything."],
+};
+const PW_HINT = "At least 8 characters with letters and a number. Give it to the person yourself (not by email) and ask them to keep it private.";
+const pwCheck = v => v.length < 8 || !/[A-Za-z]/.test(v) || !/\d/.test(v) ? "At least 8 characters, with letters and at least one number." : "";
+
 async function teamView() {
-  shell("team", topbar("Team") + loading());
+  shell("team", topbar("Staff accounts") + loading());
   const rows = await api("/users");
-  $("#view").innerHTML = topbar("Team", "Staff accounts and their discount limits") + `
-    <div class="card"><div class="tablewrap"><table><tr><th>Name</th><th>Email</th><th>Role</th><th class="right">Discount limit</th></tr>
-      ${rows.map(u => `<tr><td>${esc(u.name)}</td><td class="small">${esc(u.email)}</td><td><span class="tag">${label(u.role)}</span></td><td class="right">${u.discount_limit_pct}%</td></tr>`).join("")}</table></div></div>`;
+  const me = S.me.user.id;
+  const active = rows.filter(u => u.active).length;
+  $("#view").innerHTML = backLink("#/settings") + topbar("Staff accounts", `${active} active · who can log in to Nova Studio and what each person may do`,
+      `<button class="btn sm" id="uAdd">+ Add staff member</button>`) + `
+    <div class="card"><div class="tablewrap"><table><tr><th>Name</th><th>Email</th><th>Role</th><th>Branch</th><th class="right">Discount limit</th><th>Status</th><th class="right"></th></tr>
+      ${rows.map(u => `<tr class="${u.active ? "" : "muted"}"><td><b>${esc(u.name)}</b>${u.id === me ? ` <span class="tag">You</span>` : ""}</td><td class="small">${esc(u.email)}</td>
+        <td><span class="tag" title="${esc((ROLE_INFO[u.role] || [])[1] || "")}">${esc((ROLE_INFO[u.role] || [label(u.role)])[0])}</span></td><td class="small">${esc(u.branch || "")}</td>
+        <td class="right">${u.discount_limit_pct}%</td><td>${u.active ? `<span class="tag ok">Active</span>` : `<span class="tag out">Switched off</span>`}</td>
+        <td class="right nowrap"><button class="btn ghost sm" data-edit="${u.id}">Edit</button> <button class="btn ghost sm" data-pw="${u.id}">Reset password</button>
+          ${u.id === me ? "" : `<button class="btn ${u.active ? "danger" : "ok"} sm" data-on="${u.id}">${u.active ? "Switch off" : "Switch on"}</button>`}</td></tr>`).join("")}</table></div>
+      <p class="muted small" style="margin:10px 0 0">Nobody is deleted, so their leads, quotations and history keep their name. A switched-off account can't log in any more, straight away.
+        Every change here is kept in the <a href="#/audit">audit log</a>.</p></div>
+    <div class="card" style="margin-top:14px"><div class="head"><h2>What each role can do</h2></div>
+      <div class="tablewrap"><table>${Object.values(ROLE_INFO).map(([n, d]) => `<tr><td class="nowrap"><b>${n}</b></td><td class="small">${d}</td></tr>`).join("")}</table></div></div>`;
+  const roleOpts = Object.entries(ROLE_INFO).map(([k, v]) => [k, v[0]]);
+  $("#uAdd").onclick = async () => {
+    const r = await ask("Add a staff member", [
+      {name: "name", label: "Full name", required: true, check: v => v.length < 2 ? "Please enter their full name." : ""},
+      {name: "email", label: "Work email (they log in with it)", type: "email", required: true, auto: "off",
+       check: v => /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(v) ? "" : "That doesn't look like an email address."},
+      {name: "role", label: "Role", type: "select", required: true, value: "salesperson", options: [["", "Choose a role"], ...roleOpts]},
+      {name: "branch", label: "Branch", hint: "e.g. Doha showroom"},
+      {name: "discount_limit_pct", label: "Discount limit (%)", type: "number", min: 0, max: 15, hint: "Left empty, the role's usual limit is used (salesperson 5%, sales manager 10%, owner 15%)."},
+      {name: "password", label: "First password", type: "password", required: true, auto: "new-password", hint: PW_HINT, check: pwCheck},
+    ], "Add", "", v => api("/users", {method: "POST", body: {...v, branch: v.branch || null, discount_limit_pct: v.discount_limit_pct === "" ? null : +v.discount_limit_pct}}));
+    if (r) { toast(`${r.name} can now log in as ${(ROLE_INFO[r.role] || [r.role])[0]}.`); teamView(); }
+  };
+  document.querySelectorAll("[data-edit]").forEach(b => b.onclick = async () => {
+    const u = rows.find(x => x.id === +b.dataset.edit), self = u.id === me;
+    const r = await ask(`Edit ${u.name}`, [
+      {name: "name", label: "Full name", value: u.name, required: true, check: v => v.length < 2 ? "Please enter their full name." : ""},
+      ...(self ? [] : [{name: "role", label: "Role", type: "select", value: u.role, required: true, options: roleOpts,
+        hint: "Changing the role logs them out once, so the new rights apply straight away."}]),
+      {name: "branch", label: "Branch", value: u.branch || ""},
+      {name: "discount_limit_pct", label: "Discount limit (%)", type: "number", min: 0, max: 15, value: u.discount_limit_pct, required: true,
+       hint: "The most they can give without asking for approval. Changing the role sets the role's usual limit unless you change this too."},
+    ], "Save", self ? "You can't change your own role. Another owner can." : "", v => {
+      const body = {name: v.name, branch: v.branch, discount_limit_pct: +v.discount_limit_pct};
+      if (!self && v.role !== u.role) { body.role = v.role; if (+v.discount_limit_pct === u.discount_limit_pct) delete body.discount_limit_pct; }
+      return api(`/users/${u.id}`, {method: "PATCH", body});
+    });
+    if (r) { toast("Saved"); teamView(); }
+  });
+  document.querySelectorAll("[data-pw]").forEach(b => b.onclick = async () => {
+    const u = rows.find(x => x.id === +b.dataset.pw);
+    const r = await ask(`New password for ${u.name}`, [
+      {name: "password", label: "New password", type: "password", required: true, auto: "new-password", hint: PW_HINT, check: pwCheck},
+      {name: "again", label: "Type it again", type: "password", required: true, auto: "new-password", check: (v, all) => v !== all.password ? "The two passwords are not the same." : ""},
+    ], "Set password", "Use this when someone forgot their password. The old one stops working.", v => api(`/users/${u.id}/password`, {method: "POST", body: {password: v.password}}));
+    if (r) toast(`New password set for ${u.name}.`);
+  });
+  document.querySelectorAll("[data-on]").forEach(b => b.onclick = async () => {
+    const u = rows.find(x => x.id === +b.dataset.on), off = u.active;
+    const r = await ask(off ? `Switch off ${u.name}'s account?` : `Switch ${u.name}'s account back on?`, [], off ? "Switch off" : "Switch on",
+      off ? "They are logged out at once and can't log in again. Their leads and quotations stay as they are; give them to someone else from Leads." : "They can log in again with their last password.",
+      () => api(`/users/${u.id}`, {method: "PATCH", body: {active: !off}}));
+    if (r) { toast(off ? `${u.name} is switched off.` : `${u.name} can log in again.`); teamView(); }
+  });
 }
 /* Walkable 3D rooms made by World Labs from our 360° pictures (backend/worlds.py). Owner only, because making
    one uses the company's World Labs credits. The TV lounge is made by the server by itself; this page shows
@@ -1362,7 +1524,7 @@ async function sampleRoomView(id) {
 /* Back = where you actually came from inside the admin (keeps list filters and page);
    opened directly from a link or bookmark, Back goes to that section's list. */
 const SECTION = {ask: "Ask your data", followups: "Follow-ups", dashboard: "Dashboard", leads: "Leads", quotes: "Quotations", orders: "Orders", inventory: "Inventory",
-                 approvals: "Approvals", audit: "Audit log", team: "Team", rooms3d: "3D rooms", samplerooms: "Sample rooms"};
+                 approvals: "Approvals", audit: "Audit log", team: "Staff accounts", rooms3d: "3D rooms", samplerooms: "Sample rooms", settings: "Settings"};
 function titleOf(hash) {
   if (S.titles[hash]) return S.titles[hash];
   const sec = hash.slice(2).split(/[/?]/)[0];
@@ -1401,6 +1563,7 @@ async function route() {
     else if (view === "followups") await followupsView();
     else if (view === "audit") await auditView();
     else if (view === "team") await teamView();
+    else if (view === "settings") await settingsView();
     else if (view === "rooms3d") await rooms3dView();
     else if (view === "samplerooms") await (parts[1] ? sampleRoomView(parts[1]) : sampleRoomsView());
     window.scrollTo(0, 0);

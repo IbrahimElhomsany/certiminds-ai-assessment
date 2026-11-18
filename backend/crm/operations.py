@@ -385,6 +385,50 @@ def receive_stock(db: Session, user: User, product: Product, qty: float, shade: 
     return batch
 
 
+ADJUST_REASONS = {"count": "Stock count", "damaged": "Damaged", "returned": "Returned by customer",
+                  "found": "Found in store", "other": "Other"}
+
+
+def adjust_stock(db: Session, user: User, product: Product, batch_code: str, counted: float, reason: str,
+                 note: Optional[str] = None) -> Batch:
+    """Set what is really left of one batch (after a count, breakage, a return...). The difference is kept as an
+    "adjust" stock movement and in the audit log, so the history always adds up."""
+    batch = next((b for b in product.batches if b.code == batch_code), None)
+    if batch is None:
+        raise OpError(404, f"Batch {batch_code} is not a batch of {product.name}.")
+    if reason not in ADJUST_REASONS:
+        raise OpError(422, "Pick a reason.")
+    counted = q2(counted)
+    if counted < 0 or counted > 100000:
+        raise OpError(422, "The quantity can't be below 0.")
+    diff = counted - batch.qty_left
+    if diff == 0:
+        raise OpError(422, f"Batch {batch.code} already has {counted} left.")
+    now = local_now()
+    before = float(batch.qty_left)
+    batch.qty_left = counted
+    db.add(StockMovement(tenant_id=product.tenant_id, product_id=product.id, batch_id=batch.id, qty=diff,
+                         reason="adjust", reference=ADJUST_REASONS[reason][:30], user_id=user.id, created_at=now))
+    audit(db, product.tenant_id, "stock.adjust", user.id, "product", product.sku,
+          before={"batch": batch.code, "qty_left": before},
+          after={"batch": batch.code, "qty_left": float(counted), "reason": reason, "note": (note or "").strip()[:200] or None})
+    db.commit()
+    db.refresh(product)
+    return batch
+
+
+def set_reorder_point(db: Session, user: User, product: Product, qty: float) -> Product:
+    qty = q2(qty)
+    if qty < 0 or qty > 100000:
+        raise OpError(422, "The reorder point can't be below 0.")
+    before = float(product.reorder_point)
+    product.reorder_point = qty
+    audit(db, product.tenant_id, "stock.reorder_point", user.id, "product", product.sku,
+          before={"reorder_point": before}, after={"reorder_point": float(qty)})
+    db.commit()
+    return product
+
+
 def change_price(db: Session, user: User, product: Product, price: float, cost_price: Optional[float] = None) -> Product:
     price = q2(price)
     cost = q2(cost_price) if cost_price is not None else product.cost_price

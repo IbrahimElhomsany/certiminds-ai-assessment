@@ -4,16 +4,19 @@ Two rules hold on every route:
 1. Company isolation: queries always filter on the logged-in user's tenant_id.
 2. Role permissions: checked here with require(...), never only in the screen.
 """
+import re
 from datetime import datetime
-from typing import Optional
+from decimal import Decimal
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from backend.auth import (PERMISSIONS, authenticate, create_token, current_user, has_permission, require)
-from backend.db.database import get_db
+from backend.auth import (PERMISSIONS, audit, authenticate, create_token, current_user, hash_password, has_permission,
+                          require)
+from backend.db.database import get_db, local_now
 from backend.db.models import LEAD_STAGES, AuditLog, Lead, Tenant, User
 from backend.ratelimit import RateLimiter
 
@@ -34,11 +37,12 @@ class UserOut(BaseModel):
     role: str
     branch: Optional[str]
     discount_limit_pct: float
+    active: bool = True
 
 
 def user_out(u: User) -> UserOut:
     return UserOut(id=u.id, name=u.name, email=u.email, role=u.role, branch=u.branch,
-                   discount_limit_pct=float(u.discount_limit_pct))
+                   discount_limit_pct=float(u.discount_limit_pct), active=bool(u.active))
 
 
 @router.post("/login")
@@ -66,6 +70,116 @@ def me(user: User = Depends(current_user), db: Session = Depends(get_db)):
 def list_users(user: User = Depends(require("users.manage")), db: Session = Depends(get_db)):
     rows = db.scalars(select(User).where(User.tenant_id == user.tenant_id).order_by(User.id))
     return [user_out(u) for u in rows]
+
+
+# ------------------------------------------------------------------ staff accounts (owner only)
+# Nobody is ever deleted: their leads, quotations and audit entries keep their name. A person who leaves is
+# switched off ("deactivated"); their login stops working at once because every request re-checks the account.
+ROLE_LIMITS = {"owner": 15, "sales_manager": 10, "salesperson": 5, "warehouse": 0, "viewer": 0}
+EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[a-z]{2,}$", re.I)
+
+
+def field_error(field: str, message: str, status: int = 422):
+    """An error the screen shows next to the box it is about."""
+    raise HTTPException(status_code=status, detail={"field": field, "message": message})
+
+
+def check_password(pw: str) -> None:
+    if len(pw) < 8 or not re.search(r"[A-Za-z]", pw) or not re.search(r"\d", pw):
+        field_error("password", "At least 8 characters, with letters and at least one number.")
+
+
+def staff_member(db: Session, user: User, user_id: int) -> User:
+    u = db.get(User, user_id)
+    if u is None or u.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=404, detail="No such staff member.")
+    return u
+
+
+def other_owners(db: Session, u: User) -> int:
+    return db.scalar(select(func.count()).select_from(User).where(
+        User.tenant_id == u.tenant_id, User.role == "owner", User.active.is_(True), User.id != u.id)) or 0
+
+
+class NewUser(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    email: str = Field(min_length=3, max_length=120)
+    role: Literal["owner", "sales_manager", "salesperson", "warehouse", "viewer"]
+    password: str = Field(min_length=1, max_length=200)
+    branch: Optional[str] = Field(default=None, max_length=60)
+    discount_limit_pct: Optional[float] = Field(default=None, ge=0, le=15)
+
+
+@router.post("/users", response_model=UserOut)
+def add_user(req: NewUser, user: User = Depends(require("users.manage")), db: Session = Depends(get_db)):
+    email = req.email.strip().lower()
+    if not EMAIL.match(email):
+        field_error("email", "That doesn't look like an email address.")
+    if db.scalar(select(User).where(User.tenant_id == user.tenant_id, func.lower(User.email) == email)):
+        field_error("email", "Someone in the team already uses this email.", 409)
+    check_password(req.password)
+    limit = ROLE_LIMITS[req.role] if req.discount_limit_pct is None else req.discount_limit_pct
+    u = User(tenant_id=user.tenant_id, email=email, name=req.name.strip(), role=req.role,
+             password_hash=hash_password(req.password), discount_limit_pct=Decimal(str(limit)),
+             branch=(req.branch or "").strip() or None, active=True, created_at=local_now())
+    db.add(u)
+    db.flush()
+    audit(db, user.tenant_id, "user.create", user.id, "user", u.id,
+          after={"email": email, "role": req.role, "discount_limit_pct": float(limit)})
+    db.commit()
+    return user_out(u)
+
+
+class UserChange(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=2, max_length=120)
+    role: Optional[Literal["owner", "sales_manager", "salesperson", "warehouse", "viewer"]] = None
+    branch: Optional[str] = Field(default=None, max_length=60)
+    discount_limit_pct: Optional[float] = Field(default=None, ge=0, le=15)
+    active: Optional[bool] = None
+
+
+@router.patch("/users/{user_id}", response_model=UserOut)
+def change_user(user_id: int, req: UserChange, user: User = Depends(require("users.manage")), db: Session = Depends(get_db)):
+    u = staff_member(db, user, user_id)
+    before = {"name": u.name, "role": u.role, "branch": u.branch, "discount_limit_pct": float(u.discount_limit_pct), "active": u.active}
+    if u.id == user.id and ((req.role and req.role != u.role) or req.active is False):
+        raise HTTPException(status_code=409, detail="You can't change your own role or switch off your own account.")
+    losing_owner = u.role == "owner" and u.active and ((req.role and req.role != "owner") or req.active is False)
+    if losing_owner and not other_owners(db, u):
+        raise HTTPException(status_code=409, detail="The company needs at least one active owner.")
+    if req.name is not None:
+        u.name = req.name.strip()
+    if req.role is not None and req.role != u.role:
+        u.role = req.role
+        if req.discount_limit_pct is None:
+            u.discount_limit_pct = Decimal(str(ROLE_LIMITS[req.role]))     # the new role's usual limit
+    if req.branch is not None:
+        u.branch = req.branch.strip() or None
+    if req.discount_limit_pct is not None:
+        u.discount_limit_pct = Decimal(str(req.discount_limit_pct))
+    if req.active is not None:
+        u.active = req.active
+    after = {"name": u.name, "role": u.role, "branch": u.branch, "discount_limit_pct": float(u.discount_limit_pct), "active": u.active}
+    if after != before:
+        action = "user.deactivate" if before["active"] and not u.active else "user.reactivate" if u.active and not before["active"] else "user.update"
+        audit(db, user.tenant_id, action, user.id, "user", u.id,
+              before={k: v for k, v in before.items() if after[k] != v}, after={k: v for k, v in after.items() if before[k] != v})
+    db.commit()
+    return user_out(u)
+
+
+class PasswordReset(BaseModel):
+    password: str = Field(min_length=1, max_length=200)
+
+
+@router.post("/users/{user_id}/password")
+def reset_password(user_id: int, req: PasswordReset, user: User = Depends(require("users.manage")), db: Session = Depends(get_db)):
+    u = staff_member(db, user, user_id)
+    check_password(req.password)
+    u.password_hash = hash_password(req.password)
+    audit(db, user.tenant_id, "user.password_reset", user.id, "user", u.id)     # never the password itself
+    db.commit()
+    return {"ok": True}
 
 
 class LeadOut(BaseModel):
@@ -532,6 +646,30 @@ def receive(sku: str, req: ReceiveRequest, user: User = Depends(require("invento
     b = run(ops.receive_stock, db, user, get_product(db, user, sku), req.qty, req.shade, req.code)
     crm_bridge.refresh_catalog(force=True)
     return {"code": b.code, "qty": money(b.received_qty), "shade": b.shade}
+
+
+class AdjustRequest(BaseModel):
+    batch: str = Field(min_length=1, max_length=30)
+    counted: float = Field(ge=0, le=100000)
+    reason: Literal["count", "damaged", "returned", "found", "other"]
+    note: Optional[str] = Field(default=None, max_length=200)
+
+
+@router.post("/inventory/{sku}/adjust")
+def adjust(sku: str, req: AdjustRequest, user: User = Depends(require("inventory.edit")), db: Session = Depends(get_db)):
+    b = run(ops.adjust_stock, db, user, get_product(db, user, sku), req.batch, req.counted, req.reason, req.note)
+    crm_bridge.refresh_catalog(force=True)
+    return {"code": b.code, "left": money(b.qty_left)}
+
+
+class ReorderRequest(BaseModel):
+    reorder_point: float = Field(ge=0, le=100000)
+
+
+@router.post("/inventory/{sku}/reorder")
+def reorder(sku: str, req: ReorderRequest, user: User = Depends(require("inventory.edit")), db: Session = Depends(get_db)):
+    p = run(ops.set_reorder_point, db, user, get_product(db, user, sku), req.reorder_point)
+    return {"sku": p.sku, "reorder_point": money(p.reorder_point)}
 
 
 class PriceRequest(BaseModel):

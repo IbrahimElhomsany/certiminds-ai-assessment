@@ -68,6 +68,42 @@
   .hero .cta .btn:hover { transform:scale(1.06); box-shadow:0 6px 18px rgba(0,0,0,.12); }
   @media (prefers-reduced-motion: reduce) { .hero .cta .btn, .hero .cta .btn:hover { transition:none; transform:none; } }
   .hero img { width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:18px; }
+  /* the 3D showroom on the home page (assets/showroom.js) */
+  .showroom { position:relative; margin:22px 0 30px; height:min(74vh, 640px); min-height:460px; border-radius:20px; overflow:hidden; background:#e9e5de; }
+  .showroom .stage { position:absolute; inset:0; }
+  .showroom .intro { z-index:2; }
+  .showroom canvas { position:absolute; inset:0; width:100%; height:100%; display:block; cursor:grab; touch-action:none; }
+  .showroom .intro { position:absolute; left:0; top:0; bottom:0; width:min(440px, 46%); padding:34px 34px; display:flex; flex-direction:column; justify-content:center;
+    background:linear-gradient(90deg, rgba(255,255,255,.94) 0%, rgba(255,255,255,.86) 70%, rgba(255,255,255,0)); pointer-events:none; }
+  .showroom .intro > * { pointer-events:auto; }
+  .showroom .intro { transition:opacity .35s ease, transform .35s ease; }
+  .showroom.picked .intro { opacity:0; transform:translateX(-24px); pointer-events:none; }
+  .showroom.picked .intro > * { pointer-events:none; }
+  .showroom .back { position:absolute; left:16px; top:16px; z-index:3; border:0; border-radius:999px; background:rgba(255,255,255,.94); padding:9px 14px;
+    font:inherit; font-size:13px; box-shadow:0 2px 10px rgba(0,0,0,.15); cursor:pointer; display:none; }
+  .showroom.picked .back { display:block; }
+  .showroom .intro .kicker { font-size:11px; letter-spacing:.3em; font-weight:600; color:var(--accent); margin-bottom:10px; }
+  .showroom h1 { font-size:38px; margin:0 0 12px; letter-spacing:-.01em; }
+  .showroom .intro p { margin:0 0 20px; color:var(--muted); font-size:15px; }
+  .showroom .cta { display:flex; gap:10px; flex-wrap:wrap; }
+  .showroom .hint { position:absolute; left:50%; bottom:16px; transform:translateX(-50%); background:rgba(17,17,17,.78); color:#fff; font-size:12.5px;
+    padding:8px 14px; border-radius:999px; white-space:nowrap; pointer-events:none; transition:opacity .4s; }
+  .showroom .nav { position:absolute; right:16px; top:16px; display:flex; gap:8px; }
+  .showroom .nav button { width:42px; height:42px; border-radius:50%; border:0; background:rgba(255,255,255,.92); box-shadow:0 2px 10px rgba(0,0,0,.15);
+    font-size:18px; cursor:pointer; color:var(--ink); }
+  .showroom .nav button:hover { background:#fff; transform:scale(1.06); }
+  .showroom .tip { position:absolute; pointer-events:none; background:#111; color:#fff; font-size:12px; padding:5px 9px; border-radius:7px; transform:translate(12px, 12px); }
+  .showroom .pcard { position:absolute; right:16px; bottom:16px; width:300px; background:#fff; border-radius:16px; box-shadow:0 12px 34px rgba(0,0,0,.22);
+    padding:14px; display:grid; grid-template-columns:84px 1fr; gap:12px; animation:pop .25s ease; }
+  @keyframes pop { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+  .showroom .pcard img { width:84px; height:84px; object-fit:cover; border-radius:10px; background:var(--soft); }
+  .showroom .pcard b { display:block; color:var(--ink); font-size:15px; }
+  .showroom .pcard .price { font-weight:600; color:var(--ink); margin:4px 0; }
+  .showroom .pcard .acts { grid-column:1 / -1; display:flex; gap:8px; }
+  .showroom .pcard .acts .btn { flex:1; padding:9px 10px; font-size:13px; }
+  .showroom .pcard .x { position:absolute; right:8px; top:6px; border:0; background:none; font-size:18px; cursor:pointer; color:var(--muted); }
+  .showroom.flat { height:auto; min-height:0; background:none; border-radius:0; overflow:visible; margin:0; }
+  @media (prefers-reduced-motion: reduce) { .showroom .pcard { animation:none; } }
   .usp { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:18px 0; margin-bottom:36px; }
   .usp div { display:flex; gap:12px; align-items:flex-start; }
   .usp b { display:block; color:var(--ink); } .usp small { color:var(--muted); font-size:12.5px; }
@@ -231,6 +267,17 @@
     .summary { position:static; }
   }
   @media (max-width: 640px) {
+    .showroom { height:auto; min-height:0; display:flex; flex-direction:column; background:none; border-radius:0; overflow:visible; }
+    .showroom .stage { position:relative; height:62vh; min-height:380px; border-radius:16px; overflow:hidden; background:#e9e5de; }
+    .showroom .intro { position:static; width:auto; padding:6px 0 16px; background:none; }
+    .showroom h1 { font-size:28px; }
+    .showroom .pcard { left:10px; right:10px; bottom:10px; width:auto; }
+    .showroom .hint { bottom:auto; top:12px; left:12px; transform:none; white-space:normal; max-width:60%; }
+    .showroom .nav { top:auto; bottom:12px; right:12px; }
+    .showroom .stage:has(.pcard) .nav { display:none; }
+    .showroom.picked .intro, .showroom.picked .intro > * { opacity:1; transform:none; pointer-events:auto; }
+  }
+  @media (max-width: 640px) {
     .wrap { padding:0 16px; }
     header .bar { gap:10px; height:60px; }
     .search { display:none; }
@@ -363,13 +410,16 @@ async function home() {
   const best = products.filter(p => p.best_seller_rank).slice(0, 8);
   const img = sku => esc((products.find(p => p.sku === sku) || {}).image || IMG_BLANK);
   app.innerHTML = `
-  <section class="hero">
-    <div>
-      <h1>Tiles and bathrooms for every room in Qatar</h1>
-      <p>Porcelain and ceramic tiles, outdoor anti-slip tiles and complete bathroom sets. Enter your area and get the exact number of boxes and a price in QAR.</p>
-      <div class="cta"><a class="btn" href="#/shop?kind=tile">Shop tiles ${ICON.arrow}</a><a class="btn ghost" href="/assistant">Plan my room with Ceramica Nova AI</a></div>
+  <section class="showroom" id="showroom">
+    <div class="intro">
+      <div class="kicker">THE CERAMICA NOVA SHOWROOM</div>
+      <h1>Walk into our showroom</h1>
+      <p>Look around, tap any display to see the tile, its price and stock, then try it in a photo of your own room.</p>
+      <div class="cta"><a class="btn" href="#/shop?kind=tile">Shop tiles ${ICON.arrow}</a><a class="btn ghost" href="/assistant#/rooms">Try tiles in my room</a></div>
     </div>
-    <img src="/images/room_bathroom.jpg" alt="A bathroom finished with Ceramica Nova tiles" onerror="this.src='${IMG_BLANK}'">
+    <div class="stage" id="srStage">
+      <div class="hint" id="srHint">Drag to look around · tap a display to see the tile</div>
+    </div>
   </section>
   <section class="usp">
     <div>${ICON.ruler}<span><b>Exact quantities</b><small>Full boxes with spare for cuts, worked out for your area.</small></span></div>
@@ -397,6 +447,53 @@ async function home() {
       <li>${ICON.check} Builds a PDF quotation in QAR</li>
     </ul>
   </section>`;
+  showroom(products);
+}
+
+/* The 3D showroom at the top of the home page (assets/showroom.js). Without WebGL, the old photo is shown. */
+let SR = null;
+async function showroom(products) {
+  const box = $("#srStage"), hint = $("#srHint"), sec = $("#showroom");
+  const flat = () => { $("#showroom").classList.add("flat"); $("#showroom").classList.remove("showroom");
+    $("#showroom").innerHTML = `<section class="hero">${$("#showroom .intro").outerHTML}<img src="/images/room_bathroom.jpg" alt="A bathroom finished with Ceramica Nova tiles"></section>`; };
+  const cv = document.createElement("canvas");
+  cv.setAttribute("aria-label", "A 3D tile showroom. Drag to look around, tap a display to see the product.");
+  if (!cv.getContext("webgl2") && !cv.getContext("webgl")) return flat();
+  box.prepend(cv);
+  const nav = document.createElement("div"); nav.className = "nav";
+  nav.innerHTML = `<button type="button" aria-label="Previous display" data-go="-1">‹</button><button type="button" aria-label="Next display" data-go="1">›</button>`;
+  box.append(nav);
+  const tip = document.createElement("div"); tip.className = "tip"; tip.hidden = true; box.append(tip);
+  cv.addEventListener("pointermove", e => { const r = box.getBoundingClientRect(); tip.style.left = (e.clientX - r.left) + "px"; tip.style.top = (e.clientY - r.top) + "px"; });
+  const card = p => {
+    box.querySelector(".pcard")?.remove();
+    if (!p) return;
+    const unit = p.unit === "m2" ? "m²" : "set", tile = p.kind === "tile";
+    const el = document.createElement("div"); el.className = "pcard"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", p.name);
+    el.innerHTML = `<button class="x" type="button" aria-label="Close">×</button><img src="${esc(p.image || IMG_BLANK)}" alt="" onerror="this.src='${IMG_BLANK}'">
+      <div><b>${esc(p.name)}</b><span class="muted small">${tile ? `${esc((p.size_cm || "").replace("x", " × "))} cm · ${esc(p.finish || p.category || "")}` : esc(p.category || "Bathroom set")}</span>
+        <div class="price">${money(p.price)} <span class="muted small">/ ${unit}</span></div>
+        <span class="tag ${p.availability === "In stock" ? "ok" : /low|few/i.test(p.availability || "") ? "low" : "out"}">${esc(p.availability || "")}</span></div>
+      <div class="acts"><a class="btn ghost" href="#/p/${encodeURIComponent(p.sku)}">See details</a>
+        ${tile ? `<a class="btn" href="/assistant?sku=${encodeURIComponent(p.sku)}#/rooms">Try in my room</a>` : `<a class="btn" href="/assistant?sku=${encodeURIComponent(p.sku)}">Ask Ceramica Nova AI</a>`}</div>`;
+    el.querySelector(".x").onclick = () => el.remove();
+    box.append(el);
+  };
+  const back = document.createElement("button"); back.type = "button"; back.className = "back"; back.textContent = "‹ Back to the overview";
+  back.onclick = () => { card(null); sec.classList.remove("picked"); SR && SR.overview(); };
+  box.append(back);
+  try {
+    if (SR) SR.stop();
+    const mod = await import("/assets/showroom.js");
+    if (!document.body.contains(cv)) return;          // the visitor already left the home page
+    SR = await mod.create(cv, products, {
+      onPick: p => { hint.style.opacity = 0; card(p); sec.classList.toggle("picked", !!p || sec.classList.contains("picked")); },
+      onHover: p => { tip.hidden = !p; if (p) tip.textContent = p.name + " · tap to see it"; },
+    });
+    nav.querySelectorAll("button").forEach(b => b.onclick = () => { hint.style.opacity = 0; SR.go(+b.dataset.go); });
+  } catch (e) {
+    console.warn("showroom", e); flat();
+  }
 }
 
 const FILTERS = [
@@ -887,6 +984,7 @@ async function receiptPage(token) {
 // ---------------------------------------------------------------- router
 async function route() {
   const [path, query] = (location.hash.slice(1) || "/").split("?");
+  if (SR) { SR.stop(); SR = null; }
   $("#bubble").href = "/assistant";
   $("#bubble").hidden = path === "/checkout" || path === "/extras";
   const params = new URLSearchParams(query || "");

@@ -28,6 +28,13 @@
   .drop:hover, .drop.over { border-color:var(--accent); background:var(--accent-soft); }
   .drop img { max-width:100%; max-height:220px; border-radius:8px; display:block; margin:0 auto; }
   .drop.busy { opacity:.6; pointer-events:none; }
+  .camb { margin-top:10px; display:none; }
+  .phone { display:flex; gap:14px; align-items:center; margin-top:12px; padding:12px; border:1px solid var(--line); border-radius:12px; font-size:14px; }
+  .phone small { color:var(--muted); display:block; margin-top:2px; } .phone .qrstate { color:var(--accent); margin-top:6px; }
+  .phone .qr { position:relative; flex:none; width:112px; height:112px; border-radius:8px; background:var(--soft); display:grid; place-items:center; }
+  .phone .qr img { width:112px; height:112px; display:block; } .phone .qr span { position:absolute; font-size:11px; color:var(--muted); text-align:center; padding:6px; }
+  .linkbtn { border:0; background:none; color:var(--accent); font:inherit; font-size:13px; padding:4px 0; cursor:pointer; text-decoration:underline; }
+  @media (hover: none) and (pointer: coarse), (max-width: 700px) { .camb { display:flex; } .phone { display:none; } }
   .samples { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-top:10px; }
   .samples > small { grid-column:1 / -1; }
   .samples button { border:1px solid var(--line); background:#fff; border-radius:8px; padding:0 0 4px; overflow:hidden; cursor:pointer; font:inherit; }
@@ -104,6 +111,13 @@
           <img id="dropImg" alt="" hidden>
         </div>
         <input type="file" id="file" accept="image/*" hidden>
+        <input type="file" id="cam" accept="image/*" capture="environment" hidden>
+        <button type="button" class="btn camb" id="camBtn">📷 Take a photo now</button>
+        <div class="phone" id="phone">
+          <div class="qr"><img id="qrImg" alt="QR code: scan it with your phone to send a photo"><span id="qrWait">Making a code…</span></div>
+          <div><b>Use your phone's camera</b><br><small>Scan this code with your phone, take a photo of your room, and it appears here.</small>
+            <small class="qrstate" id="qrState"></small><button type="button" class="linkbtn" id="qrNew" hidden>Make a new code</button></div>
+        </div>
         <div class="samples" id="samples" aria-label="Or try one of our rooms"></div>
         <div class="ferr" id="e-photo"></div>
       </div>
@@ -229,11 +243,43 @@ async function usePhoto(blob, sampleBtn) {
     const r = await fetch("/api/v1/visual/photos", { method: "POST", headers: { "Content-Type": "image/jpeg", "X-User-Id": USER_ID }, body });
     const d = await r.json();
     if (!r.ok) { showErr("photo", typeof d.detail === "string" ? d.detail : "That photo could not be used. Please try another."); return; }
-    S.photo = d.id; $("dropImg").src = d.url; $("dropImg").hidden = false; $("dropText").hidden = true;
-    document.querySelectorAll("#samples button").forEach(b => b.classList.toggle("on", b === sampleBtn));
+    showPhoto(d, sampleBtn);
   } catch { showErr("photo", "The photo could not be uploaded. Check your connection and try again."); }
   finally { $("drop").classList.remove("busy"); }
 }
+function showPhoto(d, sampleBtn) {
+  S.photo = d.id; $("dropImg").src = d.url; $("dropImg").hidden = false; $("dropText").hidden = true; clearErr("photo");
+  document.querySelectorAll("#samples button").forEach(b => b.classList.toggle("on", b === sampleBtn));
+}
+$("camBtn").onclick = () => $("cam").click();
+$("cam").onchange = e => usePhoto(e.target.files[0], null);
+
+// phone hand-off: a one-time QR code (15 minutes); the photo taken on the phone appears on this screen
+const H = { code: null, timer: null };
+async function newCode() {
+  clearTimeout(H.timer); H.code = null; $("qrNew").hidden = true; $("qrState").textContent = "";
+  $("qrWait").hidden = false; $("qrWait").textContent = "Making a code…"; $("qrImg").removeAttribute("src");
+  try {
+    const r = await fetch("/api/v1/visual/handoff", { method: "POST", headers: { "X-User-Id": USER_ID } });
+    const d = await r.json(); if (!r.ok) throw new Error();
+    H.code = d.code; $("qrImg").onload = () => { $("qrWait").hidden = true; }; $("qrImg").src = d.qr; poll();
+  } catch { $("qrWait").textContent = "The phone link isn't available right now."; $("qrNew").hidden = false; }
+}
+async function poll() {
+  clearTimeout(H.timer); if (!H.code) return;
+  if (document.hidden) { H.timer = setTimeout(poll, 3000); return; }
+  try {
+    const r = await fetch(`/api/v1/visual/handoff/${encodeURIComponent(H.code)}`, { headers: { "X-User-Id": USER_ID } });
+    const d = await r.json();
+    if (r.ok && d.status === "done") { toast("Photo received from your phone."); showPhoto(d.photo, null); newCode(); return; }
+    if (!r.ok || d.status === "expired") { H.code = null; $("qrWait").hidden = false; $("qrWait").textContent = "This code has expired."; $("qrState").textContent = ""; $("qrNew").hidden = false; return; }
+    $("qrState").textContent = `Waiting for your photo · code valid ${Math.max(1, Math.ceil(d.seconds_left / 60))} more min`;
+  } catch {}
+  H.timer = setTimeout(poll, 2000);
+}
+$("qrNew").onclick = newCode;
+if (getComputedStyle($("phone")).display !== "none") newCode();
+
 $("drop").onclick = () => $("file").click();
 $("drop").onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("file").click(); } };
 $("file").onchange = e => usePhoto(e.target.files[0], null);

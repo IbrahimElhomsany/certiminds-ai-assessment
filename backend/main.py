@@ -32,6 +32,7 @@ from backend.catalog import CATALOG, SANITARY                         # noqa: E4
 from backend.admin_api import router as admin_router                 # noqa: E402
 from backend.shop_api import router as shop_router                   # noqa: E402
 from backend.visual import router as visual_router                   # noqa: E402
+from backend.roomedit import router as makeover_router               # noqa: E402
 from backend.worlds import router as worlds_router                   # noqa: E402
 from backend.sample_rooms import router as sample_rooms_router       # noqa: E402
 from backend.crm.picks import router as picks_router
@@ -66,6 +67,7 @@ except Exception:              # never block start-up over this
 app.include_router(admin_router)
 app.include_router(shop_router)
 app.include_router(visual_router)
+app.include_router(makeover_router)
 app.include_router(worlds_router)
 app.include_router(sample_rooms_router)
 app.include_router(picks_router)
@@ -107,6 +109,12 @@ def shop():
 def ui():
     """Ceramica Nova AI, the design and quotation assistant."""
     return FileResponse(Path(__file__).resolve().parent.parent / "frontend" / "index.html")
+
+
+@app.get("/makeover")
+def makeover_ui():
+    """AI room makeover: upload a room photo, pick tiles or describe a change, OpenAI re-draws the photo."""
+    return FileResponse(Path(__file__).resolve().parent.parent / "frontend" / "makeover.html")
 
 
 @app.get("/admin")

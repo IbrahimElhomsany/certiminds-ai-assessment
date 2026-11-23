@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Room Makeover | Ceramica Nova</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --ink:#111; --text:#1f2328; --muted:#6b7280; --line:#e7e7e7; --soft:#f5f5f5; --accent:#3d6fd8;
+          --accent-soft:#eef3fd; --ok:#2fa865; --bad:#c0392b; --bad-soft:#fdecea; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:Poppins, system-ui, sans-serif; color:var(--text); background:#fff; font-size:15px; }
+  a { color:inherit; }
+  header { display:flex; align-items:center; gap:14px; padding:14px 24px; border-bottom:1px solid var(--line); }
+  header .brand { font-weight:700; letter-spacing:.12em; color:var(--ink); text-decoration:none; }
+  header nav { margin-left:auto; display:flex; gap:18px; font-size:14px; }
+  header nav a { text-decoration:none; color:var(--muted); } header nav a:hover { color:var(--ink); }
+  main { max-width:1180px; margin:0 auto; padding:28px 24px 60px; }
+  .kicker { font-size:11px; letter-spacing:.3em; font-weight:600; color:var(--accent); }
+  h1 { color:var(--ink); font-size:32px; margin:8px 0 6px; } h2 { color:var(--ink); font-size:17px; margin:0 0 4px; }
+  .lead { color:var(--muted); margin:0 0 22px; max-width:720px; }
+  .grid { display:grid; grid-template-columns:minmax(0, 420px) minmax(0, 1fr); gap:28px; align-items:start; }
+  @media (max-width: 900px) { .grid { grid-template-columns:1fr; } }
+  .card { border:1px solid var(--line); border-radius:14px; padding:18px; margin-bottom:16px; }
+  .card small.hint { color:var(--muted); display:block; margin-bottom:12px; }
+  .drop { border:2px dashed var(--line); border-radius:12px; padding:18px; text-align:center; cursor:pointer; background:var(--soft); }
+  .drop:hover, .drop.over { border-color:var(--accent); background:var(--accent-soft); }
+  .drop img { max-width:100%; max-height:220px; border-radius:8px; display:block; margin:0 auto; }
+  .drop.busy { opacity:.6; pointer-events:none; }
+  .samples { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .samples button { border:1px solid var(--line); background:#fff; border-radius:8px; padding:0; width:72px; height:54px; overflow:hidden; cursor:pointer; }
+  .samples button img { width:100%; height:100%; object-fit:cover; display:block; }
+  .samples button.on { outline:2px solid var(--accent); }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fill, minmax(84px, 1fr)); gap:8px; }
+  .tile { border:1px solid var(--line); border-radius:10px; background:#fff; padding:4px 4px 6px; cursor:pointer; text-align:left; font:inherit; }
+  .tile img { width:100%; aspect-ratio:1; object-fit:cover; border-radius:6px; display:block; background:var(--soft); }
+  .tile b { display:block; font-size:11px; font-weight:600; color:var(--ink); margin-top:4px; line-height:1.2; }
+  .tile i { display:block; font-size:10px; font-style:normal; color:var(--muted); }
+  .tile.none { display:grid; place-items:center; min-height:100px; color:var(--muted); font-size:12px; text-align:center; }
+  .tile.on { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent); }
+  textarea { width:100%; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font:inherit; resize:vertical; min-height:64px; }
+  textarea:focus { outline:none; border-color:var(--accent); }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .chips button { border:1px solid var(--line); background:#fff; border-radius:999px; padding:4px 10px; font:inherit; font-size:12px; cursor:pointer; }
+  .chips button:hover { border-color:var(--accent); color:var(--accent); }
+  .q { display:flex; gap:8px; } .q label { flex:1; border:1px solid var(--line); border-radius:10px; padding:10px; cursor:pointer; font-size:13px; }
+  .q label:has(input:checked) { border-color:var(--accent); background:var(--accent-soft); }
+  .q input { margin-right:6px; } .q small { display:block; color:var(--muted); margin-top:2px; }
+  .ferr { color:var(--bad); font-size:13px; margin-top:8px; display:none; } .ferr.show { display:block; }
+  .card.bad { border-color:var(--bad); }
+  .btn { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; border:1px solid var(--ink); background:var(--ink);
+         color:#fff; border-radius:10px; padding:13px 20px; font:inherit; font-weight:600; cursor:pointer; }
+  .btn:disabled { opacity:.5; cursor:not-allowed; } .btn.ghost { background:#fff; color:var(--ink); width:auto; }
+  .off { background:#fff7e6; border:1px solid #f3d9a4; color:#7a5200; border-radius:10px; padding:12px 14px; margin-bottom:16px; font-size:14px; display:none; }
+  .stage { position:relative; border-radius:14px; overflow:hidden; background:var(--soft); aspect-ratio:3/2; user-select:none; touch-action:none; }
+  .stage [hidden] { display:none !important; }
+  .grid > section { position:sticky; top:16px; }
+  @media (max-width: 900px) { .grid > section { position:static; } }
+  .stage { margin:0 auto; max-height:82vh; }
+  .stage img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
+  .stage .afterwrap { position:absolute; inset:0; clip-path:inset(0 0 0 50%); }
+  .stage .bar { position:absolute; top:0; bottom:0; left:50%; width:2px; background:#fff; box-shadow:0 0 6px rgba(0,0,0,.4); cursor:ew-resize; }
+  .stage .bar::after { content:"⇆"; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:38px; height:38px; border-radius:50%;
+         background:#fff; display:grid; place-items:center; font-size:18px; color:var(--ink); box-shadow:0 2px 8px rgba(0,0,0,.3); }
+  .stage .lab { position:absolute; top:12px; padding:4px 10px; border-radius:6px; font-size:12px; font-weight:600; background:rgba(0,0,0,.65); color:#fff; }
+  .stage .lab.l { left:12px; } .stage .lab.r { right:12px; background:var(--accent); }
+  .empty { position:absolute; inset:0; display:grid; place-items:center; text-align:center; color:var(--muted); padding:30px; }
+  .busy { position:absolute; inset:0; display:none; place-items:center; text-align:center; background:rgba(255,255,255,.82); padding:30px; }
+  .busy.show { display:grid; } .spin { width:42px; height:42px; border:4px solid var(--line); border-top-color:var(--accent); border-radius:50%;
+         animation:sp 1s linear infinite; margin:0 auto 12px; } @keyframes sp { to { transform:rotate(360deg); } }
+  .result { display:none; } .result.show { display:block; }
+  .meta { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:12px 0; }
+  .meta .tag { background:var(--accent-soft); color:var(--accent); border-radius:6px; padding:4px 10px; font-size:12px; font-weight:600; }
+  .meta .sp { margin-left:auto; display:flex; gap:8px; }
+  .note { font-size:13px; color:var(--muted); border-left:3px solid var(--accent); padding:4px 0 4px 12px; margin:10px 0; }
+  details { font-size:13px; color:var(--muted); margin-top:10px; } details pre { white-space:pre-wrap; background:var(--soft); padding:10px; border-radius:8px; }
+  .history { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  .history button { border:1px solid var(--line); border-radius:8px; padding:0; width:96px; height:64px; overflow:hidden; cursor:pointer; background:#fff; }
+  .history button img { width:100%; height:100%; object-fit:cover; display:block; }
+  .toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:var(--ink); color:#fff; padding:10px 16px; border-radius:10px; font-size:14px; display:none; }
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="/">CERAMICA NOVA</a>
+  <nav><a href="/">Shop</a><a href="/assistant#/rooms">Room visualiser</a><a href="/assistant">Ask Ceramica Nova AI</a></nav>
+</header>
+<main>
+  <div class="kicker">AI ROOM MAKEOVER</div>
+  <h1>See our tiles in your room, drawn by AI</h1>
+  <p class="lead">Upload a photo of your room, pick a floor or wall tile (or just say what you'd like), and the AI re-draws your photo with it.</p>
+  <div class="off" id="off">AI makeovers are not switched on yet. The shop owner needs to add an OpenAI key. You can still use the <a href="/assistant#/rooms">Room visualiser</a>.</div>
+
+  <div class="grid">
+    <form id="form" novalidate>
+      <div class="card" id="c-photo">
+        <h2>1. Your room photo</h2>
+        <small class="hint">A clear photo with the floor and walls in view works best.</small>
+        <div class="drop" id="drop" tabindex="0" role="button" aria-label="Upload a room photo">
+          <div id="dropText"><b>Click to upload</b> or drop a photo here<br><small style="color:var(--muted)">JPG, PNG or WebP</small></div>
+          <img id="dropImg" alt="" hidden>
+        </div>
+        <input type="file" id="file" accept="image/*" hidden>
+        <div class="samples" id="samples" aria-label="Or try one of our rooms"></div>
+        <div class="ferr" id="e-photo"></div>
+      </div>
+
+      <div class="card" id="c-floor">
+        <h2>2. Floor tile</h2>
+        <div class="tiles" id="floorTiles"></div>
+        <div class="ferr" id="e-floor"></div>
+      </div>
+
+      <div class="card" id="c-wall">
+        <h2>3. Wall tile</h2>
+        <div class="tiles" id="wallTiles"></div>
+        <div class="ferr" id="e-wall"></div>
+      </div>
+
+      <div class="card" id="c-request">
+        <h2>4. Anything else? <span style="font-weight:400;color:var(--muted);font-size:13px">(optional)</span></h2>
+        <small class="hint">Say it in your own words. You can use this without picking a tile.</small>
+        <textarea id="request" maxlength="300" placeholder="e.g. paint the walls light grey"></textarea>
+        <div class="chips" id="chips"></div>
+        <div class="ferr" id="e-request"></div>
+      </div>
+
+      <div class="card">
+        <h2>5. Quality</h2>
+        <div class="q">
+          <label><input type="radio" name="q" value="medium" checked>Standard<small>About 20 to 60 seconds</small></label>
+          <label><input type="radio" name="q" value="high">Best<small>Sharper, up to 3 minutes</small></label>
+        </div>
+      </div>
+      <button class="btn" id="go" type="submit">✨ Make it</button>
+      <div class="ferr" id="e-general"></div>
+    </form>
+
+    <section>
+      <div class="stage" id="stage">
+        <div class="empty" id="empty">Your before and after will show here.</div>
+        <img id="imgBefore" alt="Your room before" hidden>
+        <div class="afterwrap" id="afterwrap" hidden><img id="imgAfter" alt="Your room after the AI makeover"></div>
+        <div class="bar" id="bar" hidden></div>
+        <span class="lab l" id="labL" hidden>BEFORE</span><span class="lab r" id="labR" hidden>AFTER · AI</span>
+        <div class="busy" id="busy"><div><div class="spin"></div><b>The AI is re-drawing your room…</b><br>
+          <small style="color:var(--muted)"><span id="secs">0</span> s. This usually takes 20 seconds to 2 minutes.</small></div></div>
+      </div>
+      <div class="result" id="result">
+        <div class="meta">
+          <span class="tag" id="rTiles"></span><small style="color:var(--muted)" id="rInfo"></small>
+          <span class="sp"><button class="btn ghost" type="button" id="dl">Download</button><button class="btn ghost" type="button" id="share">Copy link</button></span>
+        </div>
+        <p class="note">Drawn by an AI image model (OpenAI). The tile look is close to ours, but exact size and pattern can differ, and small things in the room can shift. For exact tiles at real size, use the <a href="/assistant#/rooms">Room visualiser</a>.</p>
+        <details><summary>What we asked the AI</summary><pre id="rPrompt"></pre></details>
+        <div class="history" id="history"></div>
+      </div>
+    </section>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const USER_ID = (() => {
+  try {
+    let id = localStorage.getItem("nova_visitor");
+    if (!/^USR-\d{10}$/.test(id || "")) { id = "USR-" + Array.from(crypto.getRandomValues(new Uint8Array(10)), b => b % 10).join(""); localStorage.setItem("nova_visitor", id); }
+    return id;
+  } catch { return "USR-" + String(Math.floor(Math.random() * 1e10)).padStart(10, "0"); }
+})();
+const S = { photo: null, floor: null, wall: null, on: false, last: null, history: [] };
+const SAMPLES = [["Living room", "/images/room_living.jpg"], ["Kitchen", "/images/room_kitchen.jpg"], ["Bathroom", "/images/room_bathroom.jpg"], ["Lounge", "/images/showroom_lounge.jpg"]];
+const CHIPS = ["Light grey walls", "Warm beige walls", "Dark wood-look floor", "Make the room brighter"];
+function toast(t) { const el = $("toast"); el.textContent = t; el.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(() => el.style.display = "none", 2600); }
+
+function showErr(field, msg) {
+  const el = $("e-" + field) || $("e-general");
+  el.textContent = msg; el.classList.add("show");
+  const card = $("c-" + field); if (card) { card.classList.add("bad"); card.scrollIntoView({ behavior: "smooth", block: "center" }); }
+}
+function clearErr(field) {
+  for (const f of field ? [field] : ["photo", "floor", "wall", "request", "general"]) {
+    $("e-" + f).classList.remove("show"); const c = $("c-" + f); if (c) c.classList.remove("bad");
+  }
+}
+
+// ------------------------------------------------ tiles
+function tileGrid(el, list, kind) {
+  el.innerHTML = `<button type="button" class="tile none on" data-sku="">No change</button>` + list.map(t =>
+    `<button type="button" class="tile" data-sku="${t.sku}" title="${esc(t.name)}, ${esc(t.size_cm)} cm"><img src="${t.image}" alt="" loading="lazy"><b>${esc(t.name)}</b><i>${esc(t.size_cm)} cm · ${esc(t.finish)}</i></button>`).join("");
+  el.addEventListener("click", e => {
+    const b = e.target.closest(".tile"); if (!b) return;
+    el.querySelectorAll(".tile").forEach(x => x.classList.toggle("on", x === b));
+    S[kind] = b.dataset.sku || null; clearErr(kind); clearErr("request");
+  });
+}
+async function loadStatus() {
+  try {
+    const d = await (await fetch("/api/v1/makeover")).json();
+    S.on = d.on; $("off").style.display = d.on ? "none" : "block"; $("go").disabled = !d.on;
+    tileGrid($("floorTiles"), d.tiles.filter(t => t.surfaces.includes("floor")), "floor");
+    tileGrid($("wallTiles"), d.tiles.filter(t => t.surfaces.includes("wall")), "wall");
+  } catch { showErr("general", "The page could not load our tiles. Please refresh."); }
+}
+
+// ------------------------------------------------ photo
+async function shrink(blob) {
+  const url = URL.createObjectURL(blob);
+  try {
+    const im = await new Promise((ok, bad) => { const i = new Image(); i.onload = () => ok(i); i.onerror = bad; i.src = url; });
+    const k = Math.min(1, 2000 / Math.max(im.naturalWidth, im.naturalHeight));
+    const c = document.createElement("canvas"); c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k);
+    c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+    return await new Promise(ok => c.toBlob(ok, "image/jpeg", 0.9));
+  } catch { return blob; } finally { URL.revokeObjectURL(url); }
+}
+async function usePhoto(blob, sampleBtn) {
+  clearErr("photo");
+  if (!blob || !/^image\//.test(blob.type || "image/")) { showErr("photo", "Please choose a photo (JPG, PNG or WebP)."); return; }
+  $("drop").classList.add("busy");
+  try {
+    const body = await shrink(blob);
+    const r = await fetch("/api/v1/visual/photos", { method: "POST", headers: { "Content-Type": "image/jpeg", "X-User-Id": USER_ID }, body });
+    const d = await r.json();
+    if (!r.ok) { showErr("photo", typeof d.detail === "string" ? d.detail : "That photo could not be used. Please try another."); return; }
+    S.photo = d.id; $("dropImg").src = d.url; $("dropImg").hidden = false; $("dropText").hidden = true;
+    document.querySelectorAll("#samples button").forEach(b => b.classList.toggle("on", b === sampleBtn));
+  } catch { showErr("photo", "The photo could not be uploaded. Check your connection and try again."); }
+  finally { $("drop").classList.remove("busy"); }
+}
+$("drop").onclick = () => $("file").click();
+$("drop").onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("file").click(); } };
+$("file").onchange = e => usePhoto(e.target.files[0], null);
+$("drop").ondragover = e => { e.preventDefault(); $("drop").classList.add("over"); };
+$("drop").ondragleave = () => $("drop").classList.remove("over");
+$("drop").ondrop = e => { e.preventDefault(); $("drop").classList.remove("over"); usePhoto(e.dataTransfer.files[0], null); };
+$("samples").innerHTML = `<small style="width:100%;color:var(--muted)">Or try one of our rooms:</small>` +
+  SAMPLES.map(([n, u]) => `<button type="button" data-u="${u}" title="${n}" aria-label="${n}"><img src="${u}" alt=""></button>`).join("");
+$("samples").onclick = async e => {
+  const b = e.target.closest("button"); if (!b) return;
+  try { const blob = await (await fetch(b.dataset.u)).blob(); usePhoto(blob, b); } catch { showErr("photo", "That sample could not be loaded."); }
+};
+$("chips").innerHTML = CHIPS.map(c => `<button type="button">${c}</button>`).join("");
+$("chips").onclick = e => { const b = e.target.closest("button"); if (!b) return; $("request").value = b.textContent; clearErr("request"); };
+$("request").oninput = () => clearErr("request");
+
+// ------------------------------------------------ make it
+$("form").onsubmit = async e => {
+  e.preventDefault(); clearErr();
+  const text = $("request").value.trim();
+  let bad = false;
+  if (!S.photo) { showErr("photo", "Upload a photo of your room first, or pick one of ours."); bad = true; }
+  if (!S.floor && !S.wall && !text) { showErr("request", "Pick a floor or wall tile, or write what you'd like to change."); bad = true; }
+  if (bad) return;
+  $("go").disabled = true; $("busy").classList.add("show"); $("empty").hidden = true;
+  const t0 = Date.now(), tick = setInterval(() => $("secs").textContent = Math.round((Date.now() - t0) / 1000), 500);
+  try {
+    const r = await fetch("/api/v1/makeover", { method: "POST", headers: { "Content-Type": "application/json", "X-User-Id": USER_ID },
+      body: JSON.stringify({ photo_id: S.photo, floor: S.floor, wall: S.wall, request: text, quality: document.querySelector("input[name=q]:checked").value }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const det = d.detail;
+      if (det && det.field) showErr(det.field, det.message);
+      else if (Array.isArray(det)) showErr("general", "Some details are not right. Please check the form.");
+      else showErr("general", typeof det === "string" ? det : "The AI makeover did not work this time. Please try again.");
+      if (!S.last) $("empty").hidden = false;
+      return;
+    }
+    show(d); S.history.unshift(d); renderHistory();
+  } catch { showErr("general", "No answer from the server. Check your connection and try again."); if (!S.last) $("empty").hidden = false; }
+  finally { clearInterval(tick); $("busy").classList.remove("show"); $("go").disabled = !S.on; }
+};
+function show(d) {
+  S.last = d;
+  $("imgBefore").src = d.before; $("imgAfter").src = d.after;
+  for (const id of ["imgBefore", "afterwrap", "bar", "labL", "labR"]) $(id).hidden = false;
+  $("empty").hidden = true; place(50);
+  if (d.width && d.height) { $("stage").style.aspectRatio = `${d.width} / ${d.height}`; $("stage").style.maxWidth = `calc(82vh * ${d.width / d.height})`; }
+  if (innerWidth <= 900) $("stage").scrollIntoView({ behavior: "smooth", block: "start" });
+  $("rTiles").textContent = d.tiles; $("rInfo").textContent = `Made in ${d.seconds} s · ${d.quality === "high" ? "best" : "standard"} quality`;
+  $("rPrompt").textContent = d.prompt; $("result").classList.add("show");
+}
+function renderHistory() {
+  $("history").innerHTML = S.history.length < 2 ? "" : S.history.map((h, i) => `<button type="button" data-i="${i}" title="${esc(h.tiles)}"><img src="${h.after}" alt=""></button>`).join("");
+}
+$("history").onclick = e => { const b = e.target.closest("button"); if (b) show(S.history[+b.dataset.i]); };
+
+// before/after slider
+function place(p) { p = Math.max(0, Math.min(100, p)); $("afterwrap").style.clipPath = `inset(0 0 0 ${p}%)`; $("bar").style.left = p + "%"; }
+let drag = false;
+const at = e => { const b = $("stage").getBoundingClientRect(); place((e.clientX - b.left) / b.width * 100); };
+$("stage").addEventListener("pointerdown", e => { if (!S.last) return; drag = true; $("stage").setPointerCapture(e.pointerId); at(e); });
+$("stage").addEventListener("pointermove", e => { if (drag) at(e); });
+$("stage").addEventListener("pointerup", () => drag = false);
+$("dl").onclick = () => { if (!S.last) return; const a = Object.assign(document.createElement("a"), { href: S.last.after, download: "ceramica-nova-ai-makeover.jpg" }); document.body.appendChild(a); a.click(); a.remove(); };
+$("share").onclick = async () => { if (!S.last) return; try { await navigator.clipboard.writeText(S.last.share_url); toast("Link copied. Anyone with it can see the picture for 30 days."); } catch { prompt("Copy this link:", S.last.share_url); } };
+loadStatus();
+</script>
+</body>
+</html>

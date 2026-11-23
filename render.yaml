@@ -26,6 +26,10 @@ services:
         sync: false          # you paste it in Render; never stored in the repo
       - key: TAP_SECRET_KEY
         sync: false          # Tap Payments secret key (sk_test_... for testing); empty = pay on delivery only
+      - key: OPENAI_API_KEY
+        sync: false          # AI room makeover (/makeover); empty = the page says it is not switched on
+      - key: OPENAI_DAILY_IMAGES
+        value: "60"          # makeovers per day for the whole site (about $0.05 each), protects the bill
       - key: ROOMAI_URL
         sync: false          # room AI on Modal (backend/roomai/modal_app.py); empty = the browser's simpler detection
       - key: ROOMAI_TOKEN

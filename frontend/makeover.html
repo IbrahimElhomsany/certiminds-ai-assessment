@@ -28,9 +28,11 @@
   .drop:hover, .drop.over { border-color:var(--accent); background:var(--accent-soft); }
   .drop img { max-width:100%; max-height:220px; border-radius:8px; display:block; margin:0 auto; }
   .drop.busy { opacity:.6; pointer-events:none; }
-  .samples { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
-  .samples button { border:1px solid var(--line); background:#fff; border-radius:8px; padding:0; width:72px; height:54px; overflow:hidden; cursor:pointer; }
-  .samples button img { width:100%; height:100%; object-fit:cover; display:block; }
+  .samples { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-top:10px; }
+  .samples > small { grid-column:1 / -1; }
+  .samples button { border:1px solid var(--line); background:#fff; border-radius:8px; padding:0 0 4px; overflow:hidden; cursor:pointer; font:inherit; }
+  .samples button img { width:100%; aspect-ratio:4/3; object-fit:cover; display:block; }
+  .samples button span { display:block; font-size:11px; color:var(--text); margin-top:3px; }
   .samples button.on { outline:2px solid var(--accent); }
   .tiles { display:grid; grid-template-columns:repeat(auto-fill, minmax(84px, 1fr)); gap:8px; }
   .tile { border:1px solid var(--line); border-radius:10px; background:#fff; padding:4px 4px 6px; cursor:pointer; text-align:left; font:inherit; }
@@ -171,7 +173,9 @@ const USER_ID = (() => {
   } catch { return "USR-" + String(Math.floor(Math.random() * 1e10)).padStart(10, "0"); }
 })();
 const S = { photo: null, floor: null, wall: null, on: false, last: null, history: [] };
-const SAMPLES = [["Living room", "/images/room_living.jpg"], ["Kitchen", "/images/room_kitchen.jpg"], ["Bathroom", "/images/room_bathroom.jpg"], ["Lounge", "/images/showroom_lounge.jpg"]];
+const SAMPLES = [["Living room", "vis_living"], ["TV lounge", "vis_tvroom"], ["Bedroom", "vis_bedroom"], ["Kitchen", "vis_kitchen"],
+  ["Bathroom", "vis_bathroom"], ["Spa bathroom", "vis_spa"], ["Office", "vis_office"], ["Terrace", "vis_terrace"], ["Showroom lounge", "showroom_lounge"]]
+  .map(([n, f]) => [n, `/images/${f}.jpg`]);
 const CHIPS = ["Light grey walls", "Warm beige walls", "Dark wood-look floor", "Make the room brighter"];
 function toast(t) { const el = $("toast"); el.textContent = t; el.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(() => el.style.display = "none", 2600); }
 
@@ -237,7 +241,7 @@ $("drop").ondragover = e => { e.preventDefault(); $("drop").classList.add("over"
 $("drop").ondragleave = () => $("drop").classList.remove("over");
 $("drop").ondrop = e => { e.preventDefault(); $("drop").classList.remove("over"); usePhoto(e.dataTransfer.files[0], null); };
 $("samples").innerHTML = `<small style="width:100%;color:var(--muted)">Or try one of our rooms:</small>` +
-  SAMPLES.map(([n, u]) => `<button type="button" data-u="${u}" title="${n}" aria-label="${n}"><img src="${u}" alt=""></button>`).join("");
+  SAMPLES.map(([n, u]) => `<button type="button" data-u="${u}" title="${n}"><img src="${u}" alt="" loading="lazy"><span>${n}</span></button>`).join("");
 $("samples").onclick = async e => {
   const b = e.target.closest("button"); if (!b) return;
   try { const blob = await (await fetch(b.dataset.u)).blob(); usePhoto(blob, b); } catch { showErr("photo", "That sample could not be loaded."); }

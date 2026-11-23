@@ -128,3 +128,10 @@ def test_daily_cap_protects_the_bill(monkeypatch):
 def test_page_is_served():
     r = client.get("/makeover")
     assert r.status_code == 200 and "AI ROOM MAKEOVER" in r.text
+
+
+def test_all_nine_sample_rooms_are_offered():
+    page = client.get("/makeover").text
+    for f in ("vis_living", "vis_tvroom", "vis_bedroom", "vis_kitchen", "vis_bathroom", "vis_spa", "vis_office",
+              "vis_terrace", "showroom_lounge"):
+        assert f'"{f}"' in page and (visual.ROOT / "images" / f"{f}.jpg").exists()

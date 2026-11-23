@@ -240,6 +240,20 @@
   /* ---------- modal + toast */
   .modal { position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; place-items:center; z-index:40; padding:16px; }
   .modal.open { display:grid; }
+  .modal .box.aibox { width:min(900px, 100%); }
+  .vtool .tb.ai { color:#3d6fd8; background:#eef3fd; }
+  .aistage { position:relative; aspect-ratio:3/2; border-radius:12px; overflow:hidden; background:#f3f3f3; margin:10px auto 0; max-width:calc(58vh * 1.5); touch-action:none; user-select:none; }
+  .aistage img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
+  .aistage .aiafter { position:absolute; inset:0; clip-path:inset(0 0 0 50%); }
+  .aistage .aibar { position:absolute; top:0; bottom:0; left:50%; width:2px; background:#fff; box-shadow:0 0 6px rgba(0,0,0,.4); cursor:ew-resize; }
+  .aistage .ailab { position:absolute; top:10px; left:10px; padding:3px 9px; border-radius:6px; font-size:12px; font-weight:600; background:rgba(0,0,0,.65); color:#fff; }
+  .aistage .ailab.r { left:auto; right:10px; background:#3d6fd8; }
+  .aistage .aibusy { position:absolute; inset:0; display:none; place-items:center; text-align:center; background:rgba(255,255,255,.85); padding:20px; }
+  .aistage.busy .aibusy { display:grid; } .aistage.busy .aiafter, .aistage.busy .aibar, .aistage.busy .ailab.r { display:none; }
+  .aistage:not(.done) .aiafter, .aistage:not(.done) .aibar, .aistage:not(.done) .ailab.r { display:none; }
+  .aispin { width:38px; height:38px; border:4px solid #e7e7e7; border-top-color:#3d6fd8; border-radius:50%; animation:aisp 1s linear infinite; margin:0 auto 10px; }
+  @keyframes aisp { to { transform:rotate(360deg); } }
+  .aierr { color:#c0392b; font-size:13.5px; margin-top:8px; }
   .modal .box { background:#fff; border-radius:16px; width:min(560px, 100%); max-height:85vh; overflow:auto; padding:18px 20px; }
   .modal h3 { margin:0 0 4px; color:var(--ink); } .modal table { width:100%; border-collapse:collapse; font-size:12.5px; margin-top:8px; }
   .modal td { border-bottom:1px solid var(--line); padding:6px 4px; vertical-align:top; } .modal td:first-child { color:var(--muted); width:38%; }
@@ -538,6 +552,7 @@
         <button class="tb" type="button" id="v3d"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3zM12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span>Walk in 3D</span></button>
         <button class="tb" type="button" id="vcmp"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3v18M4 5h16v14H4z"/></svg><span>Compare</span></button>
         <button class="tb" type="button" id="vzoom"><svg class="ico" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span>Zoom</span></button>
+        <button class="tb ai" type="button" id="vai" hidden title="The AI re-draws this room as a real photo with your tiles"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg><span>Photo-real (AI)</span></button>
         <button class="tb" type="button" id="vshare"><svg class="ico" viewBox="0 0 24 24"><path d="M18 8a3 3 0 100-6 3 3 0 000 6zM6 15a3 3 0 100-6 3 3 0 000 6zM18 22a3 3 0 100-6 3 3 0 000 6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg><span>Share</span></button>
         <button class="tb" type="button" id="vdl"><svg class="ico" viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg><span>Download</span></button>
         <a class="tb" href="#/rooms" id="vup"><svg class="ico" viewBox="0 0 24 24"><path d="M12 20V9m0 0l-4 4m4-4l4 4M5 4h14"/></svg><span>Upload</span></a>
@@ -677,6 +692,20 @@
     </div>
     <div class="hint" id="shareNote" style="margin-top:10px"></div>
     <div class="mfoot"><button type="button" class="dark" id="shareClose">Close</button></div></div>
+</div>
+<div class="modal" id="aiModal" role="dialog" aria-modal="true" aria-labelledby="aiTitle">
+  <div class="box aibox"><h3 id="aiTitle">✨ Your room, photo-real</h3>
+    <div class="hint" id="aiTiles"></div>
+    <div class="aistage" id="aiStage">
+      <img id="aiBefore" alt="Your room in the visualiser"><div class="aiafter" id="aiAfterWrap"><img id="aiAfter" alt="Your room re-drawn by AI"></div>
+      <div class="aibar" id="aiBar"></div>
+      <span class="ailab">Visualiser</span><span class="ailab r">AI photo</span>
+      <div class="aibusy" id="aiBusy"><div><div class="aispin"></div><b>The AI is re-drawing your room…</b><br><small><span id="aiSecs">0</span> s. Usually 20 to 60 seconds.</small></div></div>
+    </div>
+    <div class="aierr" id="aiErr" role="alert" hidden></div>
+    <div class="hint" style="margin-top:8px">Drawn by an AI image model (OpenAI). It looks like a real photo, but tile size and pattern can differ a little. The visualiser shows the exact tiles at real size.</div>
+    <div class="sharebtns" style="margin-top:10px"><button class="btn" type="button" id="aiDl" disabled>Download</button><button class="btn ghost" type="button" id="aiCopy" disabled>Copy link</button><button class="btn ghost" type="button" id="aiAgain" hidden>Try again</button></div>
+    <div class="mfoot"><button type="button" class="dark" id="aiClose">Close</button></div></div>
 </div>
 <div class="toast" id="toast" role="status"></div>
 

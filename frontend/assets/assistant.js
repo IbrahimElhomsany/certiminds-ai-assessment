@@ -22,6 +22,8 @@ const BLANK = "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http:
 const ROOMS = window.NOVA_ROOMS || [], PATCHES = window.NOVA_TILE_PATCHES || {};
 let AI_ON = false;                                  // the room AI service is set up (tap to fix)
 fetch("/api/v1/visual/roomai").then(r => r.ok ? r.json() : null).then(d => { AI_ON = !!(d && d.on); }).catch(() => {});
+let MAKEOVER_ON = false;                             // OpenAI key set: the "Photo-real (AI)" button shows
+fetch("/api/v1/makeover").then(r => r.ok ? r.json() : null).then(d => { MAKEOVER_ON = !!(d && d.on); try { $("vai").hidden = !MAKEOVER_ON || is3d(curRoom()); } catch {} }).catch(() => {});
 // the shop owner's own sample rooms (Admin > Sample rooms), shown before ours
 fetch("/api/rooms").then(r => r.ok ? r.json() : []).then(list => {
   if (!Array.isArray(list) || !list.length) return;
@@ -356,6 +358,7 @@ function renderVisControls() {
   $("vtitle").textContent = room.name;
   $("v3d").querySelector("span").textContent = is3d(room) ? "Photo rooms" : "360° view";
   $("v3d").hidden = !is3d(room) && !room.view360;      // only rooms with a real 360° picture of the same room
+  $("vai").hidden = !MAKEOVER_ON || is3d(room);          // AI makeover works on flat photos
   $("rooms").innerHTML = allRooms().map(r => `<button type="button" class="room ${r.id === room.id ? "on" : ""}" data-room="${r.id}">
       <img src="${r.thumb || r.photo}" alt="" loading="lazy"><span>${esc(r.name)}</span>${is3d(r) ? `<i class="b3d">${r.kind === "pano" ? "360°" : r.kind === "splat" ? "Walk" : "3D"}</i>` : ""}</button>`).join("") +
     `<a class="room" href="#/rooms" style="display:grid;place-items:center;text-decoration:none;color:var(--ink);border:1.5px dashed #ccc;min-height:92px"><span style="text-align:center">+ Your own<br>photo</span></a>`;
@@ -686,6 +689,46 @@ async function shareRoom() {
     $("shareModal").classList.add("open");
   } catch (e) { toast(e.message || "Sorry, the picture could not be shared right now."); }
   finally { btn.disabled = false; }
+}
+
+// "Photo-real (AI)": the room on screen with the chosen tiles, re-drawn by OpenAI's image model (backend/roomedit.py).
+// The visualiser picture shows the exact tiles at real size; the AI picture looks like a real photo.
+const AI = { ids: {}, last: null, busy: false };
+async function photoId(room) {                      // the AI needs the room photo on our server (sample rooms are sent once)
+  if (room.id === "own" && S.own && S.own.photo && S.own.photo.id) return S.own.photo.id;
+  if (AI.ids[room.photo]) return AI.ids[room.photo];
+  const blob = await (await fetch(room.photo)).blob();
+  const r = await fetch("/api/v1/visual/photos", { method: "POST", headers: { "Content-Type": blob.type || "image/jpeg", "X-User-Id": USER_ID }, body: blob });
+  const d = await r.json();
+  if (!r.ok) throw new Error(typeof d.detail === "string" ? d.detail : "The room photo could not be sent.");
+  return (AI.ids[room.photo] = d.id);
+}
+async function photoReal() {
+  if (AI.busy) { $("aiModal").classList.add("open"); return; }
+  if (!viewer() || !loadedKey) { toast("The room is still loading."); return; }
+  const room = curRoom();
+  const pick = s => room.surfaces[s] && fits(S.vis[s], s) && tileOkInRoom(S.vis[s], room) ? S.vis[s] : null;
+  const floor = pick("floor"), wall = pick("wall");
+  if (!floor && !wall) { toast("Choose a floor or wall tile first."); return; }
+  const st = $("aiStage"), err = $("aiErr");
+  AI.busy = true; AI.last = null; err.hidden = true; $("aiAgain").hidden = true; $("aiDl").disabled = $("aiCopy").disabled = true;
+  $("aiTiles").textContent = [floor && `${BY[floor].name} on the floor`, wall && `${BY[wall].name} on the walls`].filter(Boolean).join(" and ") + ` · ${room.name}`;
+  st.classList.remove("done"); st.classList.add("busy"); $("aiModal").classList.add("open");
+  try { const b = await canvasBlob(); if (b) { if ($("aiBefore").src.startsWith("blob:")) URL.revokeObjectURL($("aiBefore").src); $("aiBefore").src = URL.createObjectURL(b); } } catch {}
+  const t0 = Date.now(), tick = setInterval(() => $("aiSecs").textContent = Math.round((Date.now() - t0) / 1000), 500);
+  try {
+    const photo_id = await photoId(room);
+    const r = await fetch("/api/v1/makeover", { method: "POST", headers: { "Content-Type": "application/json", "X-User-Id": USER_ID },
+      body: JSON.stringify({ photo_id, floor, wall, request: "" }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.detail && d.detail.message ? d.detail.message : typeof d.detail === "string" ? d.detail : "The AI could not draw this room right now.");
+    AI.last = d; $("aiAfter").src = d.after;
+    await new Promise(ok => { $("aiAfter").onload = ok; $("aiAfter").onerror = ok; });
+    $("aiAfterWrap").style.clipPath = "inset(0 0 0 50%)"; $("aiBar").style.left = "50%";
+    st.classList.add("done"); $("aiDl").disabled = $("aiCopy").disabled = false;
+  } catch (e) {
+    err.textContent = e.message || "The AI could not draw this room right now. Please try again."; err.hidden = false; $("aiAgain").hidden = false;
+  } finally { clearInterval(tick); st.classList.remove("busy"); AI.busy = false; }
 }
 
 // ---------------------------------------------------------------- 2a. choose a room, or upload your own photo
@@ -1162,6 +1205,20 @@ $("v3d").onclick = () => {                         // jump to the 3D room closes
   S.vis.room = is3d(r) ? (r.from || "living") : want; S.vis.picked = true; S.vis.spot = 0; S.vis.spotYaw = null; save(); showVisual();
 };
 $("vdl").onclick = downloadImage;
+$("vai").onclick = photoReal;
+$("aiClose").onclick = () => $("aiModal").classList.remove("open");
+$("aiModal").onclick = e => { if (e.target.id === "aiModal") $("aiModal").classList.remove("open"); };
+$("aiAgain").onclick = photoReal;
+$("aiDl").onclick = () => { if (!AI.last) return; const a = Object.assign(document.createElement("a"), { href: AI.last.after, download: `ceramica-nova-${curRoom().id}-ai.jpg` }); document.body.appendChild(a); a.click(); a.remove(); };
+$("aiCopy").onclick = async () => { if (!AI.last) return; try { await navigator.clipboard.writeText(AI.last.share_url); toast("Link copied."); } catch { prompt("Copy this link:", AI.last.share_url); } };
+(() => {                                                  // before/after slider in the AI window
+  const st = $("aiStage"); let drag = false;
+  const place = e => { const b = st.getBoundingClientRect(), p = Math.max(0, Math.min(100, (e.clientX - b.left) / b.width * 100));
+    $("aiAfterWrap").style.clipPath = `inset(0 0 0 ${p}%)`; $("aiBar").style.left = p + "%"; };
+  st.addEventListener("pointerdown", e => { if (!st.classList.contains("done")) return; drag = true; st.setPointerCapture(e.pointerId); place(e); });
+  st.addEventListener("pointermove", e => { if (drag) place(e); });
+  st.addEventListener("pointerup", () => drag = false);
+})();
 $("vzoom").onclick = toggleZoom;
 $("vshare").onclick = shareRoom;
 $("shareClose").onclick = () => $("shareModal").classList.remove("open");

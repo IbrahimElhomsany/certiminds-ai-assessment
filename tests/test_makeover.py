@@ -135,3 +135,11 @@ def test_all_nine_sample_rooms_are_offered():
     for f in ("vis_living", "vis_tvroom", "vis_bedroom", "vis_kitchen", "vis_bathroom", "vis_spa", "vis_office",
               "vis_terrace", "showroom_lounge"):
         assert f'"{f}"' in page and (visual.ROOT / "images" / f"{f}.jpg").exists()
+
+
+def test_a_view_from_a_360_or_3d_room_is_turned_into_a_real_photo(setup):
+    r = make({"photo_id": upload(w=1600, h=900), "floor": "CN006", "source": "view"})
+    assert r.status_code == 200
+    p = setup.calls[0]["data"]["prompt"]
+    assert p.startswith("The first image is one view inside a computer-made 3D model") and "Royal Calacatta" in p
+    assert make({"photo_id": upload(), "floor": "CN006", "source": "video"}).status_code == 422

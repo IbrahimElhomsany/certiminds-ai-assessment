@@ -68,8 +68,11 @@ def describe(sku: str) -> str:
             f"each tile {p.tile_width_cm} x {p.tile_length_cm} cm")
 
 
-def build_prompt(floor: Optional[str], wall: Optional[str], request: str) -> str:
+def build_prompt(floor: Optional[str], wall: Optional[str], request: str, source: str = "photo") -> str:
     parts = ["Edit this room photo (the first image)."]
+    if source == "view":
+        parts = ["The first image is one view inside a computer-made 3D model of a room, seen from where the customer "
+                 "is standing. Re-draw it as a real photograph of that same room from exactly the same spot and angle."]
     n = 2
     if floor:
         parts.append(f"FLOOR: replace the floor covering with the tile shown in image {n}, {describe(floor)}. "
@@ -183,6 +186,7 @@ class MakeoverRequest(BaseModel):
     wall: Optional[str] = Field(default=None, max_length=20)
     request: str = Field(default="", max_length=300)
     quality: str = Field(default="medium", pattern=r"^(medium|high)$")
+    source: str = Field(default="photo", pattern=r"^(photo|view)$")   # view = a snapshot from a 360° / 3D room
 
 
 @router.post("/api/v1/makeover")
@@ -210,7 +214,7 @@ def makeover(req: MakeoverRequest, request: Request, x_user_id: Optional[str] = 
         before, size = fit_preset(Image.open(path).convert("RGB"))
     except (UnidentifiedImageError, OSError):
         err("photo", "This photo can't be read. Please upload it again.")
-    prompt = build_prompt(floor, wall, text)
+    prompt = build_prompt(floor, wall, text, req.source)
     refs = [tile_picture(s) for s in (floor, wall) if s]
     t0 = time.time()
     out, model = edit_image(_jpeg(before, 92), refs, prompt, size, req.quality)

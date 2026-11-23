@@ -23,7 +23,7 @@ const ROOMS = window.NOVA_ROOMS || [], PATCHES = window.NOVA_TILE_PATCHES || {};
 let AI_ON = false;                                  // the room AI service is set up (tap to fix)
 fetch("/api/v1/visual/roomai").then(r => r.ok ? r.json() : null).then(d => { AI_ON = !!(d && d.on); }).catch(() => {});
 let MAKEOVER_ON = false;                             // OpenAI key set: the "Photo-real (AI)" button shows
-fetch("/api/v1/makeover").then(r => r.ok ? r.json() : null).then(d => { MAKEOVER_ON = !!(d && d.on); try { $("vai").hidden = !MAKEOVER_ON || is3d(curRoom()); } catch {} }).catch(() => {});
+fetch("/api/v1/makeover").then(r => r.ok ? r.json() : null).then(d => { MAKEOVER_ON = !!(d && d.on); try { $("vai").hidden = !MAKEOVER_ON; } catch {} }).catch(() => {});
 // the shop owner's own sample rooms (Admin > Sample rooms), shown before ours
 fetch("/api/rooms").then(r => r.ok ? r.json() : []).then(list => {
   if (!Array.isArray(list) || !list.length) return;
@@ -358,7 +358,7 @@ function renderVisControls() {
   $("vtitle").textContent = room.name;
   $("v3d").querySelector("span").textContent = is3d(room) ? "Photo rooms" : "360° view";
   $("v3d").hidden = !is3d(room) && !room.view360;      // only rooms with a real 360° picture of the same room
-  $("vai").hidden = !MAKEOVER_ON || is3d(room);          // AI makeover works on flat photos
+  $("vai").hidden = !MAKEOVER_ON;                         // in 360° / 3D rooms it re-draws the view on screen
   $("rooms").innerHTML = allRooms().map(r => `<button type="button" class="room ${r.id === room.id ? "on" : ""}" data-room="${r.id}">
       <img src="${r.thumb || r.photo}" alt="" loading="lazy"><span>${esc(r.name)}</span>${is3d(r) ? `<i class="b3d">${r.kind === "pano" ? "360°" : r.kind === "splat" ? "Walk" : "3D"}</i>` : ""}</button>`).join("") +
     `<a class="room" href="#/rooms" style="display:grid;place-items:center;text-decoration:none;color:var(--ink);border:1.5px dashed #ccc;min-height:92px"><span style="text-align:center">+ Your own<br>photo</span></a>`;
@@ -694,14 +694,14 @@ async function shareRoom() {
 // "Photo-real (AI)": the room on screen with the chosen tiles, re-drawn by OpenAI's image model (backend/roomedit.py).
 // The visualiser picture shows the exact tiles at real size; the AI picture looks like a real photo.
 const AI = { ids: {}, last: null, busy: false };
-async function photoId(room) {                      // the AI needs the room photo on our server (sample rooms are sent once)
-  if (room.id === "own" && S.own && S.own.photo && S.own.photo.id) return S.own.photo.id;
-  if (AI.ids[room.photo]) return AI.ids[room.photo];
-  const blob = await (await fetch(room.photo)).blob();
+async function photoId(room, view) {                // the AI needs the picture on our server (sample photos are sent once)
+  if (!view && room.id === "own" && S.own && S.own.photo && S.own.photo.id) return S.own.photo.id;
+  if (!view && AI.ids[room.photo]) return AI.ids[room.photo];
+  const blob = view || await (await fetch(room.photo)).blob();
   const r = await fetch("/api/v1/visual/photos", { method: "POST", headers: { "Content-Type": blob.type || "image/jpeg", "X-User-Id": USER_ID }, body: blob });
   const d = await r.json();
   if (!r.ok) throw new Error(typeof d.detail === "string" ? d.detail : "The room photo could not be sent.");
-  return (AI.ids[room.photo] = d.id);
+  return view ? d.id : (AI.ids[room.photo] = d.id);
 }
 async function photoReal() {
   if (AI.busy) { $("aiModal").classList.add("open"); return; }
@@ -714,12 +714,16 @@ async function photoReal() {
   AI.busy = true; AI.last = null; err.hidden = true; $("aiAgain").hidden = true; $("aiDl").disabled = $("aiCopy").disabled = true;
   $("aiTiles").textContent = [floor && `${BY[floor].name} on the floor`, wall && `${BY[wall].name} on the walls`].filter(Boolean).join(" and ") + ` · ${room.name}`;
   st.classList.remove("done"); st.classList.add("busy"); $("aiModal").classList.add("open");
-  try { const b = await canvasBlob(); if (b) { if ($("aiBefore").src.startsWith("blob:")) URL.revokeObjectURL($("aiBefore").src); $("aiBefore").src = URL.createObjectURL(b); } } catch {}
+  let shot = null;                                  // what is on screen now (in 360° / 3D rooms this is what the AI re-draws)
+  try { shot = await canvasBlob(); if (shot) { if ($("aiBefore").src.startsWith("blob:")) URL.revokeObjectURL($("aiBefore").src); $("aiBefore").src = URL.createObjectURL(shot); } } catch {}
+  const view = is3d(room);
+  $("aiLabL").textContent = view ? "This view" : "Visualiser";
+  if (view && !shot) { err.textContent = "This view could not be captured. Please try again."; err.hidden = false; st.classList.remove("busy"); AI.busy = false; return; }
   const t0 = Date.now(), tick = setInterval(() => $("aiSecs").textContent = Math.round((Date.now() - t0) / 1000), 500);
   try {
-    const photo_id = await photoId(room);
+    const photo_id = await photoId(room, view ? shot : null);
     const r = await fetch("/api/v1/makeover", { method: "POST", headers: { "Content-Type": "application/json", "X-User-Id": USER_ID },
-      body: JSON.stringify({ photo_id, floor, wall, request: "" }) });
+      body: JSON.stringify({ photo_id, floor, wall, request: "", source: view ? "view" : "photo" }) });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.detail && d.detail.message ? d.detail.message : typeof d.detail === "string" ? d.detail : "The AI could not draw this room right now.");
     AI.last = d; $("aiAfter").src = d.after;

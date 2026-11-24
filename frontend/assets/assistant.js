@@ -53,6 +53,14 @@ const fits = (sku, surface) => isTile(sku) && (BY[sku].surfaces || []).includes(
 // ---------------------------------------------------------------- routing + step bar
 const PAGES = { "": "start", chat: "chat", rooms: "rooms", mark: "mark", visual: "visual", project: "project" };
 const STEP_OF = { rooms: "visual", mark: "visual" };
+// Two versions with the same layout (Ibrahim, 2026-11-24): the NEW one has the AI makeover (own words, labels,
+// shop this look); the OLD one is the visualiser as it was. ?old=1 / ?old=0 switches, and it is kept for the visit.
+const OLD_VIS = (() => {
+  const q = new URLSearchParams(location.search).get("old");
+  try { if (q === "1" || q === "0") sessionStorage.setItem("nova_vis_old", q); return sessionStorage.getItem("nova_vis_old") === "1"; }
+  catch { return q === "1"; }
+})();
+document.body.classList.toggle("oldvis", OLD_VIS);
 function route() {
   const key = (location.hash.replace(/^#\/?/, "").split("?")[0]) || "";
   const page = PAGES[key] || "start";
@@ -362,6 +370,8 @@ function renderVisControls() {
   $("v3d").querySelector("span").textContent = is3d(room) ? "Photo rooms" : "360° view";
   $("v3d").hidden = !is3d(room) && !room.view360;      // only rooms with a real 360° picture of the same room
   $("vai").hidden = $("vaiBox").hidden = !MAKEOVER_ON;    // in 360° / 3D rooms it re-draws the view on screen
+  $("vswitchT").textContent = OLD_VIS ? "New version" : "Old Version";
+  $("vswitch").href = `/assistant?old=${OLD_VIS ? 0 : 1}#/visual`;
   $("rooms").innerHTML = allRooms().map(r => `<button type="button" class="room ${r.id === room.id ? "on" : ""}" data-room="${r.id}">
       <img src="${r.thumb || r.photo}" alt="" loading="lazy"><span>${esc(r.name)}</span>${is3d(r) ? `<i class="b3d">${r.kind === "pano" ? "360°" : r.kind === "splat" ? "Walk" : "3D"}</i>` : ""}</button>`).join("") +
     `<a class="room" href="#/rooms" style="display:grid;place-items:center;text-decoration:none;color:var(--ink);border:1.5px dashed #ccc;min-height:92px"><span style="text-align:center">+ Your own<br>photo</span></a>`;
@@ -820,8 +830,9 @@ async function photoReal() {
   if (!viewer() || !loadedKey) { toast("The room is still loading."); return; }
   const room = curRoom();
   const pick = s => room.surfaces[s] && fits(S.vis[s], s) && tileOkInRoom(S.vis[s], room) ? S.vis[s] : null;
-  const floor = pick("floor"), wall = pick("wall"), text = $("vaiText").value.trim();
+  const floor = pick("floor"), wall = pick("wall"), text = OLD_VIS ? "" : $("vaiText").value.trim();
   $("vaiBox").classList.remove("bad"); $("vaiErr").hidden = true;
+  if (OLD_VIS && !floor && !wall) { toast("Choose a floor or wall tile first."); return; }
   if (!floor && !wall && text.length < 3) {        // the message goes next to the box it is about
     $("vaiBox").classList.add("bad"); $("vaiErr").textContent = "Pick a floor or wall tile, or write what you'd like the AI to change.";
     $("vaiErr").hidden = false; $("vaiText").focus(); return;

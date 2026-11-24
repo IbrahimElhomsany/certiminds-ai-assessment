@@ -241,6 +241,8 @@
   .modal { position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; place-items:center; z-index:40; padding:16px; }
   .modal.open { display:grid; }
   .modal .box.aibox { width:min(900px, 100%); max-height:94vh; overflow:auto; }
+  body.oldvis .vaibox, body.oldvis .ailook { display:none !important; }
+  .vtool .tb.vswitch { border:1.5px solid #3d6fd8 !important; color:#3d6fd8; border-radius:999px; padding:6px 12px; font-weight:600; }
   .vaibox { border:1.5px solid #3d6fd8; background:#f5f8ff; border-radius:12px; padding:10px 12px; display:grid; gap:7px; margin:4px 0 12px; }
   .vaibox h4 { margin:0; }
   .vaibox textarea { width:100%; border:1px solid var(--line); border-radius:8px; padding:7px 9px; font:inherit; font-size:13px; resize:vertical; background:#fff; }
@@ -608,6 +610,7 @@
         <button class="tb ai" type="button" id="vai" hidden title="The AI re-draws this room as a real photo with your tiles"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg><span>Photo-real (AI)</span></button>
         <button class="tb" type="button" id="vshare"><svg class="ico" viewBox="0 0 24 24"><path d="M18 8a3 3 0 100-6 3 3 0 000 6zM6 15a3 3 0 100-6 3 3 0 000 6zM18 22a3 3 0 100-6 3 3 0 000 6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg><span>Share</span></button>
         <button class="tb" type="button" id="vdl"><svg class="ico" viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg><span>Download</span></button>
+        <a class="tb vswitch" id="vswitch" href="/assistant?old=1#/visual" title="Switch between the new AI makeover and the old visualiser"><span id="vswitchT">Old Version</span></a>
         <a class="tb" href="#/rooms" id="vup"><svg class="ico" viewBox="0 0 24 24"><path d="M12 20V9m0 0l-4 4m4-4l4 4M5 4h14"/></svg><span>Upload</span></a>
       </div>
       <div class="stagebox" id="stagebox">

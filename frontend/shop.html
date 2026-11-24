@@ -91,6 +91,20 @@
   .film .caption b { color:#fff; font-weight:600; }
   .film .down { position:absolute; z-index:2; left:50%; bottom:16px; transform:translateX(-50%); color:#fff; opacity:.8; border:0; background:none; cursor:pointer; font-size:12px; letter-spacing:.2em; }
   @media (prefers-reduced-motion: reduce) { .film .slide.on { animation:none; } }
+  /* the 360° showroom tour as the top banner (drag to look around; it turns slowly by itself) */
+  .film .showroom { position:absolute; inset:0; width:auto; height:auto; min-height:0; margin:0; background:#1b1814; }
+  .film .showroom canvas { touch-action:pan-y; }          /* phones: an up/down swipe still scrolls the page */
+  .film .showroom .pcard, .film .showroom .nav, .film .showroom .hint, .film .showroom .back { z-index:3; }
+  .film .sr-views { left:auto; right:16px; bottom:16px; max-width:min(52%, 760px); }
+  .film .words { transition:opacity .35s ease, transform .35s ease; }
+  .film.picked .words { opacity:0; transform:translateX(-24px); pointer-events:none; }
+  .film.picked::after, .film.fs::after { opacity:0; }
+  .film::after { transition:opacity .35s ease; }
+  .film .fsclose { display:none; position:absolute; z-index:5; left:16px; top:16px; border:0; border-radius:999px; background:rgba(255,255,255,.95);
+    padding:9px 16px; font:inherit; font-size:13px; font-weight:600; cursor:pointer; box-shadow:0 2px 10px rgba(0,0,0,.25); }
+  .film.fs { position:fixed; inset:0; z-index:80; width:auto; height:auto; min-height:0; margin:0; }
+  .film.fs .fsclose { display:block; } .film.fs .words, .film.fs .caption { display:none; }
+  .film.tour360 .caption { display:none; }
   /* shop the showroom: display pictures with a dot on each product */
   .look { margin:46px 0 34px; }
   .look .head { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:14px; }
@@ -125,12 +139,6 @@
   .look .thumbs button img { width:100%; aspect-ratio:16/9; object-fit:cover; display:block; }
   .look .thumbs button span { display:block; padding:6px 8px 0; font-size:12.5px; color:var(--ink); }
   .look .thumbs button.on { border-color:var(--ink); box-shadow:0 0 0 1px var(--ink); }
-  /* the virtual tour (the 360° showroom) opens over the page */
-  .tour { position:fixed; inset:0; z-index:80; background:#111; }
-  .tour .showroom { margin:0; width:100%; height:100%; min-height:0; }
-  .tour .showroom .back { top:64px; }
-  .tour .close { position:absolute; z-index:5; left:16px; top:16px; border:0; border-radius:999px; background:rgba(255,255,255,.95);
-    padding:9px 16px; font:inherit; font-size:13px; font-weight:600; cursor:pointer; box-shadow:0 2px 10px rgba(0,0,0,.25); }
   @media (max-width: 760px) {
     .film { height:calc(100svh - 170px); min-height:460px; }
     .film::after { background:linear-gradient(0deg, rgba(16,13,10,.82) 0%, rgba(16,13,10,.45) 45%, rgba(16,13,10,.05) 75%); }
@@ -142,15 +150,17 @@
     .film .cta .btn.blue { grid-column:1 / -1; order:-1; font-size:14px; }
     .film .tl { display:none; } .film .ts { display:inline; } .film .cta { margin-right:56px; }
     .film .caption, .film .down { display:none; }
+    .film .sr-views { left:10px; right:10px; top:64px; bottom:auto; max-width:none; }
+    .film .showroom .hint, .film .showroom .nav { display:none; }
+    .film .showroom .pcard { left:10px; right:10px; bottom:10px; width:auto; }
+    .film.fs .sr-views { top:auto; bottom:16px; }
     .film .btn { padding:10px 12px; font-size:14px; }
     .look .arrows { display:none; } .look .head h2 { font-size:23px; }
     .look .scene { aspect-ratio:4 / 3; border-radius:14px; }
     .look .dot .lbl { display:none; }
     .look .pcard { left:10px; right:10px; bottom:10px; width:auto; }
-    .tour .showroom .stage { height:100svh; }
-    .tour .showroom .intro { display:none; }
   }
-  /* the 3D showroom (assets/showroom.js), now opened as the virtual tour */
+  /* the 360° showroom tour (assets/showroom360.js), the home page's top banner */
   .showroom { position:relative; width:100vw; margin:0 calc(50% - 50vw) 30px; height:calc(100svh - 140px); min-height:520px; overflow:hidden; background:#e9e5de; }
   body { overflow-x:clip; }
   .showroom .stage { position:absolute; inset:0; }
@@ -171,11 +181,7 @@
   .showroom .cta { display:flex; gap:10px; flex-wrap:wrap; }
   .showroom .hint { position:absolute; left:50%; top:16px; transform:translateX(-50%); background:rgba(17,17,17,.78); color:#fff; font-size:12.5px;
     padding:8px 14px; border-radius:999px; white-space:nowrap; pointer-events:none; transition:opacity .4s; }
-  .showroom .skip { position:absolute; right:16px; bottom:16px; z-index:3; border:0; border-radius:999px; background:rgba(17,17,17,.78); color:#fff;
-    padding:8px 14px; font:inherit; font-size:13px; cursor:pointer; }
-  .showroom.inside .skip { display:none; }
   .showroom:not(.inside) .nav { display:none; }
-  .showroom .nav button.again { width:auto; border-radius:999px; padding:0 14px; font-size:13px; }
   .showroom .nav { position:absolute; right:16px; top:16px; display:flex; gap:8px; }
   .showroom .nav button { width:42px; height:42px; border-radius:50%; border:0; background:rgba(255,255,255,.92); box-shadow:0 2px 10px rgba(0,0,0,.15);
     font-size:18px; cursor:pointer; color:var(--ink); }
@@ -510,6 +516,8 @@ async function home() {
   const img = sku => esc((products.find(p => p.sku === sku) || {}).image || IMG_BLANK);
   app.innerHTML = `
   <section class="film" id="film" aria-label="Ceramica Nova showroom">
+    <div class="showroom" id="showroom"><div class="stage" id="srStage"><div class="hint" id="srHint"></div></div></div>
+    <button class="fsclose" type="button" id="fsClose">✕ Close</button>
     <div class="words">
       <div class="kicker">CERAMICA NOVA · TILES FOR QATAR HOMES</div>
       <h1>Floors and walls you'll love coming home to</h1>
@@ -517,11 +525,10 @@ async function home() {
       <div class="cta">
         <a class="btn" href="#/shop?kind=tile">Shop tiles ${ICON.arrow}</a>
         <a class="btn blue" href="/assistant#/rooms"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><circle cx="12" cy="12.5" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/></svg> See our tiles in your room</a>
-        <button class="btn line" type="button" id="tourBtn"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg> <span class="tl">Virtual showroom tour</span><span class="ts">360° tour</span></button>
+        <button class="btn line" type="button" id="tourBtn"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg> <span class="tl">Full-screen tour</span><span class="ts">Full screen</span></button>
       </div>
     </div>
     <div class="caption" id="filmCap"></div>
-    <button class="down" type="button" id="filmDown" aria-label="Shop the showroom">SHOP THE SHOWROOM ↓</button>
   </section>
   <section class="look" id="look" aria-label="Shop the showroom"></section>
   <section class="usp">
@@ -563,6 +570,12 @@ async function homeFilm(products) {
   clearInterval(filmTimer);
   try { HOME = await fetch("/api/shop/home").then(r => r.json()); } catch { HOME = { film: null, scenes: [] }; }
   const film = $("#film"); if (!film) return;
+  $("#tourBtn").onclick = () => fullTour(true);
+  $("#fsClose").onclick = () => fullTour(false);
+  shopTheLook(products);
+  if (await heroTour(products)) return;
+  // no 3D in this browser (or the tour pictures are missing): the owner's film, or a slow move over the pictures
+  $("#showroom").remove(); $("#tourBtn").hidden = true;
   const scenes = HOME.scenes || [], still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const cap = $("#filmCap");
   const say = sc => { cap.innerHTML = sc ? `<b>${esc(sc.title)}</b>${sc.spots.length ? `<br>${sc.spots.length} of our products on show` : ""}` : ""; };
@@ -588,9 +601,6 @@ async function homeFilm(products) {
       void slides[at].offsetWidth; slides[at].classList.add("on"); say(show[at]);
     }, 7000);
   }
-  $("#filmDown").onclick = () => $("#look").scrollIntoView({ behavior: "smooth" });
-  $("#tourBtn").onclick = () => openTour(products);
-  shopTheLook(products);
 }
 
 function shopTheLook(products) {
@@ -651,48 +661,34 @@ function shopTheLook(products) {
   show(0);
 }
 
-/* The virtual tour: the 360° showroom, opened over the page. */
-function openTour(products) {
-  if ($("#tour")) return;
-  const t = document.createElement("div"); t.className = "tour"; t.id = "tour"; t.setAttribute("role", "dialog"); t.setAttribute("aria-label", "Virtual showroom tour");
-  t.innerHTML = `<button class="close" type="button" id="tourClose">✕ Close the tour</button>
-  <section class="showroom" id="showroom">
-    <div class="intro">
-      <div class="kicker">THE CERAMICA NOVA SHOWROOM</div>
-      <h1>Walk into our showroom</h1>
-      <p>Look around, tap any + to see the tile, its price and stock.</p>
-    </div>
-    <div class="stage" id="srStage">
-      <div class="hint" id="srHint">Welcome to Ceramica Nova</div>
-      <button class="skip" type="button" id="srSkip">Skip ›</button>
-    </div>
-  </section>`;
-  document.body.append(t); document.body.style.overflow = "hidden";
-  const close = () => { if (SR) { try { SR.stop(); } catch {} SR = null; } t.remove(); document.body.style.overflow = ""; removeEventListener("keydown", esc_); };
-  const esc_ = e => { if (e.key === "Escape") close(); };
-  addEventListener("keydown", esc_); addEventListener("hashchange", close, { once: true });
-  $("#tourClose").onclick = close;
-  showroom(products);
-}
-
-/* The 3D showroom at the top of the home page (assets/showroom.js). Without WebGL, the old photo is shown. */
+/* The top banner: the 360° showroom tour (assets/showroom360.js, pictures rendered in Blender). It opens inside at
+   the entrance and turns slowly until the visitor drags it; + shows a tile's price and stock, the view list and the
+   circles on the floor walk to the other displays. "Full-screen tour" makes the same banner fill the screen.
+   Returns false when it can't run (no WebGL, or the pictures are missing), so the page shows the film instead. */
 let SR = null;
-async function showroom(products) {
-  const box = $("#srStage"), hint = $("#srHint"), sec = $("#showroom");
-  const flat = () => { $("#showroom").classList.add("flat"); $("#showroom").classList.remove("showroom");
-    $("#showroom").innerHTML = `<section class="hero">${$("#showroom .intro").outerHTML}<img src="/images/room_bathroom.jpg" alt="A bathroom finished with Ceramica Nova tiles"></section>`; };
+function fullTour(on) {
+  const film = $("#film"); if (!film) return;
+  film.classList.toggle("fs", on); document.body.style.overflow = on ? "hidden" : "";
+  const key = e => { if (e.key === "Escape") fullTour(false); };
+  if (on) addEventListener("keydown", key, { once: true });
+}
+async function heroTour(products) {
+  const film = $("#film"), host = $("#showroom"), box = $("#srStage"), hint = $("#srHint");
   const cv = document.createElement("canvas");
-  cv.setAttribute("aria-label", "A 3D tile showroom. Drag to look around, tap a display to see the product.");
-  if (!cv.getContext("webgl2") && !cv.getContext("webgl")) return flat();
+  cv.setAttribute("aria-label", "Our showroom in 360°. Drag to look around, tap + to see a tile, tap a circle on the floor to walk there.");
+  if (!cv.getContext("webgl2") && !cv.getContext("webgl")) return false;
+  const real = await fetch("/images/showroom/spots.json", { method: "HEAD" }).then(r => r.ok).catch(() => false);
+  if (!real) return false;
   box.prepend(cv);
   const nav = document.createElement("div"); nav.className = "nav";
-  nav.innerHTML = `<button type="button" class="again" id="srAgain" title="Go back outside and walk in again">↻ Walk in again</button><button type="button" aria-label="Previous view" data-go="-1">‹</button><button type="button" aria-label="Next view" data-go="1">›</button>`;
+  nav.innerHTML = `<button type="button" aria-label="Previous view" data-go="-1">‹</button><button type="button" aria-label="Next view" data-go="1">›</button>`;
   box.append(nav);
   const tip = document.createElement("div"); tip.className = "tip"; tip.hidden = true; box.append(tip);
   cv.addEventListener("pointermove", e => { const r = box.getBoundingClientRect(); tip.style.left = (e.clientX - r.left) + "px"; tip.style.top = (e.clientY - r.top) + "px"; });
   const card = p => {
     box.querySelector(".pcard")?.remove();
-    if (!p) return;
+    film.classList.toggle("picked", !!p);
+    if (!p) { SR && SR.unpick(); return; }
     const unit = p.unit === "m2" ? "m²" : "set", tile = p.kind === "tile";
     const el = document.createElement("div"); el.className = "pcard"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", p.name);
     el.innerHTML = `<button class="x" type="button" aria-label="Close">×</button><img src="${esc(p.image || IMG_BLANK)}" alt="" onerror="this.src='${IMG_BLANK}'">
@@ -701,33 +697,29 @@ async function showroom(products) {
         <span class="tag ${p.availability === "In stock" ? "ok" : /low|few/i.test(p.availability || "") ? "low" : "out"}">${esc(p.availability || "")}</span></div>
       <div class="acts"><a class="btn ghost" href="#/p/${encodeURIComponent(p.sku)}">See details</a>
         ${tile ? `<a class="btn" href="/assistant?sku=${encodeURIComponent(p.sku)}#/rooms">Try in my room</a>` : `<a class="btn" href="/assistant?sku=${encodeURIComponent(p.sku)}">Ask Ceramica Nova AI</a>`}</div>`;
-    el.querySelector(".x").onclick = () => el.remove();
+    el.querySelector(".x").onclick = () => card(null);
     box.append(el);
   };
-  const back = document.createElement("button"); back.type = "button"; back.className = "back"; back.textContent = "‹ Back to the overview";
-  back.onclick = () => { card(null); sec.classList.remove("picked"); SR && SR.overview(); };
-  box.append(back);
   try {
     if (SR) SR.stop();
-    // the photo-real showroom (360° pictures rendered in Blender); the live-3D one if those pictures are missing
-    const real = await fetch("/images/showroom/spots.json", { method: "HEAD" }).then(r => r.ok).catch(() => false);
-    const mod = await import(real ? "/assets/showroom360.js" : "/assets/showroom.js");
-    if (!document.body.contains(cv)) return;          // the visitor already left the home page
+    const mod = await import("/assets/showroom360.js");
+    if (!document.body.contains(cv)) return true;          // the visitor already left the home page
     SR = await mod.create(cv, products, {
-      onPick: p => { hint.style.opacity = 0; card(p); sec.classList.toggle("picked", !!p || sec.classList.contains("picked")); },
+      drift: true,
+      avoid: () => film.classList.contains("picked") || film.classList.contains("fs") ? [] : [...film.querySelectorAll(".words, .sr-views")].map(e => e.getBoundingClientRect()),
+      onPick: p => { hint.style.opacity = 0; card(p); },
       onHover: p => { tip.hidden = !p; if (p) tip.textContent = p.name + " · tap to see it"; },
       onEntered: () => {
-        sec.classList.add("inside"); hint.style.opacity = 1;
-        hint.textContent = real ? "Drag to look around · tap a circle to walk there · tap + to see a tile · ‹ › for the next view"
-          : matchMedia("(pointer: fine)").matches ? "Drag to look around · arrow keys to walk · click a display to see the tile"
-          : "Drag to look around · tap the floor to walk · tap a display to see the tile";
+        host.classList.add("inside"); film.classList.add("tour360");
+        hint.textContent = "Drag to look around · tap + to see a tile · tap a circle to walk there";
+        hint.style.opacity = 1; setTimeout(() => { hint.style.opacity = 0; }, 6000);
       },
     });
-    $("#srSkip").onclick = () => SR.skip();
     nav.querySelectorAll("[data-go]").forEach(b => b.onclick = () => { hint.style.opacity = 0; SR.go(+b.dataset.go); });
-    $("#srAgain").onclick = () => { card(null); sec.classList.remove("inside", "picked"); hint.textContent = "Welcome to Ceramica Nova"; hint.style.opacity = 1; SR.enter(); };
+    return true;
   } catch (e) {
-    console.warn("showroom", e); flat();
+    console.warn("showroom", e); cv.remove(); nav.remove(); tip.remove();
+    return false;
   }
 }
 
@@ -1220,6 +1212,7 @@ async function receiptPage(token) {
 async function route() {
   const [path, query] = (location.hash.slice(1) || "/").split("?");
   if (SR) { SR.stop(); SR = null; }
+  document.body.style.overflow = "";
   $("#bubble").href = "/assistant";
   $("#bubble").hidden = path === "/checkout" || path === "/extras";
   const params = new URLSearchParams(query || "");

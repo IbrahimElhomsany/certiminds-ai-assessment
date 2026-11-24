@@ -4,6 +4,8 @@
  * standing spot plus images/showroom/spots.json (where each spot is, which spots you can walk to from it and where
  * each booth appears in the picture). Here we only show those pictures: drag to look around, tap a white circle on
  * the floor to walk there, tap a "+" to see the tile, or step through the views with ‹ › or the view list.
+ * It opens inside, at the entrance (the old walk-in from the street was removed on 2026-11-24: it looked like a game).
+ * With drift: true (the home page's top banner) the view turns slowly by itself until the visitor touches it.
  *
  * Same interface as assets/showroom.js (the older live-3D version, still used if the pictures are missing).
  * three.js is MIT licensed (vendor/THREE-LICENSE.txt). */
@@ -49,7 +51,7 @@ const dirOf = (u, v) => {                           // picture position -> direc
 const ease = t => t < .5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
 const angDiff = (a, b) => { let d = (b - a) % (2 * Math.PI); if (d > Math.PI) d -= 2 * Math.PI; if (d < -Math.PI) d += 2 * Math.PI; return d; };
 
-export async function create(canvas, products, { onPick = () => {}, onHover = () => {}, onEntered = () => {} } = {}) {
+export async function create(canvas, products, { onPick = () => {}, onHover = () => {}, onEntered = () => {}, drift = false, avoid = null } = {}) {
   const data = await fetch("/images/showroom/spots.json").then(r => { if (!r.ok) throw new Error("no showroom pictures"); return r.json(); });
   const box = canvas.parentElement, sec = box.closest(".showroom") || box;
   if (!document.getElementById("sr360css")) { const st = document.createElement("style"); st.id = "sr360css"; st.textContent = CSS; document.head.append(st); }
@@ -69,13 +71,13 @@ export async function create(canvas, products, { onPick = () => {}, onHover = ()
     t.colorSpace = THREE.NoColorSpace; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; t.wrapS = THREE.RepeatWrapping; ok(t);
   }, undefined, bad)));
   const picture = s => tex(s === "closed" ? data.closed : small ? spots[s].small : spots[s].image);
-  const first = await picture("closed").catch(() => picture("s1"));
+  const first = await picture("s1");
   const uni = { a: { value: first }, b: { value: first }, k: { value: 0 } };
   scene.add(new THREE.Mesh(new THREE.SphereGeometry(10, 64, 32), new THREE.ShaderMaterial({ uniforms: uni, vertexShader: VERT, fragmentShader: FRAG, side: THREE.BackSide, depthWrite: false })));
 
   // ---- where we look: yaw/pitch as in the pictures (u = 0.5 is straight ahead into the shop's depth)
-  const view = { u: (spots.s0 || spots.s1).look_u, pitch: -0.04, fov: 75 };
-  let cur = "s0", busy = false, alive = true, entered = false, dirty = true, hover = null;
+  const view = { u: spots.s1.look_u, pitch: -0.04, fov: 75 };
+  let cur = "s1", busy = false, alive = true, entered = false, dirty = true, picked = false, touched = 0;
   const aim = () => { const d = dirOf(view.u, 0.5 - view.pitch / Math.PI); camera.lookAt(d); camera.fov = view.fov; camera.updateProjectionMatrix(); };
 
   // ---- hotspots (DOM buttons placed over the picture each frame)
@@ -99,7 +101,7 @@ export async function create(canvas, products, { onPick = () => {}, onHover = ()
         const el = document.createElement("button"); el.type = "button"; el.className = "sr-hs tile"; el.textContent = "+";
         el.setAttribute("aria-label", p.name); el.title = p.name;
         el.onmouseenter = () => onHover(p); el.onmouseleave = () => onHover(null);
-        el.onclick = () => { onHover(null); onPick(p); };
+        el.onclick = () => { onHover(null); picked = true; onPick(p); };
         layer.append(el); marks.push({ el, d: dirOf(h.u, h.v + dv - 0.04) });
       }
     }
@@ -108,11 +110,13 @@ export async function create(canvas, products, { onPick = () => {}, onHover = ()
   const v3 = new THREE.Vector3();
   function placeMarks() {
     const w = canvas.clientWidth, h = canvas.clientHeight, fwd = new THREE.Vector3(); camera.getWorldDirection(fwd);
+    const keep = avoid ? avoid() : [], at = keep.length ? canvas.getBoundingClientRect() : null;   // e.g. the home page's words box
     for (const m of marks) {
       if (m.d.dot(fwd) < 0.2) { m.el.style.display = "none"; continue; }
       v3.copy(m.d).project(camera);
       const x = (v3.x + 1) / 2 * w, y = (1 - v3.y) / 2 * h;
-      const off = x < -30 || x > w + 30 || y < -30 || y > h + 30;
+      const off = x < -30 || x > w + 30 || y < -30 || y > h + 30
+        || keep.some(r => at.left + x > r.left - 24 && at.left + x < r.right + 24 && at.top + y > r.top - 24 && at.top + y < r.bottom + 24);
       m.el.style.display = off ? "none" : ""; if (!off) m.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
     }
   }
@@ -135,7 +139,7 @@ export async function create(canvas, products, { onPick = () => {}, onHover = ()
   });
   async function walk(to, face) {
     if (busy || !spots[to] || (to === cur && entered)) return;
-    busy = true; buildMarks(); onPick(null);
+    busy = true; picked = false; buildMarks(); onPick(null);
     const from = spots[cur], dest = spots[to], link = from.links.find(l => l.to === to);
     const next = picture(to);
     const u0 = view.u, p0 = view.pitch;
@@ -155,41 +159,24 @@ export async function create(canvas, products, { onPick = () => {}, onHover = ()
     ORDER.forEach(id => spots[id] && picture(id).catch(() => {}));   // fetch the rest quietly
   }
 
-  // ---- entrance: closed doors -> doors slide open -> walk in
-  let introRun = 0;
-  async function enter() {
-    const run = ++introRun;
-    entered = false; busy = true; buildMarks(); sec.classList?.remove?.("inside");
-    cur = "s0"; view.u = spots.s0.look_u; view.pitch = -0.02; view.fov = 75;
-    uni.a.value = await picture("closed").catch(() => picture("s0")); uni.k.value = 0; dirty = true;
-    const opened = picture("s0"), inside = picture("s1");
-    await new Promise(r => setTimeout(r, reduced ? 0 : 1100)); if (run !== introRun) return;
-    uni.b.value = await opened;
-    await anim(1500, t => { uni.k.value = ease(t); view.fov = 75 - 6 * ease(t); }); if (run !== introRun) return;
-    uni.a.value = uni.b.value; uni.k.value = 0;
-    await new Promise(r => setTimeout(r, reduced ? 0 : 500)); if (run !== introRun) return;
-    uni.b.value = await inside;
-    const f0 = view.fov;
-    await anim(1600, t => { view.fov = f0 - 26 * ease(Math.min(1, t * 1.4)) + 26 * ease(Math.max(0, t - 0.55) / 0.45); uni.k.value = Math.min(1, Math.max(0, (t - 0.3) / 0.4)); });
-    if (run !== introRun) return;
-    uni.a.value = uni.b.value; uni.k.value = 0; view.fov = 75; view.u = spots.s1.look_u;
-    finishEnter();
-  }
+  // ---- start inside, at the entrance
   function finishEnter() { cur = "s1"; entered = true; busy = false; markStrip(); buildMarks(); dirty = true; onEntered(); }
   async function skip() {
-    introRun++; uni.a.value = await picture("s1"); uni.k.value = 0; view.u = spots.s1.look_u; view.pitch = -0.04; view.fov = 75; finishEnter();
+    uni.a.value = await picture("s1"); uni.k.value = 0; view.u = spots.s1.look_u; view.pitch = -0.04; view.fov = 75; finishEnter();
   }
 
   // ---- drag to look around, wheel/trackpad sideways swipe for the next view, arrow keys
   let drag = null;
-  canvas.addEventListener("pointerdown", e => { drag = { x: e.clientX, y: e.clientY, u: view.u, p: view.pitch }; canvas.setPointerCapture(e.pointerId); canvas.style.cursor = "grabbing"; });
+  canvas.addEventListener("pointerdown", e => { touched = performance.now(); drag = { x: e.clientX, y: e.clientY, u: view.u, p: view.pitch }; canvas.setPointerCapture(e.pointerId); canvas.style.cursor = "grabbing"; });
   canvas.addEventListener("pointermove", e => {
     if (!drag || busy) return;
     const k = (camera.fov * Math.PI / 180) / canvas.clientHeight;
     view.u = drag.u - (e.clientX - drag.x) * k / (2 * Math.PI);
     view.pitch = Math.max(-1.2, Math.min(1.2, drag.p + (e.clientY - drag.y) * k)); dirty = true;
   });
-  const up = () => { drag = null; canvas.style.cursor = ""; };
+  const up = () => { drag = null; canvas.style.cursor = ""; touched = performance.now(); };
+  box.addEventListener("pointerdown", () => { touched = performance.now(); });
+  box.addEventListener("pointermove", e => { if (e.pointerType === "mouse") touched = performance.now(); });   // holds still under the mouse
   canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
   let wheelAt = 0;
   canvas.addEventListener("wheel", e => {
@@ -215,17 +202,22 @@ export async function create(canvas, products, { onPick = () => {}, onHover = ()
   const ro = new ResizeObserver(resize); ro.observe(canvas); resize();
   let visible = true;
   const io = new IntersectionObserver(es => { visible = es[0].isIntersecting; dirty = true; }); io.observe(canvas);
+  let last = performance.now();
   (function loop() {
     if (!alive) return;
+    const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); last = now;
+    // the slow turn on the home page: one full turn in about 2.5 minutes; it stops while the mouse is over the picture
+    // and for 4 s after any touch, so a + never slides away from the visitor
+    if (drift && !reduced && entered && !busy && !drag && !picked && visible && !document.hidden && now - touched > 4000) { view.u += dt / 150; dirty = true; }
     if (dirty && visible && !document.hidden) { aim(); renderer.render(scene, camera); placeMarks(); dirty = false; }
     requestAnimationFrame(loop);
   })();
   window.__sr360 = { walk, go, skip, get cur() { return cur; }, view };
 
-  enter();
+  skip();
   return {
-    go, skip, enter, resize, displays: data.booths,
-    focus: () => {}, overview: () => { onPick(null); },
-    stop() { alive = false; introRun++; ro.disconnect(); io.disconnect(); layer.remove(); strip.remove(); renderer.dispose(); },
+    go, skip, enter: skip, resize, displays: data.booths,
+    focus: () => {}, overview: () => { onPick(null); }, unpick: () => { picked = false; touched = performance.now(); dirty = true; }, refresh: () => { dirty = true; },
+    stop() { alive = false; ro.disconnect(); io.disconnect(); layer.remove(); strip.remove(); renderer.dispose(); },
   };
 }

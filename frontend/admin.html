@@ -1432,7 +1432,7 @@ async function rooms3dView() {
     <div class="tablewrap"><table><tr><th>Room</th><th>Status</th><th class="right"></th></tr>
     ${list.map(w => `<tr><td><b>${esc(w.name)}</b></td><td class="small">${esc(say(w))}</td><td class="right">
       ${w.status === "none" || w.status === "failed" ? `<button class="btn" data-make="${esc(w.key)}">${w.status === "failed" ? "Try again" : "Make it"}</button>` : ""}
-      ${w.status === "ready" ? `<a class="btn ghost" href="/assistant?old=1#/visual" target="_blank">Open the shop view</a>` : ""}</td></tr>`).join("")}
+      ${w.status === "ready" ? `<a class="btn ghost" href="/assistant#/visual" target="_blank">Open the shop view</a>` : ""}</td></tr>`).join("")}
     </table></div></div>`;
   document.querySelectorAll("[data-make]").forEach(b => b.onclick = async () => {
     const w = list.find(x => x.key === b.dataset.make);
@@ -1650,7 +1650,7 @@ async function sampleRoomView(id) {
       <button class="btn" id="srSave" disabled>Save fixes</button><button class="btn ghost sm" id="srClear">Clear my fixes</button></div>
       <div class="small muted" id="srHint" style="margin-bottom:8px">Paint with the mouse, or pick ✨ Tap and click once on an area: the room AI finds its whole outline.</div>
       <div class="sr-stage" id="srStage"><img id="srImg" src="${esc(room.photo)}" alt=""><canvas id="srCv" width="${W}" height="${H}"></canvas></div>
-      <div class="actions" style="margin-top:12px">${d.published ? `<a class="btn ghost" href="/assistant?old=1#/rooms" target="_blank">See it in the shop</a>`
+      <div class="actions" style="margin-top:12px">${d.published ? `<a class="btn ghost" href="/assistant#/rooms" target="_blank">See it in the shop</a>`
         : `<button class="btn" id="srPub">Publish to the shop</button>`}</div></div>`;
   const cv = $("#srCv"), ctx = cv.getContext("2d");
   const layer = (kind, col) => {

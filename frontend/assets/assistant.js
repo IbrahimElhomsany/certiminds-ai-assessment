@@ -23,7 +23,7 @@ const ROOMS = window.NOVA_ROOMS || [], PATCHES = window.NOVA_TILE_PATCHES || {};
 let AI_ON = false;                                  // the room AI service is set up (tap to fix)
 fetch("/api/v1/visual/roomai").then(r => r.ok ? r.json() : null).then(d => { AI_ON = !!(d && d.on); }).catch(() => {});
 let MAKEOVER_ON = false;                             // OpenAI key set: the "Photo-real (AI)" button shows
-fetch("/api/v1/makeover").then(r => r.ok ? r.json() : null).then(d => { MAKEOVER_ON = !!(d && d.on); try { $("vai").hidden = !MAKEOVER_ON; } catch {} }).catch(() => {});
+fetch("/api/v1/makeover").then(r => r.ok ? r.json() : null).then(d => { MAKEOVER_ON = !!(d && d.on); try { $("vai").hidden = $("vaiBox").hidden = !MAKEOVER_ON; } catch {} }).catch(() => {});
 // the shop owner's own sample rooms (Admin > Sample rooms), shown before ours
 fetch("/api/rooms").then(r => r.ok ? r.json() : []).then(list => {
   if (!Array.isArray(list) || !list.length) return;
@@ -53,21 +53,9 @@ const fits = (sku, surface) => isTile(sku) && (BY[sku].surfaces || []).includes(
 // ---------------------------------------------------------------- routing + step bar
 const PAGES = { "": "start", chat: "chat", rooms: "rooms", mark: "mark", visual: "visual", project: "project" };
 const STEP_OF = { rooms: "visual", mark: "visual" };
-// The AI makeover (/makeover) replaced this visualiser (Ibrahim, 2026-11-24). It stays as the "Old Version":
-// /assistant?old=1#/rooms opens it, and it stays open for the rest of the visit.
-function oldVisualiser() {
-  try {
-    if (new URLSearchParams(location.search).get("old") === "1") sessionStorage.setItem("nova_old_vis", "1");
-    return sessionStorage.getItem("nova_old_vis") === "1";
-  } catch { return /[?&]old=1/.test(location.search); }
-}
 function route() {
   const key = (location.hash.replace(/^#\/?/, "").split("?")[0]) || "";
   const page = PAGES[key] || "start";
-  if ((page === "rooms" || page === "visual" || page === "mark") && !oldVisualiser()) {
-    const sku = S.selected || new URLSearchParams(location.search).get("sku");
-    location.replace("/makeover" + (sku ? "?sku=" + encodeURIComponent(sku) : "")); return;
-  }
   document.body.dataset.page = page; document.body.dataset.step = STEP_OF[page] || page;
   ["Start", "Chat", "Rooms", "Mark", "Visual", "Project"].forEach(n => $("p" + n).hidden = page !== n.toLowerCase());
   if (page !== "visual") { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); $("stagewrap").classList.remove("fs"); }
@@ -373,7 +361,7 @@ function renderVisControls() {
   $("vtitle").textContent = room.name;
   $("v3d").querySelector("span").textContent = is3d(room) ? "Photo rooms" : "360° view";
   $("v3d").hidden = !is3d(room) && !room.view360;      // only rooms with a real 360° picture of the same room
-  $("vai").hidden = !MAKEOVER_ON;                         // in 360° / 3D rooms it re-draws the view on screen
+  $("vai").hidden = $("vaiBox").hidden = !MAKEOVER_ON;    // in 360° / 3D rooms it re-draws the view on screen
   $("rooms").innerHTML = allRooms().map(r => `<button type="button" class="room ${r.id === room.id ? "on" : ""}" data-room="${r.id}">
       <img src="${r.thumb || r.photo}" alt="" loading="lazy"><span>${esc(r.name)}</span>${is3d(r) ? `<i class="b3d">${r.kind === "pano" ? "360°" : r.kind === "splat" ? "Walk" : "3D"}</i>` : ""}</button>`).join("") +
     `<a class="room" href="#/rooms" style="display:grid;place-items:center;text-decoration:none;color:var(--ink);border:1.5px dashed #ccc;min-height:92px"><span style="text-align:center">+ Your own<br>photo</span></a>`;
@@ -832,11 +820,16 @@ async function photoReal() {
   if (!viewer() || !loadedKey) { toast("The room is still loading."); return; }
   const room = curRoom();
   const pick = s => room.surfaces[s] && fits(S.vis[s], s) && tileOkInRoom(S.vis[s], room) ? S.vis[s] : null;
-  const floor = pick("floor"), wall = pick("wall");
-  if (!floor && !wall) { toast("Choose a floor or wall tile first."); return; }
+  const floor = pick("floor"), wall = pick("wall"), text = $("vaiText").value.trim();
+  $("vaiBox").classList.remove("bad"); $("vaiErr").hidden = true;
+  if (!floor && !wall && text.length < 3) {        // the message goes next to the box it is about
+    $("vaiBox").classList.add("bad"); $("vaiErr").textContent = "Pick a floor or wall tile, or write what you'd like the AI to change.";
+    $("vaiErr").hidden = false; $("vaiText").focus(); return;
+  }
+  $("aiLook").innerHTML = "";
   const st = $("aiStage"), err = $("aiErr");
   AI.busy = true; AI.last = null; err.hidden = true; $("aiAgain").hidden = true; $("aiDl").disabled = $("aiCopy").disabled = true;
-  $("aiTiles").textContent = [floor && `${BY[floor].name} on the floor`, wall && `${BY[wall].name} on the walls`].filter(Boolean).join(" and ") + ` · ${room.name}`;
+  $("aiTiles").textContent = [floor && `${BY[floor].name} on the floor`, wall && `${BY[wall].name} on the walls`, text && `“${text}”`].filter(Boolean).join(" · ") + ` · ${room.name}`;
   st.classList.remove("done"); st.classList.add("busy"); $("aiModal").classList.add("open");
   let shot = null;                                  // what is on screen now (in 360° / 3D rooms this is what the AI re-draws)
   try { shot = await canvasBlob(); if (shot) { if ($("aiBefore").src.startsWith("blob:")) URL.revokeObjectURL($("aiBefore").src); $("aiBefore").src = URL.createObjectURL(shot); } } catch {}
@@ -847,16 +840,79 @@ async function photoReal() {
   try {
     const photo_id = await photoId(room, view ? shot : null);
     const r = await fetch("/api/v1/makeover", { method: "POST", headers: { "Content-Type": "application/json", "X-User-Id": USER_ID },
-      body: JSON.stringify({ photo_id, floor, wall, request: "", source: view ? "view" : "photo" }) });
+      body: JSON.stringify({ photo_id, floor, wall, request: text, source: view ? "view" : "photo" }) });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d.detail && d.detail.message ? d.detail.message : typeof d.detail === "string" ? d.detail : "The AI could not draw this room right now.");
     AI.last = d; $("aiAfter").src = d.after;
     await new Promise(ok => { $("aiAfter").onload = ok; $("aiAfter").onerror = ok; });
     $("aiAfterWrap").style.clipPath = "inset(0 0 0 50%)"; $("aiBar").style.left = "50%";
     st.classList.add("done"); $("aiDl").disabled = $("aiCopy").disabled = false;
+    renderAiLook(d);
   } catch (e) {
     err.textContent = e.message || "The AI could not draw this room right now. Please try again."; err.hidden = false; $("aiAgain").hidden = false;
   } finally { clearInterval(tick); st.classList.remove("busy"); AI.busy = false; }
+}
+
+// Under the AI picture: buy the tiles in it (same cart as the shop), and what is drawn that we don't offer yet
+const CART_KEY = "nova_cart_v1", PRICED = {};
+function renderAiLook(d) {
+  for (const k in PRICED) delete PRICED[k];
+  const off = (d.notes || []).filter(n => n.kind === "not_offered");
+  const sugg = n => !(n.suggest || []).length ? "" : `<div class="sugg">${n.suggest.filter(s => BY[s]).map(s =>
+    `<button type="button" data-surf="${n.surface}" data-sku="${s}" title="Use ${esc(BY[s].name)} in the visualiser"><img src="${BY[s].image}" alt="">${esc(BY[s].name)}</button>`).join("")}</div>`;
+  $("aiLook").innerHTML = (d.products && d.products.length ? `<h4>Shop this look</h4><div class="items">${d.products.map(p => `<div class="buyc" data-sku="${esc(p.sku)}">
+      <a class="head" href="/#/p/${encodeURIComponent(p.sku)}"><img src="${esc(p.image)}" alt=""><span><b>${esc(p.name)}</b><small>${p.where === "floor" ? "Floor" : "Walls"} · ${money(p.price)} / m²</small><span class="go">See it in the shop →</span></span></a>
+      <div class="row"><label for="ai-area-${esc(p.sku)}">Your ${p.where === "floor" ? "floor" : "wall"} area</label><input id="ai-area-${esc(p.sku)}" type="number" min="0.5" max="2000" step="0.5" inputmode="decimal" placeholder="e.g. 20"> m²</div>
+      <div class="calc" aria-live="polite"></div><div class="ferr" hidden></div></div>`).join("")}</div>
+    <div class="buy"><button type="button" class="btn" id="aiBuy">🛒 Add to cart</button><b class="aitot" id="aiTotal"></b>
+      <span class="hint">10% spare for cuts, rounded up to full boxes.</span></div>` : "")
+    + (off.length ? `<div class="off"><b>In the picture, but we don't offer it yet</b><ul>${off.map(n => `<li>${esc(n.text)}${sugg(n)}</li>`).join("")}</ul></div>` : "");
+}
+async function priceAi(card) {
+  const sku = card.dataset.sku, inp = card.querySelector("input"), out = card.querySelector(".calc"), er = card.querySelector(".ferr");
+  const area = parseFloat(inp.value);
+  card.classList.remove("bad"); er.hidden = true; delete PRICED[sku];
+  if (!inp.value.trim()) { out.textContent = ""; aiTotal(); return; }
+  if (!(area >= 0.5 && area <= 2000)) { card.classList.add("bad"); er.textContent = "Enter the area in m², between 0.5 and 2000."; er.hidden = false; out.textContent = ""; aiTotal(); return; }
+  try {
+    const r = await fetch("/api/shop/cart/price", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: [{ sku, area_m2: area, layout: "simple" }] }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(r.status >= 502 ? "The shop is restarting for an update. Please try again in a minute." : typeof d.detail === "string" ? d.detail : "We couldn't price this area.");
+    const l = d.lines[0]; PRICED[sku] = { area, total: l.line_total };
+    out.innerHTML = `<b>${l.boxes} boxes</b> · ${l.quantity_m2} m² · <b>${money(l.line_total)}</b>`;
+  } catch (e) { card.classList.add("bad"); er.textContent = e.message; er.hidden = false; out.textContent = ""; }
+  aiTotal();
+}
+function aiTotal() {
+  const v = Object.values(PRICED), el = $("aiTotal"); if (el) el.textContent = v.length ? `Total ${money(v.reduce((a, x) => a + x.total, 0))}` : "";
+}
+function wireAiLook() {
+  $("aiLook").addEventListener("input", e => {
+    const card = e.target.closest(".buyc"); if (!card) return;
+    clearTimeout(card._t); card._t = setTimeout(() => priceAi(card), 350);
+  });
+  $("aiLook").addEventListener("click", async e => {
+    const sg = e.target.closest(".sugg button");
+    if (sg) {                                     // try our closest tile in the visualiser
+      $("aiModal").classList.remove("open");
+      S.vis[sg.dataset.surf] = sg.dataset.sku; S.vis.surface = sg.dataset.surf; visChanged();
+      toast(`${BY[sg.dataset.sku].name} is in the room. Press “Make it real with AI” to see it as a photo.`); return;
+    }
+    if (!e.target.closest("#aiBuy")) return;
+    const cards = [...document.querySelectorAll("#aiLook .buyc")];
+    await Promise.all(cards.map(c => c._t ? (clearTimeout(c._t), priceAi(c)) : null));
+    const ready = cards.filter(c => PRICED[c.dataset.sku]);
+    if (!ready.length) {
+      cards.forEach(c => { c.classList.add("bad"); const er = c.querySelector(".ferr"); er.textContent = "Enter your area in m² to buy this tile."; er.hidden = false; });
+      cards[0].querySelector("input").focus(); return;
+    }
+    if (cards.some(c => c.classList.contains("bad"))) return;
+    let cart = []; try { cart = JSON.parse(localStorage.getItem(CART_KEY)) || []; } catch {}
+    for (const c of ready) { const sku = c.dataset.sku; cart = cart.filter(i => i.sku !== sku).concat({ sku, area_m2: PRICED[sku].area, layout: "simple" }); }
+    try { localStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch { toast("Your browser blocked the cart. Please allow site data and try again."); return; }
+    $("aiBuy").textContent = "Added ✓"; setTimeout(() => location.href = "/#/cart", 400);
+  });
 }
 
 // ---------------------------------------------------------------- 2a. choose a room, or upload your own photo
@@ -1334,6 +1390,11 @@ $("v3d").onclick = () => {                         // jump to the 3D room closes
 };
 $("vdl").onclick = downloadImage;
 $("vai").onclick = photoReal;
+$("vaiGo").onclick = photoReal;
+$("vaiChips").innerHTML = ["Dark wood walls", "Light grey walls", "Make the room brighter", "Marble floor"].map(c => `<button type="button">${c}</button>`).join("");
+$("vaiChips").onclick = e => { const b = e.target.closest("button"); if (!b) return; $("vaiText").value = b.textContent; $("vaiBox").classList.remove("bad"); $("vaiErr").hidden = true; };
+$("vaiText").oninput = () => { $("vaiBox").classList.remove("bad"); $("vaiErr").hidden = true; };
+wireAiLook();
 $("aiClose").onclick = () => $("aiModal").classList.remove("open");
 $("aiModal").onclick = e => { if (e.target.id === "aiModal") $("aiModal").classList.remove("open"); };
 $("aiAgain").onclick = photoReal;

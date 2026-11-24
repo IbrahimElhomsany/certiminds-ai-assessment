@@ -145,6 +145,8 @@
   .stage { position:relative; border-radius:14px; overflow:hidden; aspect-ratio:1672/941; background:#e9e6e0; user-select:none; touch-action:pan-y; }
   .stage canvas, .stage .before { position:absolute; inset:0; width:100%; height:100%; display:block; }
   .stage .before { object-fit:cover; pointer-events:none; }
+  .stage .aishot { z-index:2; } .stage .label.aishotl { left:auto; right:12px; z-index:2; }
+  body:not(.oldvis) .oldonly { display:none !important; }
   .stage .label { position:absolute; top:12px; left:12px; background:rgba(20,24,22,.72); color:#fff; font-size:12px; padding:5px 12px; border-radius:99px; pointer-events:none; }
   .stage .label.r { left:auto; right:12px; }
   .stage .handle { position:absolute; top:0; bottom:0; width:0; border-left:2px solid #fff; box-shadow:0 0 0 1px rgba(0,0,0,.15); cursor:ew-resize; }
@@ -605,9 +607,9 @@
         <a class="tb" href="#/rooms"><svg class="ico" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg><span>Rooms</span></a>
         <span class="vtitle" id="vtitle"></span>
         <button class="tb" type="button" id="v3d"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3zM12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span>Walk in 3D</span></button>
-        <button class="tb" type="button" id="vcmp"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3v18M4 5h16v14H4z"/></svg><span>Compare</span></button>
+        <button class="tb oldonly" type="button" id="vcmp"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3v18M4 5h16v14H4z"/></svg><span>Compare</span></button>
         <button class="tb" type="button" id="vzoom"><svg class="ico" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span>Zoom</span></button>
-        <button class="tb ai" type="button" id="vai" hidden title="The AI re-draws this room as a real photo with your tiles"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg><span>Photo-real (AI)</span></button>
+        <button class="tb ai oldonly" type="button" id="vai" hidden title="The AI re-draws this room as a real photo with your tiles"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg><span>Photo-real (AI)</span></button>
         <button class="tb" type="button" id="vshare"><svg class="ico" viewBox="0 0 24 24"><path d="M18 8a3 3 0 100-6 3 3 0 000 6zM6 15a3 3 0 100-6 3 3 0 000 6zM18 22a3 3 0 100-6 3 3 0 000 6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg><span>Share</span></button>
         <button class="tb" type="button" id="vdl"><svg class="ico" viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></svg><span>Download</span></button>
         <a class="tb vswitch" id="vswitch" href="/assistant?old=1#/visual" title="Switch between the new AI makeover and the old visualiser"><span id="vswitchT">Old Version</span></a>
@@ -621,6 +623,7 @@
           <span class="walkhint" id="walkhint" hidden></span>
           <div class="spots" id="vspots" hidden></div>
           <img class="before" id="before" alt="" hidden>
+          <img class="before aishot" id="aiShot" alt="The room as drawn by the AI" hidden><span class="label aishotl" id="aiShotL" hidden>AI picture</span>
           <canvas id="vbrush" class="vbrush" aria-label="Paint to fix where the tiles go" hidden></canvas>
           <svg class="outline" id="vout" preserveAspectRatio="none" aria-hidden="true"></svg>
           <div class="handle" id="handle" hidden></div>
@@ -672,7 +675,7 @@
         <div class="vaierr" id="vaiErr" role="alert" hidden></div>
         <button class="btn" type="button" id="vaiGo">✨ Make it real with AI</button>
       </div>
-      <div class="tilectl" id="vlayoutBox">
+      <div class="tilectl oldonly" id="vlayoutBox">
         <h4>Layout</h4>
         <div class="ctl2">
           <div class="seg" id="vlayout"><button type="button" data-l="0">Straight</button><button type="button" data-l="1">Half offset</button><button type="button" data-l="2">Third offset</button></div>
@@ -680,7 +683,7 @@
         </div>
         <div class="hint" id="vpatchNote" hidden>This tile comes as a mesh sheet, so it is shown laid as supplied.</div>
       </div>
-      <div class="tilectl" id="vposBox" hidden>
+      <div class="tilectl oldonly" id="vposBox" hidden>
         <h4>Position</h4>
         <label class="rng"><span>Angle <b id="vangV">0°</b></span><input type="range" id="vang" min="0" max="90" step="1" value="0"></label>
         <label class="rng"><span>Move sideways</span><input type="range" id="vsx" min="0" max="1" step="0.01" value="0"></label>
@@ -689,7 +692,7 @@
         <div class="hint" id="vscaleHint" hidden>If the tiles look too big or too small for your room, slide this until a tile matches something you know (a door is about 2 m high).</div>
         <button class="linkbtn" type="button" id="vposReset">Reset position</button>
       </div>
-      <div class="tilectl" id="vfixBox" hidden>
+      <div class="tilectl oldonly" id="vfixBox" hidden>
         <h4>Fix the area</h4>
         <div class="ctl2">
           <div class="seg" id="vtool"><button type="button" data-vtool="erase">Erase tiles</button><button type="button" data-vtool="add">Add tiles</button></div>
@@ -699,7 +702,7 @@
         <div class="ctl2" style="margin-top:6px"><button class="tglbtn" type="button" id="vfixDone" hidden>Done</button><button class="linkbtn" type="button" id="vfixClear">Clear my fixes</button></div>
         <label class="chk" id="vtrainRow" hidden style="margin-top:8px"><input type="checkbox" id="vtrain"> Keep my photo and fixes to help improve the room AI</label>
       </div>
-      <div class="tilectl">
+      <div class="tilectl oldonly">
         <h4>Grout</h4>
         <div class="ctl2">
           <div class="dots" id="vgc"></div>

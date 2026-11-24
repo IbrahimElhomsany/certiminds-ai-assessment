@@ -286,9 +286,25 @@ function tileSpec(sku) {
   // the visualisers draw one clean tile face (images/tex, tools/tiles/make_faces.py); p.image is the shop picture
   return { image: `/images/tex/${encodeURIComponent(sku)}.jpg`, w, h, patch: PATCHES[sku] || null, gloss };
 }
+// new version: the last AI picture stays on the stage for that room until the room changes
+let aiShotKey = null;
+function showAiShot(room, url) {
+  const on = !OLD_VIS && !!url && !is3d(room);
+  aiShotKey = on ? roomKey(room) : null;
+  $("aiShot").hidden = $("aiShotL").hidden = !on;
+  if (on) $("aiShot").src = url; else $("aiShot").removeAttribute("src");
+}
+// new version: a different room starts clean (no tiles, no AI picture, empty request)
+function resetPicks() {
+  if (OLD_VIS) return;
+  S.vis.floor = S.vis.wall = null; S.vis.surface = "floor";
+  try { $("vaiText").value = ""; $("vaiErr").hidden = true; $("vaiBox").classList.remove("bad"); } catch {}
+  showAiShot(curRoom(), null);
+}
 async function showVisual() {
   if (!S.vis.picked && !S.selected) { location.replace("#/rooms"); return; }
   const room = curRoom();
+  if (aiShotKey && aiShotKey !== roomKey(room)) showAiShot(room, null);
   if (!room.surfaces[S.vis.surface]) S.vis.surface = room.surfaces.floor ? "floor" : "wall";
   renderVisControls(); sizeStage();
   const three = is3d(room);
@@ -348,6 +364,7 @@ async function loadRoom(room) {
 }
 async function applyTiles() {
   const room = curRoom(), R = viewer(); if (!R) return;
+  if (!OLD_VIS) { for (const surf of ["floor", "wall"]) await R.setTile(surf, null); return; }   // new version: only the AI changes the picture
   R.setOptions({ grout: S.vis.grout, groutColor: S.vis.groutColor, floor: S.vis.opt.floor, wall: S.vis.opt.wall });
   for (const surf of ["floor", "wall"]) {
     const sku = room.surfaces[surf] && fits(S.vis[surf], surf) && tileOkInRoom(S.vis[surf], room) ? S.vis[surf] : null;
@@ -859,6 +876,7 @@ async function photoReal() {
     $("aiAfterWrap").style.clipPath = "inset(0 0 0 50%)"; $("aiBar").style.left = "50%";
     st.classList.add("done"); $("aiDl").disabled = $("aiCopy").disabled = false;
     renderAiLook(d);
+    if (!view) showAiShot(room, d.after);
   } catch (e) {
     err.textContent = e.message || "The AI could not draw this room right now. Please try again."; err.hidden = false; $("aiAgain").hidden = false;
   } finally { clearInterval(tick); st.classList.remove("busy"); AI.busy = false; }
@@ -964,7 +982,7 @@ const isPano = photo => photo.width / photo.height >= 1.9;
 function gotPhoto(photo) { if (isPano(photo)) newPano(photo); else newOwn(photo); }
 function newPano(photo) {
   S.pano = { photo, rev: ((S.pano && S.pano.rev) || 0) + 1, location: "indoor" };
-  S.vis.room = "pano"; S.vis.picked = true; S.vis.surface = "floor";
+  resetPicks(); S.vis.room = "pano"; S.vis.picked = true; S.vis.surface = "floor";
   save(); location.hash = "#/visual";
 }
 function newOwn(photo) {
@@ -1067,7 +1085,7 @@ function useAi(d) {
   o.ai = { surfaces: d.surfaces.map(a => ({ kind: a.kind, quad: a.quad, size: a.size, mask: a.mask })),
            floorM2: sum("floor") || null, wallM2: sum("wall") || null };
   o.auto = "done"; o.keep = null; o.areaM2 = null; o.wallM2 = null; o.rev = (o.rev || 0) + 1;
-  S.vis.room = "own"; S.vis.picked = true; S.vis.surface = "floor";
+  resetPicks(); S.vis.room = "own"; S.vis.picked = true; S.vis.surface = "floor";
   autoMsg = { url: o.photo.url, text: "The room AI found your floor. Showing it with tiles.", kind: "ok" };
   save();
   if (location.hash === "#/mark") location.hash = "#/visual";
@@ -1164,7 +1182,7 @@ function wireMark() {
     if (m.wall) { o.wall.size = [Math.round(m.wall.w * 100), Math.round(m.wall.h * 100)]; o.wallM2 = m.wall.w * m.wall.h; }
     else { o.wall.size = null; o.wallM2 = null; }
     o.rev = (o.rev || 0) + 1;
-    S.vis.room = "own"; S.vis.picked = true; S.vis.surface = "floor";
+    resetPicks(); S.vis.room = "own"; S.vis.picked = true; S.vis.surface = "floor";
     save(); location.hash = "#/visual";
   };
 }
@@ -1356,7 +1374,7 @@ document.addEventListener("click", e => {
   else if (d.quote) send(`I'd like a quote for ${d.quote}.`);
   else if (d.swap) send(`Show me alternatives to ${d.swap}.`);
   else if (d.specs) showSpecs([d.specs]);
-  else if (d.room) { S.vis.room = d.room; S.vis.picked = true; S.vis.spot = 0; S.vis.spotYaw = null; save(); if (location.hash === "#/visual") showVisual(); else location.hash = "#/visual"; }
+  else if (d.room) { if (d.room !== S.vis.room) resetPicks(); S.vis.room = d.room; S.vis.picked = true; S.vis.spot = 0; S.vis.spotYaw = null; save(); if (location.hash === "#/visual") showVisual(); else location.hash = "#/visual"; }
   else if (d.addproj) { if (addToProject(d.addproj)) { renderVisControls(); toast("Added to your project.", ["Open project", "#/project"]); } }
   else if (d.ms) { mtab = d.ms; renderMark(); }
   else if (d.ml) { S.own.location = d.ml; save(); renderMark(); }

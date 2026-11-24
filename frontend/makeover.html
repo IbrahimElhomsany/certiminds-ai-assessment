@@ -103,6 +103,16 @@
   .look a.item { display:grid; grid-template-columns:56px 1fr; gap:10px; align-items:center; border:1px solid var(--line); border-radius:12px; padding:8px; text-decoration:none; }
   .look a.item:hover { border-color:var(--accent); } .look img { width:56px; height:56px; border-radius:8px; object-fit:cover; }
   .look b { display:block; color:var(--ink); font-size:14px; } .look small { color:var(--muted); display:block; } .look .go { color:var(--accent); font-size:12px; font-weight:600; }
+  .look .buyc { border:1px solid var(--line); border-radius:12px; padding:10px; display:grid; gap:8px; }
+  .look .buyc.bad { border-color:var(--bad); }
+  .look .buyc .head { display:grid; grid-template-columns:56px 1fr; gap:10px; align-items:center; text-decoration:none; }
+  .look .row { display:flex; gap:8px; align-items:center; font-size:13px; } .look .row label { color:var(--muted); }
+  .look .row input { width:90px; border:1px solid var(--line); border-radius:8px; padding:7px 9px; font:inherit; }
+  .look .row input:focus { outline:none; border-color:var(--accent); } .look .buyc.bad input { border-color:var(--bad); background:var(--bad-soft); }
+  .look .calc { font-size:13px; color:var(--ink); min-height:18px; } .look .calc small { color:var(--muted); }
+  .look .ferr { margin-top:0; }
+  .look .buy { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px; } .look .buy .btn { width:auto; }
+  .look .buy .total { font-weight:600; color:var(--ink); }
   .look ul { margin:10px 0 0; padding-left:18px; color:var(--muted); font-size:13px; }
   .top { display:flex; align-items:center; justify-content:space-between; gap:12px; }
   .oldbtn { padding:8px 14px; font-size:13px; } header nav a.oldv { color:var(--ink); font-weight:600; }
@@ -371,11 +381,62 @@ function show(d) {
   $("rTiles").textContent = d.tiles; $("rInfo").textContent = `Made in ${d.seconds} s · ${d.quality === "high" ? "best" : "standard"} quality`;
   $("rPrompt").textContent = d.prompt; $("result").classList.add("show");
   const notes = d.notes || [], off = notes.filter(n => n.kind === "not_offered");
-  $("look").innerHTML = (d.products && d.products.length ? `<h3>Shop this look</h3><div class="items">${d.products.map(p =>
-    `<a class="item" href="${esc(p.url)}"><img src="${esc(p.image)}" alt=""><span><b>${esc(p.name)}</b><small>${esc(p.where === "floor" ? "Floor" : "Walls")} · ${money(p.price, p.currency)} / m²</small><span class="go">See it in the shop →</span></span></a>`).join("")}</div>` : "")
+  for (const k in priced) delete priced[k];
+  $("look").innerHTML = (d.products && d.products.length ? `<h3>Shop this look</h3>
+    <div class="items">${d.products.map(p => `<div class="buyc" data-sku="${esc(p.sku)}">
+      <a class="head" href="${esc(p.url)}"><img src="${esc(p.image)}" alt=""><span><b>${esc(p.name)}</b><small>${esc(p.where === "floor" ? "Floor" : "Walls")} · ${money(p.price, p.currency)} / m²</small><span class="go">See it in the shop →</span></span></a>
+      <div class="row"><label for="area-${esc(p.sku)}">Your ${esc(p.where === "floor" ? "floor" : "wall")} area</label><input id="area-${esc(p.sku)}" type="number" min="0.5" max="2000" step="0.5" inputmode="decimal" placeholder="e.g. 20"> m²</div>
+      <div class="calc" aria-live="polite"></div><div class="ferr"></div></div>`).join("")}</div>
+    <div class="buy"><button type="button" class="btn" id="buy">🛒 Add to cart</button><span class="total" id="buyTotal"></span></div>
+    <small style="color:var(--muted)">We add 10% spare for cuts and round up to full boxes. Grout and adhesive are suggested in the cart.</small>` : "")
     + (off.length ? `<div class="plan"><h3>In the picture, but we don't offer it yet</h3><ul>${off.map(n =>
       `<li class="no"><span class="i" aria-hidden="true">✕</span><div>${esc(n.text)}${sugg(n)}</div></li>`).join("")}</ul></div>` : "");
 }
+// ------------------------------------------------ buy the tiles in the picture (same cart as the shop)
+const CART_KEY = "nova_cart_v1", priced = {};
+async function priceLine(card) {
+  const sku = card.dataset.sku, inp = card.querySelector("input"), out = card.querySelector(".calc"), er = card.querySelector(".ferr");
+  const area = parseFloat(inp.value);
+  card.classList.remove("bad"); er.classList.remove("show"); delete priced[sku];
+  if (!inp.value.trim()) { out.textContent = ""; buyTotal(); return; }
+  if (!(area >= 0.5 && area <= 2000)) { card.classList.add("bad"); er.textContent = "Enter the area in m², between 0.5 and 2000."; er.classList.add("show"); out.textContent = ""; buyTotal(); return; }
+  try {
+    const r = await fetch("/api/shop/cart/price", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: [{ sku, area_m2: area, layout: "simple" }] }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(r.status >= 502 ? "The shop is restarting for an update. Please try again in a minute." : typeof d.detail === "string" ? d.detail : "We couldn't price this area.");
+    const l = d.lines[0]; priced[sku] = { area, total: l.line_total };
+    out.innerHTML = `<b>${l.boxes} boxes</b> · ${l.quantity_m2} m² · <b>${money(l.line_total)}</b>`;
+  } catch (e) { card.classList.add("bad"); er.textContent = e.message; er.classList.add("show"); out.textContent = ""; }
+  buyTotal();
+}
+function buyTotal() {
+  const v = Object.values(priced); const el = $("buyTotal"); if (!el) return;
+  el.textContent = v.length ? `Total ${money(v.reduce((a, x) => a + x.total, 0))}` : "";
+}
+$("look").addEventListener("input", e => {
+  const card = e.target.closest(".buyc"); if (!card) return;
+  clearTimeout(card._t); card._t = setTimeout(() => priceLine(card), 350);
+});
+$("look").addEventListener("click", async e => {
+  if (!e.target.closest("#buy")) return;
+  const cards = [...document.querySelectorAll("#look .buyc")];
+  await Promise.all(cards.map(c => c._t ? (clearTimeout(c._t), priceLine(c)) : null));
+  const ready = cards.filter(c => priced[c.dataset.sku]);
+  if (!ready.length) {                         // nothing filled in: say so next to every box
+    cards.forEach(c => { c.classList.add("bad"); const er = c.querySelector(".ferr"); er.textContent = "Enter your area in m² to buy this tile."; er.classList.add("show"); });
+    cards[0].querySelector("input").focus(); return;
+  }
+  if (cards.some(c => c.classList.contains("bad"))) return;
+  let cart = []; try { cart = JSON.parse(localStorage.getItem(CART_KEY)) || []; } catch {}
+  for (const c of ready) {
+    const sku = c.dataset.sku;
+    cart = cart.filter(i => i.sku !== sku).concat({ sku, area_m2: priced[sku].area, layout: "simple" });
+  }
+  try { localStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch { toast("Your browser blocked the cart. Please allow site data and try again."); return; }
+  $("buy").textContent = "Added ✓"; setTimeout(() => location.href = "/#/cart", 400);
+});
+
 function renderHistory() {
   $("history").innerHTML = S.history.length < 2 ? "" : S.history.map((h, i) => `<button type="button" data-i="${i}" title="${esc(h.tiles)}"><img src="${h.after}" alt=""></button>`).join("");
 }

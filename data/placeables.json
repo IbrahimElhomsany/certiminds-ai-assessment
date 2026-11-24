@@ -1,0 +1,354 @@
+[
+ {
+  "id": "SN003",
+  "name": "Nova Wall-Hung WC Set",
+  "category": "wc",
+  "mount": "wall",
+  "sold": true,
+  "size_cm": [
+   37,
+   57,
+   81
+  ],
+  "lift_cm": 32,
+  "model": "/images/products/SN003.glb",
+  "image": "/images/products/SN003.jpg",
+  "source": "Nova Studio 3D model"
+ },
+ {
+  "id": "SN004",
+  "name": "Luna Oak Vanity Set 100",
+  "category": "vanity",
+  "mount": "wall",
+  "sold": true,
+  "size_cm": [
+   102,
+   50,
+   67
+  ],
+  "lift_cm": 47,
+  "model": "/images/products/SN004.glb",
+  "image": "/images/products/SN004.jpg",
+  "source": "Nova Studio 3D model"
+ },
+ {
+  "id": "SN002",
+  "name": "Aria Shower Set",
+  "category": "shower",
+  "mount": "wall",
+  "sold": true,
+  "size_cm": [
+   43,
+   47,
+   101
+  ],
+  "lift_cm": 102,
+  "model": "/images/products/SN002.glb",
+  "image": "/images/products/SN002.jpg",
+  "source": "Nova Studio 3D model"
+ },
+ {
+  "id": "SN005",
+  "name": "Oval Freestanding Bath 172",
+  "category": "bath",
+  "mount": "floor",
+  "sold": true,
+  "size_cm": [
+   172,
+   80,
+   60
+  ],
+  "lift_cm": 0,
+  "model": "/images/products/SN005.glb",
+  "image": "/images/products/SN005.jpg",
+  "source": "Nova Studio 3D model"
+ },
+ {
+  "id": "SN006",
+  "name": "Nova Wall-Hung Bidet Set",
+  "category": "bidet",
+  "mount": "wall",
+  "sold": true,
+  "size_cm": [
+   36,
+   54,
+   21
+  ],
+  "lift_cm": 32,
+  "model": "/images/products/SN006.glb",
+  "image": "/images/products/SN006.jpg",
+  "source": "Nova Studio 3D model"
+ },
+ {
+  "id": "SN007",
+  "name": "Halo Round LED Mirror 80",
+  "category": "mirror",
+  "mount": "wall",
+  "sold": true,
+  "size_cm": [
+   80,
+   4,
+   80
+  ],
+  "lift_cm": 120,
+  "model": "/images/products/SN007.glb",
+  "image": "/images/products/SN007.jpg",
+  "source": "Nova Studio 3D model"
+ },
+ {
+  "id": "SN008",
+  "name": "Clear Walk-In Shower Screen 120",
+  "category": "screen",
+  "mount": "floor",
+  "sold": true,
+  "size_cm": [
+   122,
+   62,
+   200
+  ],
+  "lift_cm": 0,
+  "model": "/images/products/SN008.glb",
+  "image": "/images/products/SN008.jpg",
+  "source": "Nova Studio 3D model"
+ },
+ {
+  "id": "decor_sofa",
+  "name": "Modern three-seat sofa",
+  "category": "sofa",
+  "mount": "floor",
+  "sold": false,
+  "size_cm": [
+   220,
+   92,
+   80
+  ],
+  "lift_cm": 0,
+  "model": "/images/products/decor_sofa.glb",
+  "image": "/images/products/decor_sofa.jpg",
+  "source": "Nova Studio 3D model"
+ },
+ {
+  "id": "decor_loveseat",
+  "name": "Leather loveseat",
+  "category": "sofa",
+  "mount": "floor",
+  "sold": false,
+  "size_cm": [
+   181,
+   82,
+   71
+  ],
+  "lift_cm": 0,
+  "model": "/images/products/decor_loveseat.glb",
+  "image": "/images/products/decor_loveseat.jpg",
+  "source": "Poly Haven CC0 (sofa_02)"
+ },
+ {
+  "id": "decor_classic_sofa",
+  "name": "Classic sofa",
+  "category": "sofa",
+  "mount": "floor",
+  "sold": false,
+  "size_cm": [
+   157,
+   66,
+   80
+  ],
+  "lift_cm": 0,
+  "model": "/images/products/decor_classic_sofa.glb",
+  "image": "/images/products/decor_classic_sofa.jpg",
+  "source": "Poly Haven CC0 (Sofa_01)"
+ },
+ {
+  "id": "decor_lounge_chair",
+  "name": "Lounge chair",
+  "category": "chair",
+  "mount": "floor",
+  "sold": false,
+  "size_cm": [
+   101,
+   119,
+   117
+  ],
+  "lift_cm": 0,
+  "model": "/images/products/decor_lounge_chair.glb",
+  "image": "/images/products/decor_lounge_chair.jpg",
+  "source": "Poly Haven CC0 (mid_century_lounge_chair)"
+ },
+ {
+  "id": "decor_armchair",
+  "name": "Wood and leather armchair",
+  "category": "chair",
+  "mount": "floor",
+  "sold": false,
+  "size_cm": [
+   82,
+   99,
+   102
+  ],
+  "lift_cm": 0,
+  "model": "/images/products/decor_armchair.glb",
+  "image": "/images/products/decor_armchair.jpg",
+  "source": "Poly Haven CC0 (modern_arm_chair_01)"
+ },
+ {
+  "id": "decor_classic_armchair",
+  "name": "Classic armchair",
+  "category": "chair",
+  "mount": "floor",
+  "sold": false,
+  "size_cm": [
+   85,
+   77,
+   107
+  ],
+  "lift_cm": 0,
+  "model": "/images/products/decor_classic_armchair.glb",
+  "image": "/images/products/decor_classic_armchair.jpg",
+  "source": "Poly Haven CC0 (ArmChair_01)"
+ },
+ {
+  "id": "decor_ottoman",
+  "name": "Leather ottoman",
+  "category": "chair",
+  "mount": "floor",
+  "sold": false,
+  "size_cm": [
+   88,
+   62,
+   62
+  ],
+  "lift_cm": 0,
+  "model": "/images/products/decor_ottoman.glb",
+  "image": "/images/products/decor_ottoman.jpg",
+  "source": "Poly Haven CC0 (Ottoman_01)"
+ },
+ {
+  "id": "decor_coffee_table",
+  "name": "Round coffee table",
+  "category": "table",
+  "mount": "floor",
+  "sold": false,
+  "size_cm": [
+   130,
+   130,
+   49
+  ],
+  "lift_cm": 0,
+  "model": "/images/products/decor_coffee_table.glb",
+  "image": "/images/products/decor_coffee_table.jpg",
+  "source": "Poly Haven CC0 (coffee_table_round_01)"
+ },
+ {
+  "id": "decor_coffee_table_2",
+  "name": "Concrete coffee table",
+  "category": "table",
+  "mount": "floor",
+  "sold": false,
+  "size_cm": [
+   60,
+   120,
+   39
+  ],
+  "lift_cm": 0,
+  "model": "/images/products/decor_coffee_table_2.glb",
+  "image": "/images/products/decor_coffee_table_2.jpg",
+  "source": "Poly Haven CC0 (modern_coffee_table_01)"
+ },
+ {
+  "id": "decor_side_table",
+  "name": "Oak side table",
+  "category": "table",
+  "mount": "floor",
+  "sold": false,
+  "size_cm": [
+   55,
+   45,
+   55
+  ],
+  "lift_cm": 0,
+  "model": "/images/products/decor_side_table.glb",
+  "image": "/images/products/decor_side_table.jpg",
+  "source": "Poly Haven CC0 (side_table_01)"
+ },
+ {
+  "id": "decor_sideboard",
+  "name": "Slatted sideboard",
+  "category": "storage",
+  "mount": "floor",
+  "sold": false,
+  "size_cm": [
+   244,
+   52,
+   68
+  ],
+  "lift_cm": 0,
+  "model": "/images/products/decor_sideboard.glb",
+  "image": "/images/products/decor_sideboard.jpg",
+  "source": "Poly Haven CC0 (modern_wooden_cabinet)"
+ },
+ {
+  "id": "decor_wall_mirror",
+  "name": "Arched wall mirror",
+  "category": "mirror",
+  "mount": "wall",
+  "sold": false,
+  "size_cm": [
+   49,
+   3,
+   74
+  ],
+  "lift_cm": 123,
+  "model": "/images/products/decor_wall_mirror.glb",
+  "image": "/images/products/decor_wall_mirror.jpg",
+  "source": "Poly Haven CC0 (ornate_mirror_01)"
+ },
+ {
+  "id": "decor_plant",
+  "name": "Plant in clay bowl",
+  "category": "plant",
+  "mount": "floor",
+  "sold": false,
+  "size_cm": [
+   59,
+   63,
+   135
+  ],
+  "lift_cm": 0,
+  "model": "/images/products/decor_plant.glb",
+  "image": "/images/products/decor_plant.jpg",
+  "source": "Poly Haven CC0 (potted_plant_01)"
+ },
+ {
+  "id": "decor_plant_2",
+  "name": "Leafy plant in clay pot",
+  "category": "plant",
+  "mount": "floor",
+  "sold": false,
+  "size_cm": [
+   70,
+   66,
+   84
+  ],
+  "lift_cm": 0,
+  "model": "/images/products/decor_plant_2.glb",
+  "image": "/images/products/decor_plant_2.jpg",
+  "source": "Poly Haven CC0 (potted_plant_02)"
+ },
+ {
+  "id": "decor_plant_3",
+  "name": "Succulent in white pot",
+  "category": "plant",
+  "mount": "floor",
+  "sold": false,
+  "size_cm": [
+   17,
+   18,
+   27
+  ],
+  "lift_cm": 0,
+  "model": "/images/products/decor_plant_3.glb",
+  "image": "/images/products/decor_plant_3.jpg",
+  "source": "Poly Haven CC0 (potted_plant_04)"
+ }
+]

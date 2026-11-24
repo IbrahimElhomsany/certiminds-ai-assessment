@@ -161,7 +161,13 @@ SET_KEYWORDS = {      # bathroom sets (sold per set) and the words customers use
     "SN001": [r"luna", r"\bbasins?\b", r"wash ?basins?", r"\bsinks?\b", r"مغسلة"],
     "SN002": [r"aria", r"shower sets?", r"hand ?shower", r"shower ?heads?", r"rain ?shower", r"shower mixer", r"\bدش\b"],
     "SN003": [r"\bwc\b", r"toilets?", r"water closet", r"مرحاض"],
+    "SN004": [r"vanity", r"vanities", r"basin cabinet", r"sink cabinet"],
+    "SN005": [r"bath ?tubs?", r"freestanding baths?", r"بانيو"],
+    "SN006": [r"bidets?", r"شطاف"],
+    "SN007": [r"(?<!polished )(?<!mirror )\bmirrors?\b(?! finish| polish)", r"مرآة"],
+    "SN008": [r"shower screens?", r"shower glass", r"glass shower panel"],
 }
+BUNDLE = ("SN001", "SN002", "SN003")      # "a complete bathroom": basin, shower and WC
 BUNDLE_WORDS = r"complete bathroom|full bathroom|bathroom bundle|whole bathroom|everything for the bathroom"
 NUMBER_WORDS = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
 
@@ -171,7 +177,7 @@ def find_mentioned_sets(text: str) -> dict[str, int]:
     "complete bathroom" means one of each."""
     t = text.lower()
     if re.search(BUNDLE_WORDS, t):
-        return {sku: 1 for sku in SET_KEYWORDS}
+        return {sku: 1 for sku in BUNDLE}
     found = {}
     for sku, patterns in SET_KEYWORDS.items():
         for pat in patterns:

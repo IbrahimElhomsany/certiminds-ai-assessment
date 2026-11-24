@@ -27,6 +27,9 @@ from backend.tools import compute_quantity
 DAYS = 90
 DEMO_PASSWORD = os.getenv("DEMO_PASSWORD", "NovaDemo2026!")
 SET_IMAGES = {"basin": "/images/BASIN.jpg", "shower": "/images/SHOWER.jpg", "wc": "/images/WC.jpg"}
+# The first three bathroom sets use the demo's shared random numbers; sets added later get their own,
+# so adding a product never changes the rest of the demo data (orders, customers, prices paid).
+FIRST_SETS = ("SN001", "SN002", "SN003")
 
 STAFF = [  # email, name, role, discount limit %, branch
     ("owner@ceramicanova.demo", "Business Owner", "owner", 15, "Doha"),
@@ -98,16 +101,19 @@ def seed_products(db: Session, tenant: Tenant, rng: random.Random) -> dict[str, 
                         "surfaces": p.surfaces, "locations": p.locations, "catalog_stock_m2": p.stock_m2,
                         "commercial": p.commercial, "application": p.application})
     for s in SANITARY.values():
-        products[s.sku] = Product(
-            tenant_id=tenant.id, sku=s.sku, name=s.name, kind="set", category=s.category, unit="set",
-            price=q2(s.price), cost_price=q2(s.price * rng.uniform(0.58, 0.66)), reorder_point=Decimal(8),
-            image=SET_IMAGES.get(s.category), attributes={"finish": s.finish, "includes": s.includes,
-                                                          "catalog_stock_units": s.stock_units})
+        products[s.sku] = set_product(tenant, s, rng if s.sku in FIRST_SETS else random.Random(s.sku))
     for a in ACCESSORIES:
         products[a["sku"]] = accessory_product(tenant, a, random.Random(a["sku"]))   # own rng: the rest of the demo stays the same
     db.add_all(products.values())
     db.flush()
     return products
+
+
+def set_product(tenant: Tenant, s, rng: random.Random) -> Product:
+    return Product(tenant_id=tenant.id, sku=s.sku, name=s.name, kind="set", category=s.category, unit="set",
+                   price=q2(s.price), cost_price=q2(s.price * rng.uniform(0.58, 0.66)), reorder_point=Decimal(8),
+                   image=s.image or SET_IMAGES.get(s.category), attributes={"finish": s.finish, "includes": s.includes,
+                                                                             "catalog_stock_units": s.stock_units})
 
 
 def accessory_product(tenant: Tenant, a: dict, rng: random.Random) -> Product:
@@ -118,18 +124,18 @@ def accessory_product(tenant: Tenant, a: dict, rng: random.Random) -> Product:
 
 
 def ensure_accessories(db: Session) -> int:
-    """Adds grout, adhesive and spacers to companies created before they existed (one batch each). Returns how many."""
+    """Adds products that came later to companies created before them, one stock batch each: grout, adhesive
+    and spacers, and the newer bathroom sets. Returns how many were added."""
     added = 0
     for t in db.scalars(select(Tenant)):
-        have = set(db.scalars(select(Product.sku).where(Product.tenant_id == t.id, Product.kind == "acc")))
-        for a in ACCESSORIES:
-            if a["sku"] in have:
-                continue
-            p = accessory_product(t, a, random.Random(a["sku"]))
+        have = set(db.scalars(select(Product.sku).where(Product.tenant_id == t.id)))
+        new = [(accessory_product(t, a, random.Random(a["sku"])), a["stock"]) for a in ACCESSORIES if a["sku"] not in have]
+        new += [(set_product(t, s, random.Random(s.sku)), s.stock_units) for s in SANITARY.values() if s.sku not in have]
+        for p, stock in new:
             db.add(p)
             db.flush()
-            db.add(Batch(tenant_id=t.id, product_id=p.id, code=f"{a['sku']}-START", shade=None, received_at=local_now(),
-                         received_qty=Decimal(a["stock"]), qty_left=Decimal(a["stock"])))
+            db.add(Batch(tenant_id=t.id, product_id=p.id, code=f"{p.sku}-START", shade=None, received_at=local_now(),
+                         received_qty=Decimal(stock), qty_left=Decimal(stock)))
             added += 1
     db.commit()
     return added

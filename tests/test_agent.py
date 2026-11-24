@@ -204,6 +204,13 @@ def test_shower_wall_tiles_do_not_add_a_shower_set():
     assert find_mentioned_sets("I want a complete bathroom") == {"SN001": 1, "SN002": 1, "SN003": 1}
 
 
+def test_newer_bathroom_products_are_found_but_not_by_tile_words():
+    from backend.recommender import find_mentioned_sets
+    assert find_mentioned_sets("a freestanding bathtub, 2 bidets and a round mirror") == {"SN005": 1, "SN006": 2, "SN007": 1}
+    assert find_mentioned_sets("an oak vanity and a shower screen") == {"SN004": 1, "SN008": 1}
+    assert find_mentioned_sets("polished tiles with a mirror finish for the bathroom floor") == {}
+
+
 def test_bathroom_floor_needs_r11_like_other_wet_areas():
     from backend.recommender import recommend
     from backend.schemas import CustomerRequirements

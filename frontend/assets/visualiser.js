@@ -268,7 +268,7 @@
       }
       scene = { photoTex, lightTex, planes, W, H, closeup: !!room.closeup };
       render();
-      return { width: W, height: H };
+      return { width: W, height: H, scale: sx };
     }
 
     /* The light on one surface only. The canvas stores colour x coverage, so blurring the cut-out photo and

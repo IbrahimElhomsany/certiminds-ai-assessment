@@ -61,7 +61,7 @@ def test_shop_is_the_home_page_and_assistant_moved():
 # ------------------------------------------------------------------ browsing
 def test_products_hide_cost_and_exact_stock():
     body = client.get("/api/shop/products").json()
-    assert body["currency"] == "QAR" and len(body["products"]) == 24          # 12 tiles, 6 bathroom sets, 6 grout/adhesive/spacers
+    assert body["currency"] == "QAR" and len(body["products"]) == 29          # + 5 bathroom products added with "Place products"
     text = str(body)
     assert "cost" not in text and "qty_left" not in text and "stock_m2" not in text
     assert {p["availability"] for p in body["products"]} <= {"In stock", "Low stock", "Out of stock"}
@@ -71,7 +71,7 @@ def test_filters():
     outdoor = client.get("/api/shop/products?location=outdoor").json()["products"]
     assert {p["sku"] for p in outdoor} == {"CN004", "CN009", "CN014"}
     sets = client.get("/api/shop/products?kind=set").json()["products"]
-    assert {p["sku"] for p in sets} == {"SN001", "SN002", "SN003"}
+    assert {p["sku"] for p in sets} == {f"SN00{i}" for i in range(1, 9)}
     walls = client.get("/api/shop/products?kind=tile&surface=wall").json()["products"]
     assert walls and all("wall" in p["surfaces"] for p in walls)
     assert {p["sku"] for p in client.get("/api/shop/products?q=marble").json()["products"]} >= {"CN001"}

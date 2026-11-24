@@ -325,6 +325,35 @@
   .auto .spin { width:13px; height:13px; border-radius:50%; border:2px solid #c9d3ea; border-top-color:#3d6fd8; animation:spin .8s linear infinite; flex:none; }
   .auto.ok .spin, .auto.bad .spin { display:none; }
   @keyframes spin { to { transform:rotate(360deg); } }
+  /* Place products: the 3D products over the photo, and the bar for the one picked */
+  .stage canvas.pcanvas { pointer-events:none; }
+  .stage.onprod { cursor:grab; } .stage.onprod .outline, .stage.onprod .hoverlbl { display:none; }
+  .psel { position:absolute; left:50%; bottom:12px; transform:translateX(-50%); z-index:4; display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:center;
+          background:rgba(255,255,255,.96); border-radius:14px; padding:8px 10px; box-shadow:0 6px 24px rgba(0,0,0,.18); max-width:calc(100% - 24px); width:max-content; }
+  .psel .pinfo { display:flex; flex-direction:column; font-size:12px; line-height:1.3; min-width:0; }
+  .psel .pinfo b { font-size:13px; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; }
+  .psel .pinfo span { color:var(--muted); }
+  .psel .pacts { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; }
+  .psel button { border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:99px; padding:6px 11px; font-size:12.5px; font-weight:500; display:inline-flex; align-items:center; gap:5px; cursor:pointer; }
+  .psel button:hover { border-color:var(--ink); }
+  .psel button .ico { width:16px; height:16px; }
+  .psel button.pri { background:var(--ink); border-color:var(--ink); color:#fff; }
+  .psel button.on { background:var(--cream); border-color:var(--ink); }
+  @media (max-width: 760px) {             /* phones: a small bar, so the room stays visible */
+    .psel { bottom:6px; padding:5px 6px; gap:4px; border-radius:12px; }
+    .psel .pinfo span { display:none; } .psel .pinfo b { font-size:12px; max-width:150px; }
+    .psel button { padding:4px 8px; font-size:11.5px; }
+  }
+  .controls .vmode { width:100%; } .controls .vmode button { flex:1; }
+  .controls.prod .tilectl, .controls:not(.prod) .prodctl { display:none !important; }
+  .pgrid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; margin-top:10px; }
+  .pcard { border:1px solid var(--line); border-radius:12px; background:#fff; padding:6px; text-align:left; cursor:pointer; display:flex; flex-direction:column; gap:3px; font-size:12px; color:var(--text); font-family:inherit; }
+  .pcard:hover { border-color:var(--ink); }
+  .pcard img { width:100%; aspect-ratio:1; object-fit:cover; border-radius:8px; background:#f4f3f1; }
+  .pcard b { font-size:12.5px; color:var(--ink); line-height:1.25; }
+  .pcard .pm { color:var(--muted); }
+  .pcard .pp { font-weight:600; color:var(--ink); }
+  .pcard.busy { opacity:.55; pointer-events:none; }
   .stage .outline { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
   .stage .outline path { fill:rgba(61,111,216,.10); stroke:#3d6fd8; stroke-width:2.5; vector-effect:non-scaling-stroke; stroke-linejoin:round; }
   .hoverlbl { position:absolute; pointer-events:none; background:var(--ink); color:#fff; font-size:12px; font-weight:500; padding:4px 10px; border-radius:99px; transform:translate(-50%, -150%); white-space:nowrap; }
@@ -560,6 +589,7 @@
       <div class="stagebox" id="stagebox">
         <div class="stage" id="stage">
           <canvas id="vcanvas" aria-label="Room with your tiles"></canvas>
+          <canvas id="pcanvas" class="pcanvas" aria-hidden="true" hidden></canvas>
           <canvas id="wcanvas" class="walk" aria-label="3D room with your tiles: drag to look around" hidden></canvas>
           <span class="walkhint" id="walkhint" hidden></span>
           <div class="spots" id="vspots" hidden></div>
@@ -570,6 +600,17 @@
           <span class="label" id="lblL" hidden>Before</span><span class="label r" id="lblR" hidden>With your tiles</span>
           <span class="hoverlbl" id="vhl" hidden></span>
           <div class="loading" id="vload" hidden>Loading the room…</div>
+          <div class="psel" id="psel" hidden>
+            <div class="pinfo"><b id="pselName"></b><span id="pselSize"></span></div>
+            <div class="pacts">
+              <button type="button" data-pa="left" id="pselL" title="Turn left" aria-label="Turn left"><svg class="ico" viewBox="0 0 24 24"><path d="M4 11a8 8 0 112.3 5.7M4 4v7h7"/></svg></button>
+              <button type="button" data-pa="right" id="pselR" title="Turn right" aria-label="Turn right"><svg class="ico" viewBox="0 0 24 24"><path d="M20 11a8 8 0 10-2.3 5.7M20 4v7h-7"/></svg></button>
+              <button type="button" data-pa="wall" id="pselW" title="Put it on the wall, or take it off to stand it anywhere">On the wall</button>
+              <button type="button" data-pa="dup" title="Add another one">Copy</button>
+              <button type="button" data-pa="del" title="Take it out of the room">Remove</button>
+              <button type="button" data-pa="add" id="pselAdd" class="pri">Add to project</button>
+            </div>
+          </div>
           <div class="fail" id="vfail" hidden>This browser can't draw the visualiser (WebGL 2 is off). You can still choose tiles here and plan your project.</div>
         </div>
       </div>
@@ -578,17 +619,26 @@
       <div class="visnote" id="visnote"></div>
     </section>
 
-    <aside class="panel controls">
-      <div>
+    <aside class="panel controls" id="vcontrols">
+      <div class="seg vmode" id="vmode"><button type="button" data-m="tiles" class="on">Tiles</button><button type="button" data-m="products">Products</button></div>
+      <div class="prodctl" id="vprodBox">
+        <h4>Place products</h4>
+        <div class="seg" id="vpcat"><button type="button" data-c="bath" class="on">Bathroom</button><button type="button" data-c="living">Furniture</button><button type="button" data-c="plant">Plants</button></div>
+        <div class="pgrid" id="vpgrid"></div>
+        <div class="hint" id="vphint">Tap a product to put it in the room at its real size, then drag it where you want it. Wall products go on the wall.</div>
+        <div class="hint" id="vpnote">Furniture and plants are free 3D models from Poly Haven, shown only to style the room; we don't sell them.</div>
+        <button class="linkbtn" type="button" id="vpclear" hidden>Take all products out</button>
+      </div>
+      <div class="tilectl">
         <h4>Tiling the</h4>
         <div class="seg" id="vsurf"><button type="button" data-s="floor">Floor</button><button type="button" data-s="wall">Wall</button></div>
         <div class="hint" style="margin-top:5px">Or click the floor or a wall in the picture.</div>
       </div>
-      <div>
+      <div class="tilectl">
         <h4 id="swTitle">Floor tiles</h4>
         <div class="swgrid" id="vsw"></div>
       </div>
-      <div id="vlayoutBox">
+      <div class="tilectl" id="vlayoutBox">
         <h4>Layout</h4>
         <div class="ctl2">
           <div class="seg" id="vlayout"><button type="button" data-l="0">Straight</button><button type="button" data-l="1">Half offset</button><button type="button" data-l="2">Third offset</button></div>
@@ -596,7 +646,7 @@
         </div>
         <div class="hint" id="vpatchNote" hidden>This tile comes as a mesh sheet, so it is shown laid as supplied.</div>
       </div>
-      <div id="vposBox" hidden>
+      <div class="tilectl" id="vposBox" hidden>
         <h4>Position</h4>
         <label class="rng"><span>Angle <b id="vangV">0°</b></span><input type="range" id="vang" min="0" max="90" step="1" value="0"></label>
         <label class="rng"><span>Move sideways</span><input type="range" id="vsx" min="0" max="1" step="0.01" value="0"></label>
@@ -605,7 +655,7 @@
         <div class="hint" id="vscaleHint" hidden>If the tiles look too big or too small for your room, slide this until a tile matches something you know (a door is about 2 m high).</div>
         <button class="linkbtn" type="button" id="vposReset">Reset position</button>
       </div>
-      <div id="vfixBox" hidden>
+      <div class="tilectl" id="vfixBox" hidden>
         <h4>Fix the area</h4>
         <div class="ctl2">
           <div class="seg" id="vtool"><button type="button" data-vtool="erase">Erase tiles</button><button type="button" data-vtool="add">Add tiles</button></div>
@@ -615,14 +665,14 @@
         <div class="ctl2" style="margin-top:6px"><button class="tglbtn" type="button" id="vfixDone" hidden>Done</button><button class="linkbtn" type="button" id="vfixClear">Clear my fixes</button></div>
         <label class="chk" id="vtrainRow" hidden style="margin-top:8px"><input type="checkbox" id="vtrain"> Keep my photo and fixes to help improve the room AI</label>
       </div>
-      <div>
+      <div class="tilectl">
         <h4>Grout</h4>
         <div class="ctl2">
           <div class="dots" id="vgc"></div>
           <div class="seg" id="vgw"><button type="button" data-w="0.2">2 mm</button><button type="button" data-w="0.3">3 mm</button><button type="button" data-w="0.5">5 mm</button></div>
         </div>
       </div>
-      <div class="vbtns">
+      <div class="vbtns tilectl">
         <button class="btn" type="button" id="vuse">Use these tiles <svg class="ico" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
         <a class="btn ghost" href="#/chat">Ask Nova which tile suits this room</a>
       </div>

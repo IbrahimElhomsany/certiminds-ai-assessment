@@ -2,7 +2,8 @@
 import json, os, sys, urllib.request
 OUT = "assets"
 import subprocess
-def get(url): return subprocess.run(["curl", "-sfL", "-m", "300", url], check=True, capture_output=True).stdout
+# Poly Haven asks API users for a unique User-Agent; no personal details in it.
+def get(url): return subprocess.run(["curl", "-sfL", "-m", "300", "-A", "NovaStudioShop/1.0", url], check=True, capture_output=True).stdout
 for name in sys.argv[1:]:
     if name.startswith("hdri:"):
         h = name[5:]; f = json.loads(get(f"https://api.polyhaven.com/files/{h}"))

@@ -111,7 +111,7 @@ def test_catalog_prices_are_converted_once_to_qar():
 def test_bathroom_products_load_and_unknown_sku_is_refused():
     import pytest
     from backend.catalog import SANITARY, UnknownSKUError, get_sanitary
-    assert {p.category for p in SANITARY.values()} == {"basin", "shower", "wc"}
+    assert {p.category for p in SANITARY.values()} == {"basin", "shower", "wc", "vanity", "bath", "bidet", "mirror", "screen"}
     assert get_sanitary("sn001").price == 1250 and get_sanitary("SN001").unit == "set"
     with pytest.raises(UnknownSKUError):
         get_sanitary("SN999")

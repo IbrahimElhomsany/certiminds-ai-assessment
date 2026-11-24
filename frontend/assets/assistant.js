@@ -40,7 +40,7 @@ const STORE = "nova_assistant_v2";
 const fresh = () => ({
   sessionId: null, log: [], recs: [], selected: null, req: {}, quote: null, quoteSig: null, offers: null,
   vis: { room: "living", picked: false, surface: "floor", floor: null, wall: null, grout: 0.3, groutColor: "#d9d6cf",
-         opt: { floor: { layout: 0, rotate: false }, wall: { layout: 0, rotate: false } }, edits: {} },
+         opt: { floor: { layout: 0, rotate: false }, wall: { layout: 0, rotate: false } }, edits: {}, items: {}, mode: "tiles" },
   proj: { floor: { sku: null, area: null, layout: "simple" }, wall: { sku: null, area: null, layout: "simple" }, sets: {} },
 });
 let S = fresh();
@@ -284,6 +284,7 @@ async function showVisual() {
   renderVisControls(); sizeStage();
   const three = is3d(room);
   $("vcanvas").hidden = three; $("wcanvas").hidden = !three; $("walkhint").hidden = !three;
+  $("pcanvas").hidden = three || !PL; if (three && PL) PL.select();
   $("vcmp").hidden = three; if (three && cmp) setCompare(false);
   const back360 = room.kind === "splat" && ROOMS.find(r => r.kind === "pano" && r.from === room.from);
   $("vspots").hidden = !room.spots && !back360;
@@ -328,10 +329,11 @@ async function loadRoom(room) {
       if (f) { room.mask = f.mask; room.floorMean = f.mean; room.wallMean = f.wallMean; room.rect = f.rect; }
     }
     // photo rooms carry the customer's "Fix the area" strokes (erased everywhere, added per surface)
-    await viewer().setRoom(is3d(room) ? room : { ...room, edits: (S.vis.edits || {})[roomKey(room)] || null });
+    const size = await viewer().setRoom(is3d(room) ? room : { ...room, edits: (S.vis.edits || {})[roomKey(room)] || null });
     if (token !== roomToken) return;
     loadedKey = roomKey(room);
     await applyTiles();
+    if (!is3d(room)) { photoSize = size; await placeRoom(room); }
   } catch (e) { toast(room.id === "own" ? "Your photo could not be loaded. It may have expired: please upload it again." : "Sorry, this room could not be loaded."); }
   finally { if (token === roomToken) { $("vload").hidden = true; $("vload").textContent = "Loading the room…"; } }
 }
@@ -395,6 +397,108 @@ function renderVisControls() {
   document.querySelectorAll("#vgw button").forEach(b => b.classList.toggle("on", +b.dataset.w === S.vis.grout));
   $("vuse").disabled = !(S.vis.floor || S.vis.wall);
   renderPosFix(room, surf, p, patch);
+  renderProd();
+}
+
+// ---------------------------------------------------------------- Place products (placer.js with three.js, loaded when first used)
+// True-size 3D products in the photo rooms: our bathroom products (sold) and free CC0 furniture and plants (decor).
+let PL = null, PRODS = null, PBY = {}, pcat = "bath", photoSize = null;
+const PCATS = { bath: p => p.sold, living: p => !p.sold && p.category !== "plant", plant: p => p.category === "plant" };
+async function products() {
+  if (!PRODS) {
+    try { const d = await (await fetch("/api/v1/placeables")).json(); PRODS = d.products || []; } catch { PRODS = []; }
+    PBY = Object.fromEntries(PRODS.map(p => [p.id, p]));
+  }
+  return PRODS;
+}
+async function placer() {
+  if (!PL) {
+    const mod = await import("/assets/placer.js");
+    PL = mod.create($("pcanvas"), {
+      onSelect: showSel,
+      onChange: list => { S.vis.items = S.vis.items || {}; S.vis.items[roomKey(curRoom())] = list; save(); renderProd(); },
+      blocked: () => cmp || !!vtool || is3d(curRoom()),
+    });
+    PL.attach($("stage"));
+  }
+  return PL;
+}
+// after a photo room is loaded: work out its camera and bring back the products placed in it before
+async function placeRoom(room) {
+  const saved = (S.vis.items || {})[roomKey(room)] || [];
+  if (!PL && !saved.length && S.vis.mode !== "products") return;
+  try { await Promise.all([placer(), products()]); } catch { return; }
+  if (loadedKey !== roomKey(room) || !photoSize) return;
+  const ok = PL.setRoom(room, photoSize, (S.vis.opt.floor || {}).scale || 1);
+  $("pcanvas").hidden = is3d(curRoom());
+  if (ok) await PL.restore(saved, PBY);
+  renderProd();
+}
+function renderProd() {
+  const room = curRoom(), photo = !is3d(room), on = S.vis.mode === "products";
+  $("vcontrols").classList.toggle("prod", on);
+  document.querySelectorAll("#vmode button").forEach(b => b.classList.toggle("on", b.dataset.m === (on ? "products" : "tiles")));
+  if (!on) return;
+  document.querySelectorAll("#vpcat button").forEach(b => b.classList.toggle("on", b.dataset.c === pcat));
+  const can = photo && PL && PL.ready;
+  $("vpgrid").innerHTML = !PRODS ? `<div class="hint">Loading the products…</div>` : PRODS.filter(PCATS[pcat]).map(p => `<button type="button" class="pcard" data-pid="${p.id}"${can ? "" : " disabled"}>
+      <img src="${p.image}" alt="" loading="lazy"><b>${esc(p.name)}</b><span class="pm">${p.size_cm.join(" × ")} cm</span>
+      <span class="${p.sold ? "pp" : "pm"}">${p.sold ? money(p.price) : "Decor, not sold"}</span></button>`).join("");
+  $("vphint").textContent = !photo ? "Products can be placed in the photo rooms and in your own photo. Pick one of those below the picture."
+    : !PL || !loadedKey ? "Loading…"
+    : !can ? "We couldn't work out this photo's floor well enough to place products at their real size. Try another room."
+    : "Tap a product to put it in the room at its real size, then drag it where you want it. Wall products go on the wall.";
+  $("vpnote").textContent = pcat === "bath"
+    ? "Our 3D models of these products, drawn at their real size. Light and shadow are worked out by the computer, so treat it as a guide to size and look, not a photo."
+    : "Free 3D models from Poly Haven (CC0), shown only to style the room. We don't sell them.";
+  $("vpclear").hidden = !(PL && PL.count && photo);
+}
+let selInfo = null;
+function showSel(info) {
+  selInfo = info;
+  const bar = $("psel"); bar.hidden = !info;
+  if (!info) return;
+  const p = info.product, q = S.proj.sets[p.id] || 0;
+  $("pselName").textContent = p.name;
+  $("pselSize").textContent = `${p.size_cm.join(" × ")} cm · ` + (p.sold ? money(p.price) : "decor, not sold");
+  $("pselL").hidden = $("pselR").hidden = info.onWall;
+  $("pselW").hidden = !info.canSnap; $("pselW").textContent = info.onWall ? "Off the wall" : "On the wall";
+  $("pselAdd").hidden = !p.sold; $("pselAdd").textContent = q ? `In your project (${q}) +1` : "Add to project";
+}
+function wireProducts() {
+  $("vmode").addEventListener("click", async e => {
+    const b = e.target.closest("[data-m]"); if (!b) return;
+    S.vis.mode = b.dataset.m; save();
+    if (S.vis.mode !== "products" && PL) PL.select();
+    renderProd();
+    if (S.vis.mode === "products") {
+      await products(); renderProd();
+      if (!is3d(curRoom()) && loadedKey === roomKey(curRoom()) && (!PL || !PL.ready)) await placeRoom(curRoom());
+    }
+  });
+  $("vpcat").addEventListener("click", e => { const b = e.target.closest("[data-c]"); if (b) { pcat = b.dataset.c; renderProd(); } });
+  $("vpgrid").addEventListener("click", async e => {
+    const b = e.target.closest("[data-pid]"); if (!b || !PL || !PL.ready) return;
+    b.classList.add("busy");
+    try {
+      if (!await PL.add(PBY[b.dataset.pid])) toast("There's no free floor in view to put it on.");
+      else if (matchMedia("(max-width: 900px)").matches) $("stage").scrollIntoView({ behavior: "smooth", block: "center" });   // phones: show it
+    }
+    catch (err) { console.error(err); toast("Sorry, this product could not be loaded."); }
+    finally { b.classList.remove("busy"); }
+  });
+  $("vpclear").onclick = () => { if (PL) PL.clear(); };
+  $("psel").addEventListener("click", e => {
+    const b = e.target.closest("[data-pa]"); e.stopPropagation(); if (!b || !PL) return;
+    const a = b.dataset.pa, p = PL.selected;
+    if (a === "left") PL.rotate(15); else if (a === "right") PL.rotate(-15);
+    else if (a === "wall") PL.toggleWall(); else if (a === "dup") PL.duplicate(); else if (a === "del") PL.remove();
+    else if (a === "add" && p) {
+      S.proj.sets[p.id] = (S.proj.sets[p.id] || 0) + 1; save(); renderSteps();
+      toast(`${p.name} is in your project (${S.proj.sets[p.id]}).`); showSel(selInfo);
+    }
+  });
+  ["pointerdown", "pointerup", "touchstart"].forEach(t => $("psel").addEventListener(t, e => e.stopPropagation()));
 }
 // ---- Position sliders and the "Fix the area" brush (photo rooms only)
 const POS0 = { angle: 0, shiftX: 0, shiftY: 0, scale: 1 };
@@ -433,7 +537,7 @@ function wirePosition() {
       if (show) show(o[key]);
       live();
     });
-    $(id).addEventListener("change", () => save());
+    $(id).addEventListener("change", () => { save(); if (key === "scale" && PL) placeRoom(curRoom()); });   // products follow the room size
   };
   bind("vang", "angle", v => { $("vangV").textContent = Math.round(v) + "°"; });
   bind("vsx", "shiftX"); bind("vsy", "shiftY");
@@ -655,7 +759,12 @@ function toggleZoom() {
   else if (w.requestFullscreen && !w.classList.contains("fs")) w.requestFullscreen().catch(() => { w.classList.add("fs"); sizeStage(); });
   else { w.classList.toggle("fs"); sizeStage(); }
 }
-const canvasBlob = () => is3d(curRoom()) ? W3.snapshot() : new Promise(ok => { V.render(); $("vcanvas").toBlob(ok, "image/jpeg", 0.9); });
+const canvasBlob = () => is3d(curRoom()) ? W3.snapshot() : new Promise(ok => {
+  V.render();
+  if (!PL || !PL.count) { $("vcanvas").toBlob(ok, "image/jpeg", 0.9); return; }
+  const v = $("vcanvas"), c = Object.assign(document.createElement("canvas"), { width: v.width, height: v.height }), x = c.getContext("2d");
+  x.drawImage(v, 0, 0); PL.drawOver(x); c.toBlob(ok, "image/jpeg", 0.9);         // the tiled photo with the placed products
+});
 function tilesText() {
   const room = curRoom();
   return ["floor", "wall"].filter(s => room.surfaces[s] && fits(S.vis[s], s) && tileOkInRoom(S.vis[s], room))
@@ -718,7 +827,7 @@ async function photoReal() {
   st.classList.remove("done"); st.classList.add("busy"); $("aiModal").classList.add("open");
   let shot = null;                                  // what is on screen now (in 360° / 3D rooms this is what the AI re-draws)
   try { shot = await canvasBlob(); if (shot) { if ($("aiBefore").src.startsWith("blob:")) URL.revokeObjectURL($("aiBefore").src); $("aiBefore").src = URL.createObjectURL(shot); } } catch {}
-  const view = is3d(room);
+  const view = is3d(room) || !!(PL && PL.count);       // with placed products the AI gets the picture with them in it
   $("aiLabL").textContent = view ? "This view" : "Visualiser";
   if (view && !shot) { err.textContent = "This view could not be captured. Please try again."; err.hidden = false; st.classList.remove("busy"); AI.busy = false; return; }
   const t0 = Date.now(), tick = setInterval(() => $("aiSecs").textContent = Math.round((Date.now() - t0) / 1000), 500);
@@ -1284,7 +1393,7 @@ $("cbForm").onsubmit = async e => {
     $("cbName").disabled = $("cbPhone").disabled = true;
   } catch (ex) { msg.textContent = ex.message; $("cbSend").disabled = false; }
 };
-wireCompare(); wirePicking(); wireMark(); wirePosition(); wireBrush();
+wireCompare(); wirePicking(); wireMark(); wirePosition(); wireBrush(); wireProducts();
 window.addEventListener("hashchange", route);
 window.addEventListener("storage", e => { if (e.key === "nova_cart_v1") renderSteps(); });
 

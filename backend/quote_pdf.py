@@ -8,6 +8,9 @@ from datetime import date
 from fpdf import FPDF
 
 from backend.catalog import SANITARY, get_product
+
+SET_LABELS = {"basin": "Basin set", "shower": "Shower set", "wc": "WC set", "vanity": "Vanity set", "bath": "Bath",
+              "bidet": "Bidet set", "mirror": "Mirror", "screen": "Shower screen"}
 from backend.tools import Quote
 
 INK = (17, 17, 17)
@@ -92,7 +95,7 @@ def build_quote_pdf(q: Quote, issued: date | None = None) -> bytes:
         if line.unit == "set":                          # bathroom set: priced per set
             s = SANITARY.get(line.sku)
             spec = s.finish if s else ""
-            sub = f"{s.category.upper() if s.category == 'wc' else s.category.capitalize()} set" if s else ""
+            sub = SET_LABELS.get(s.category, "Bathroom set") if s else ""
             area, qty, unit_price = "-", f"{line.quantity_units} set{'s' if line.quantity_units > 1 else ''}", f"{line.unit_price:,.2f}/set"
         else:
             try:

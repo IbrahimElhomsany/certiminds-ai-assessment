@@ -75,14 +75,16 @@ def get_product(sku: str, catalog: Optional[dict[str, Product]] = None) -> Produ
 
 # ------------------------------------------------------------------ bathroom products (sold per set)
 # Added for the Qatar showroom demo; not part of the original assessment catalog. They are priced
-# directly in QAR and counted in whole units, not square meters.
+# directly in QAR and counted in whole units, not square meters. SN004 to SN008 (vanity, bath, bidet, mirror,
+# shower screen) were added with "Place products"; their pictures are rendered from our own 3D models
+# (tools/products/build_products.py).
 SANITARY_PATH = CATALOG_PATH.parent / "sanitary.json"
 
 
 class SanitaryProduct(BaseModel):
     sku: str
     name: str
-    category: Literal["basin", "shower", "wc"]
+    category: Literal["basin", "shower", "wc", "vanity", "bath", "bidet", "mirror", "screen"]
     description: str
     includes: list[str]
     finish: str
@@ -92,6 +94,7 @@ class SanitaryProduct(BaseModel):
     currency: Literal["QAR"]
     unit: Literal["set"]
     stock_units: int = Field(ge=0)
+    image: Optional[str] = None           # own product picture; without one the shop uses its photo per category
 
 
 def load_sanitary(path: Path = SANITARY_PATH) -> dict[str, SanitaryProduct]:

@@ -1,6 +1,7 @@
 """FastAPI application. Run with:  uvicorn backend.main:app --reload
 Interactive API docs (API documentation deliverable): http://127.0.0.1:8000/docs
 """
+import json
 import os
 import time
 
@@ -58,7 +59,7 @@ def build_providers():
 
 app = FastAPI(title="Ceramica Nova AI Sales API + Nova Studio admin", version="1.1")
 init_db()                      # creates missing tables; demo data comes from `python -m backend.db.seed`
-try:                           # grout, adhesive and spacers for companies seeded before they existed
+try:                           # grout, adhesive, spacers and newer bathroom sets for companies seeded before them
     from backend.db.database import SessionLocal as _S
     from backend.db.seed import ensure_accessories as _ea
     with _S() as _db:
@@ -162,9 +163,31 @@ def catalog():
     names = {"basin": "BASIN", "shower": "SHOWER", "wc": "WC"}
     sets = [{"sku": s.sku, "name": s.name, "kind": "set", "category": s.category, "finish": s.finish,
              "includes": s.includes, "price": s.price, "unit": "set", "currency": s.currency,
-             "image": photo(names[s.category])} for s in SANITARY.values()]
+             "image": s.image or photo(names.get(s.category, ""))} for s in SANITARY.values()]
     return {"currency": "QAR", "products": tiles + sets,
             "rooms": {"bathroom": photo("room_bathroom"), "kitchen": photo("room_kitchen")}}
+
+
+PLACEABLES_PATH = ROOT / "data" / "placeables.json"
+
+
+@app.get("/api/v1/placeables")
+def placeables():
+    """Products a customer can place in a room picture (the visualiser's "Place products"): true-size 3D models
+    made by tools/products/build_products.py. Our bathroom sets carry their shop price; furniture and plants
+    are free CC0 models from Poly Haven, shown only to style the room ("decor", not for sale)."""
+    try:
+        rows = json.loads(PLACEABLES_PATH.read_text())
+    except (OSError, ValueError):
+        return {"currency": "QAR", "products": []}
+    out = []
+    for r in rows:
+        s = SANITARY.get(r["id"])
+        if r.get("sold") and not s:            # a sold product must be in the catalogue
+            continue
+        out.append({**r, "name": s.name if s else r["name"], "price": s.price if s else None,
+                    "finish": s.finish if s else None})
+    return {"currency": "QAR", "products": out}
 
 
 @app.post("/api/v1/chat")

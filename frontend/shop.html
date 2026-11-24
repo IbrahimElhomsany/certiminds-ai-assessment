@@ -70,7 +70,85 @@
   .hero .cta .btn:hover { transform:scale(1.06); box-shadow:0 6px 18px rgba(0,0,0,.12); }
   @media (prefers-reduced-motion: reduce) { .hero .cta .btn, .hero .cta .btn:hover { transition:none; transform:none; } }
   .hero img { width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:18px; }
-  /* the 3D showroom on the home page (assets/showroom.js) */
+  /* home page top: a film (or a slow camera move across the scenes until the owner uploads one) */
+  .film { position:relative; width:100vw; margin:0 calc(50% - 50vw); height:calc(100svh - 140px); min-height:520px; overflow:hidden; background:#1b1814; color:#fff; }
+  .film video, .film .slide { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .film .slide { opacity:0; transition:opacity 1.6s ease; transform-origin:var(--ox, 50%) var(--oy, 60%); }
+  .film .slide.on { opacity:1; animation:drift 9s ease-out forwards; }
+  @keyframes drift { from { transform:scale(1.02) translate(0, 0); } to { transform:scale(1.13) translate(var(--dx, -1.5%), var(--dy, -1%)); } }
+  .film::after { content:""; position:absolute; inset:0; pointer-events:none;
+    background:linear-gradient(90deg, rgba(16,13,10,.72) 0%, rgba(16,13,10,.38) 38%, rgba(16,13,10,0) 65%), linear-gradient(0deg, rgba(16,13,10,.45), rgba(16,13,10,0) 30%); }
+  .film .words { position:absolute; z-index:2; left:max(34px, calc(50vw - 596px)); bottom:clamp(40px, 12vh, 120px); max-width:560px; }
+  .film .kicker { font-size:11px; letter-spacing:.32em; font-weight:600; color:#e9d9c2; margin-bottom:14px; }
+  .film h1 { color:#fff; font-size:clamp(34px, 4.4vw, 56px); line-height:1.05; margin:0 0 16px; letter-spacing:-.015em; font-weight:600; }
+  .film p { color:rgba(255,255,255,.86); font-size:16px; margin:0 0 24px; max-width:460px; }
+  .film .cta { display:flex; gap:10px; flex-wrap:wrap; }
+  .film .btn { border-color:#fff; background:#fff; color:var(--ink); }
+  .film .btn.blue { border-color:var(--accent); background:var(--accent); color:#fff; }
+  .film .btn.line { background:rgba(255,255,255,.08); color:#fff; border-color:rgba(255,255,255,.7); backdrop-filter:blur(6px); }
+  .film .btn .ico { stroke:currentColor; } .film .ts { display:none; }
+  .film .caption { position:absolute; z-index:2; right:24px; top:22px; font-size:12px; color:rgba(255,255,255,.8); text-align:right; }
+  .film .caption b { color:#fff; font-weight:600; }
+  .film .down { position:absolute; z-index:2; left:50%; bottom:16px; transform:translateX(-50%); color:#fff; opacity:.8; border:0; background:none; cursor:pointer; font-size:12px; letter-spacing:.2em; }
+  @media (prefers-reduced-motion: reduce) { .film .slide.on { animation:none; } }
+  /* shop the look: room pictures with a dot on each tile */
+  .look { margin:46px 0 34px; }
+  .look .head { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:14px; }
+  .look .head h2 { margin:0; font-size:28px; } .look .head p { margin:4px 0 0; color:var(--muted); }
+  .look .arrows { display:flex; gap:8px; } .look .arrows button { width:44px; height:44px; border-radius:50%; border:1px solid var(--line); background:#fff; font-size:20px; cursor:pointer; }
+  .look .arrows button:hover { border-color:var(--ink); }
+  .look .scene { position:relative; border-radius:18px; overflow:hidden; aspect-ratio:16 / 9; max-height:78vh; width:100%; background:#eee; touch-action:pan-y; user-select:none; }
+  .look .scene > img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transition:opacity .45s ease; }
+  .look .dot { position:absolute; width:30px; height:30px; margin:-15px 0 0 -15px; border-radius:50%; border:0; padding:0; cursor:pointer;
+    background:rgba(255,255,255,.95); box-shadow:0 2px 10px rgba(0,0,0,.35); display:grid; place-items:center; }
+  .look .dot::before { content:""; width:10px; height:10px; border-radius:50%; background:var(--ink); }
+  .look .dot::after { content:""; position:absolute; inset:-7px; border-radius:50%; border:2px solid rgba(255,255,255,.85); animation:ring 2.2s ease-out infinite; }
+  .look .dot.on::before { background:var(--accent); }
+  @keyframes ring { from { transform:scale(.7); opacity:1; } to { transform:scale(1.5); opacity:0; } }
+  @media (prefers-reduced-motion: reduce) { .look .dot::after { animation:none; } }
+  .look .dot .lbl { position:absolute; left:38px; top:50%; transform:translateY(-50%); white-space:nowrap; background:rgba(17,17,17,.82); color:#fff; font-size:12px;
+    padding:4px 9px; border-radius:6px; pointer-events:none; }
+  .look .pcard { position:absolute; right:16px; bottom:16px; width:300px; background:#fff; border-radius:16px; box-shadow:0 12px 34px rgba(0,0,0,.22);
+    padding:14px; display:grid; grid-template-columns:84px 1fr; gap:12px; z-index:3; }
+  .look .pcard img { width:84px; height:84px; object-fit:cover; border-radius:10px; background:var(--soft); }
+  .look .pcard b { display:block; color:var(--ink); font-size:15px; } .look .pcard .price { font-weight:600; color:var(--ink); margin:4px 0; }
+  .look .pcard .acts { grid-column:1 / -1; display:flex; gap:8px; } .look .pcard .acts .btn { flex:1; padding:9px 10px; font-size:13px; }
+  .look .pcard .x { position:absolute; right:8px; top:6px; border:0; background:none; font-size:18px; cursor:pointer; color:var(--muted); }
+  .look .tag.made { position:absolute; left:14px; bottom:14px; background:rgba(17,17,17,.7); color:#fff; font-size:11.5px; }
+  .look .inroom { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:12px 0 0; font-size:14px; color:var(--muted); }
+  .look .inroom a { border:1px solid var(--line); border-radius:999px; padding:5px 12px; color:var(--ink); text-decoration:none; font-size:13px; }
+  .look .inroom a:hover { border-color:var(--ink); }
+  .look .thumbs { display:flex; gap:10px; margin-top:14px; overflow-x:auto; padding-bottom:4px; scrollbar-width:thin; }
+  .look .thumbs button { flex:none; width:150px; border:1px solid var(--line); border-radius:12px; background:#fff; padding:0 0 6px; overflow:hidden; cursor:pointer; font:inherit; text-align:left; }
+  .look .thumbs button img { width:100%; aspect-ratio:16/9; object-fit:cover; display:block; }
+  .look .thumbs button span { display:block; padding:6px 8px 0; font-size:12.5px; color:var(--ink); }
+  .look .thumbs button.on { border-color:var(--ink); box-shadow:0 0 0 1px var(--ink); }
+  /* the virtual tour (the 360° showroom) opens over the page */
+  .tour { position:fixed; inset:0; z-index:80; background:#111; }
+  .tour .showroom { margin:0; width:100%; height:100%; min-height:0; }
+  .tour .showroom .back { top:64px; }
+  .tour .close { position:absolute; z-index:5; left:16px; top:16px; border:0; border-radius:999px; background:rgba(255,255,255,.95);
+    padding:9px 16px; font:inherit; font-size:13px; font-weight:600; cursor:pointer; box-shadow:0 2px 10px rgba(0,0,0,.25); }
+  @media (max-width: 760px) {
+    .film { height:calc(100svh - 170px); min-height:460px; }
+    .film::after { background:linear-gradient(0deg, rgba(16,13,10,.82) 0%, rgba(16,13,10,.45) 45%, rgba(16,13,10,.05) 75%); }
+    .film .words { left:16px; right:16px; bottom:22px; }
+    .film .kicker { font-size:10px; letter-spacing:.24em; margin-bottom:10px; }
+    .film h1 { font-size:30px; margin-bottom:10px; }
+    .film p { font-size:14px; margin-bottom:16px; }
+    .film .cta { display:grid; grid-template-columns:1fr 1fr; gap:8px; } .film .cta .btn { justify-content:center; white-space:nowrap; font-size:13px; }
+    .film .cta .btn.blue { grid-column:1 / -1; order:-1; font-size:14px; }
+    .film .tl { display:none; } .film .ts { display:inline; } .film .cta { margin-right:56px; }
+    .film .caption, .film .down { display:none; }
+    .film .btn { padding:10px 12px; font-size:14px; }
+    .look .arrows { display:none; } .look .head h2 { font-size:23px; }
+    .look .scene { aspect-ratio:4 / 3; border-radius:14px; }
+    .look .dot .lbl { display:none; }
+    .look .pcard { left:10px; right:10px; bottom:10px; width:auto; }
+    .tour .showroom .stage { height:100svh; }
+    .tour .showroom .intro { display:none; }
+  }
+  /* the 3D showroom (assets/showroom.js), now opened as the virtual tour */
   .showroom { position:relative; width:100vw; margin:0 calc(50% - 50vw) 30px; height:calc(100svh - 140px); min-height:520px; overflow:hidden; background:#e9e5de; }
   body { overflow-x:clip; }
   .showroom .stage { position:absolute; inset:0; }
@@ -429,19 +507,21 @@ async function home() {
   const best = products.filter(p => p.best_seller_rank).slice(0, 8);
   const img = sku => esc((products.find(p => p.sku === sku) || {}).image || IMG_BLANK);
   app.innerHTML = `
-  <section class="showroom" id="showroom">
-    <div class="intro">
-      <div class="kicker">THE CERAMICA NOVA SHOWROOM</div>
-      <h1>Walk into our showroom</h1>
-      <p>Look around, tap any + to see the tile, its price and stock. Then use our room visualiser to see it in a photo of your own room.</p>
-      <div class="cta"><a class="btn" href="#/shop?kind=tile">Shop tiles ${ICON.arrow}</a><a class="btn ghost" href="/assistant#/rooms"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><circle cx="12" cy="12.5" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/></svg> Room visualiser</a></div>
+  <section class="film" id="film" aria-label="Ceramica Nova rooms">
+    <div class="words">
+      <div class="kicker">CERAMICA NOVA · TILES FOR QATAR HOMES</div>
+      <h1>Floors and walls you'll love coming home to</h1>
+      <p>Porcelain, marble-look and outdoor tiles, delivered across Qatar. See them in your own room before you buy.</p>
+      <div class="cta">
+        <a class="btn" href="#/shop?kind=tile">Shop tiles ${ICON.arrow}</a>
+        <a class="btn blue" href="/assistant#/rooms"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><circle cx="12" cy="12.5" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/></svg> See our tiles in your room</a>
+        <button class="btn line" type="button" id="tourBtn"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg> <span class="tl">Virtual showroom tour</span><span class="ts">360° tour</span></button>
+      </div>
     </div>
-    <div class="stage" id="srStage">
-      <div class="hint" id="srHint">Welcome to Ceramica Nova</div>
-      <button class="skip" type="button" id="srSkip">Skip ›</button>
-      <a class="viz" href="/assistant#/rooms"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><circle cx="12" cy="12.5" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/></svg>See our tiles in your room</a>
-    </div>
+    <div class="caption" id="filmCap"></div>
+    <button class="down" type="button" id="filmDown" aria-label="Shop the look">SHOP THE LOOK ↓</button>
   </section>
+  <section class="look" id="look" aria-label="Shop the look"></section>
   <section class="usp">
     <div>${ICON.ruler}<span><b>Exact quantities</b><small>Full boxes with spare for cuts, worked out for your area.</small></span></div>
     <div>${ICON.layers}<span><b>One batch per job</b><small>We check one production batch covers your order, so the shade matches.</small></span></div>
@@ -468,6 +548,123 @@ async function home() {
       <li>${ICON.check} Builds a PDF quotation in QAR</li>
     </ul>
   </section>`;
+  homeFilm(products);
+}
+
+/* The top of the home page: the owner's film, or a slow camera move across the scenes until there is one.
+   Then "shop the look": the scenes with a dot on each tile (backend/homepage.py, Admin > Settings > Home page). */
+let HOME = null, filmTimer = null;
+async function homeFilm(products) {
+  clearInterval(filmTimer);
+  try { HOME = await fetch("/api/shop/home").then(r => r.json()); } catch { HOME = { film: null, scenes: [] }; }
+  const film = $("#film"); if (!film) return;
+  const scenes = HOME.scenes || [], still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const cap = $("#filmCap");
+  const say = sc => { cap.innerHTML = sc ? `<b>${esc(sc.title)}</b>${sc.spots.length ? "<br>" + sc.spots.map(p => esc(p.name) + " " + p.surface).join(" · ") : ""}` : ""; };
+  if (HOME.film) {
+    const v = Object.assign(document.createElement("video"), { src: HOME.film, muted: true, loop: true, playsInline: true, autoplay: !still, preload: "auto" });
+    v.setAttribute("muted", ""); v.setAttribute("playsinline", ""); v.setAttribute("aria-hidden", "true");
+    if (scenes[0]) v.poster = scenes[0].image;
+    film.prepend(v); say(null);
+  } else if (scenes.length) {
+    const show = scenes.slice(0, 4), moves = [["-2%", "-1%", "60%", "70%"], ["2%", "-1.5%", "40%", "60%"], ["-1%", "1%", "50%", "40%"], ["1.5%", "-1%", "55%", "65%"]];
+    show.forEach((sc, i) => {
+      const im = Object.assign(document.createElement("img"), { className: "slide" + (i === 0 ? " on" : ""), src: sc.image, alt: "", decoding: "async" });
+      const [dx, dy, ox, oy] = moves[i % moves.length];
+      im.style.cssText = `--dx:${dx};--dy:${dy};--ox:${ox};--oy:${oy}`;
+      film.prepend(im);
+    });
+    let at = 0; say(show[0]);
+    const slides = [...film.querySelectorAll(".slide")].reverse();
+    if (!still && slides.length > 1) filmTimer = setInterval(() => {
+      if (!document.body.contains(film)) return clearInterval(filmTimer);
+      if (document.hidden) return;
+      slides[at].classList.remove("on"); at = (at + 1) % slides.length;
+      void slides[at].offsetWidth; slides[at].classList.add("on"); say(show[at]);
+    }, 7000);
+  }
+  $("#filmDown").onclick = () => $("#look").scrollIntoView({ behavior: "smooth" });
+  $("#tourBtn").onclick = () => openTour(products);
+  shopTheLook(products);
+}
+
+function shopTheLook(products) {
+  const box = $("#look"), scenes = (HOME && HOME.scenes) || [];
+  if (!box || !scenes.length) { if (box) box.remove(); return; }
+  const by = Object.fromEntries(products.map(p => [p.sku, p]));
+  let at = 0;
+  box.innerHTML = `<div class="head"><div><h2>Shop the look</h2><p>Tap a dot to see the tile, its price and stock.</p></div>
+      <div class="arrows"><button type="button" aria-label="Previous room" data-go="-1">‹</button><button type="button" aria-label="Next room" data-go="1">›</button></div></div>
+    <div class="scene" id="lkScene"><img id="lkImg" alt=""></div>
+    <div class="inroom" id="lkIn"></div>
+    <div class="thumbs" id="lkThumbs">${scenes.map((sc, i) => `<button type="button" data-i="${i}"><img src="${esc(sc.image)}" alt="" loading="lazy"><span>${esc(sc.title)}</span></button>`).join("")}</div>`;
+  const scene = $("#lkScene");
+  const card = (p, dot) => {
+    scene.querySelector(".pcard")?.remove(); scene.querySelectorAll(".dot").forEach(d => d.classList.toggle("on", d === dot));
+    if (!p) return;
+    const el = document.createElement("div"); el.className = "pcard"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", p.name);
+    el.innerHTML = `<button class="x" type="button" aria-label="Close">×</button><img src="${esc(p.image || IMG_BLANK)}" alt="" onerror="this.src='${IMG_BLANK}'">
+      <div><b>${esc(p.name)}</b><span class="muted small">${esc((p.size_cm || "").replace("x", " × "))} cm · ${esc(p.finish || "")}</span>
+        <div class="price">${money(p.price)} <span class="muted small">/ m²</span></div>
+        <span class="tag ${p.availability === "In stock" ? "ok" : /low|few/i.test(p.availability || "") ? "low" : "out"}">${esc(p.availability || "")}</span></div>
+      <div class="acts"><a class="btn ghost" href="#/p/${encodeURIComponent(p.sku)}">See details</a>
+        <a class="btn" href="/assistant?sku=${encodeURIComponent(p.sku)}#/rooms">Try in my room</a></div>`;
+    el.querySelector(".x").onclick = () => card(null);
+    scene.append(el);
+  };
+  const show = i => {
+    at = (i + scenes.length) % scenes.length;
+    const sc = scenes[at], img = $("#lkImg");
+    card(null); scene.querySelectorAll(".dot, .tag.made").forEach(d => d.remove());
+    img.style.opacity = 0;
+    const put = () => {
+      img.style.opacity = 1;
+      for (const sp of sc.spots) {
+        const p = by[sp.sku]; if (!p) continue;
+        const d = document.createElement("button"); d.type = "button"; d.className = "dot";
+        d.style.left = sp.x + "%"; d.style.top = sp.y + "%";
+        d.setAttribute("aria-label", `${p.name} on the ${sp.surface}: see the tile`);
+        d.innerHTML = `<span class="lbl">${esc(p.name)}</span>`;
+        d.onclick = e => { e.stopPropagation(); card(p, d); };
+        scene.append(d);
+      }
+    };
+    if (img.getAttribute("src") === sc.image) put(); else { img.onload = put; img.onerror = put; img.src = sc.image; }
+    img.alt = sc.title + " with " + sc.spots.map(sp => (by[sp.sku] || {}).name).filter(Boolean).join(" and ");
+    $("#lkIn").innerHTML = sc.spots.length ? "In this room: " + sc.spots.filter(sp => by[sp.sku]).map(sp =>
+      `<a href="#/p/${encodeURIComponent(sp.sku)}">${esc(by[sp.sku].name)} · ${sp.surface}</a>`).join("") : "";
+    box.querySelectorAll("#lkThumbs button").forEach((b, j) => b.classList.toggle("on", j === at));
+  };
+  box.querySelectorAll("[data-go]").forEach(b => b.onclick = () => show(at + +b.dataset.go));
+  $("#lkThumbs").onclick = e => { const b = e.target.closest("button"); if (b) show(+b.dataset.i); };
+  scene.onclick = e => { if (e.target === scene || e.target.id === "lkImg") card(null); };
+  let x0 = null;                                   // swipe left / right between rooms
+  scene.addEventListener("pointerdown", e => { x0 = e.clientX; });
+  scene.addEventListener("pointerup", e => { if (x0 != null && Math.abs(e.clientX - x0) > 50) show(at + (e.clientX < x0 ? 1 : -1)); x0 = null; });
+  show(0);
+}
+
+/* The virtual tour: the 360° showroom, opened over the page. */
+function openTour(products) {
+  if ($("#tour")) return;
+  const t = document.createElement("div"); t.className = "tour"; t.id = "tour"; t.setAttribute("role", "dialog"); t.setAttribute("aria-label", "Virtual showroom tour");
+  t.innerHTML = `<button class="close" type="button" id="tourClose">✕ Close the tour</button>
+  <section class="showroom" id="showroom">
+    <div class="intro">
+      <div class="kicker">THE CERAMICA NOVA SHOWROOM</div>
+      <h1>Walk into our showroom</h1>
+      <p>Look around, tap any + to see the tile, its price and stock.</p>
+    </div>
+    <div class="stage" id="srStage">
+      <div class="hint" id="srHint">Welcome to Ceramica Nova</div>
+      <button class="skip" type="button" id="srSkip">Skip ›</button>
+    </div>
+  </section>`;
+  document.body.append(t); document.body.style.overflow = "hidden";
+  const close = () => { if (SR) { try { SR.stop(); } catch {} SR = null; } t.remove(); document.body.style.overflow = ""; removeEventListener("keydown", esc_); };
+  const esc_ = e => { if (e.key === "Escape") close(); };
+  addEventListener("keydown", esc_); addEventListener("hashchange", close, { once: true });
+  $("#tourClose").onclick = close;
   showroom(products);
 }
 

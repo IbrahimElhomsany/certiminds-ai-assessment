@@ -1,0 +1,17 @@
+{
+  "film": null,
+  "scenes": [
+    {"id": "living", "title": "Living room", "image": "/images/home/scene_living.jpg", "room": "living", "made": "visualiser",
+     "spots": [{"sku": "CN006", "surface": "floor", "x": 52, "y": 84}]},
+    {"id": "kitchen", "title": "Kitchen", "image": "/images/home/scene_kitchen.jpg", "room": "kitchen", "made": "visualiser",
+     "spots": [{"sku": "CN003", "surface": "floor", "x": 40, "y": 88}, {"sku": "CN010", "surface": "wall", "x": 46, "y": 38}]},
+    {"id": "spa", "title": "Spa bathroom", "image": "/images/home/scene_spa.jpg", "room": "spa", "made": "visualiser",
+     "spots": [{"sku": "CN011", "surface": "floor", "x": 32, "y": 88}, {"sku": "CN007", "surface": "wall", "x": 38, "y": 34}]},
+    {"id": "bedroom", "title": "Bedroom", "image": "/images/home/scene_bedroom.jpg", "room": "bedroom", "made": "visualiser",
+     "spots": [{"sku": "CN002", "surface": "floor", "x": 28, "y": 88}]},
+    {"id": "bathroom", "title": "Bathroom", "image": "/images/home/scene_bathroom.jpg", "room": "bathroom", "made": "visualiser",
+     "spots": [{"sku": "CN005", "surface": "floor", "x": 36, "y": 86}, {"sku": "CN015", "surface": "wall", "x": 13, "y": 30}]},
+    {"id": "terrace", "title": "Terrace", "image": "/images/home/scene_terrace.jpg", "room": "terrace", "made": "visualiser",
+     "spots": [{"sku": "CN014", "surface": "floor", "x": 50, "y": 88}]}
+  ]
+}

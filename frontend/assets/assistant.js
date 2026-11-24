@@ -926,7 +926,7 @@ function wireAiLook() {
     if (sg) {                                     // try our closest tile in the visualiser
       $("aiModal").classList.remove("open");
       S.vis[sg.dataset.surf] = sg.dataset.sku; S.vis.surface = sg.dataset.surf; visChanged();
-      toast(`${BY[sg.dataset.sku].name} is in the room. Press “Make it real with AI” to see it as a photo.`); return;
+      toast(`${BY[sg.dataset.sku].name} is in the room. Press “Generate” to see it in the room.`); return;
     }
     if (!e.target.closest("#aiBuy")) return;
     const cards = [...document.querySelectorAll("#aiLook .buyc")];

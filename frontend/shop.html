@@ -91,7 +91,7 @@
   .film .caption b { color:#fff; font-weight:600; }
   .film .down { position:absolute; z-index:2; left:50%; bottom:16px; transform:translateX(-50%); color:#fff; opacity:.8; border:0; background:none; cursor:pointer; font-size:12px; letter-spacing:.2em; }
   @media (prefers-reduced-motion: reduce) { .film .slide.on { animation:none; } }
-  /* shop the look: room pictures with a dot on each tile */
+  /* shop the showroom: display pictures with a dot on each product */
   .look { margin:46px 0 34px; }
   .look .head { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:14px; }
   .look .head h2 { margin:0; font-size:28px; } .look .head p { margin:4px 0 0; color:var(--muted); }
@@ -107,7 +107,9 @@
   @keyframes ring { from { transform:scale(.7); opacity:1; } to { transform:scale(1.5); opacity:0; } }
   @media (prefers-reduced-motion: reduce) { .look .dot::after { animation:none; } }
   .look .dot .lbl { position:absolute; left:38px; top:50%; transform:translateY(-50%); white-space:nowrap; background:rgba(17,17,17,.82); color:#fff; font-size:12px;
-    padding:4px 9px; border-radius:6px; pointer-events:none; }
+    padding:4px 9px; border-radius:6px; pointer-events:none; opacity:0; transition:opacity .15s; }
+  .look .dot.left .lbl { left:auto; right:38px; }
+  .look .dot:hover .lbl, .look .dot:focus-visible .lbl { opacity:1; }
   .look .pcard { position:absolute; right:16px; bottom:16px; width:300px; background:#fff; border-radius:16px; box-shadow:0 12px 34px rgba(0,0,0,.22);
     padding:14px; display:grid; grid-template-columns:84px 1fr; gap:12px; z-index:3; }
   .look .pcard img { width:84px; height:84px; object-fit:cover; border-radius:10px; background:var(--soft); }
@@ -507,7 +509,7 @@ async function home() {
   const best = products.filter(p => p.best_seller_rank).slice(0, 8);
   const img = sku => esc((products.find(p => p.sku === sku) || {}).image || IMG_BLANK);
   app.innerHTML = `
-  <section class="film" id="film" aria-label="Ceramica Nova rooms">
+  <section class="film" id="film" aria-label="Ceramica Nova showroom">
     <div class="words">
       <div class="kicker">CERAMICA NOVA · TILES FOR QATAR HOMES</div>
       <h1>Floors and walls you'll love coming home to</h1>
@@ -519,9 +521,9 @@ async function home() {
       </div>
     </div>
     <div class="caption" id="filmCap"></div>
-    <button class="down" type="button" id="filmDown" aria-label="Shop the look">SHOP THE LOOK ↓</button>
+    <button class="down" type="button" id="filmDown" aria-label="Shop the showroom">SHOP THE SHOWROOM ↓</button>
   </section>
-  <section class="look" id="look" aria-label="Shop the look"></section>
+  <section class="look" id="look" aria-label="Shop the showroom"></section>
   <section class="usp">
     <div>${ICON.ruler}<span><b>Exact quantities</b><small>Full boxes with spare for cuts, worked out for your area.</small></span></div>
     <div>${ICON.layers}<span><b>One batch per job</b><small>We check one production batch covers your order, so the shade matches.</small></span></div>
@@ -551,8 +553,11 @@ async function home() {
   homeFilm(products);
 }
 
-/* The top of the home page: the owner's film, or a slow camera move across the scenes until there is one.
-   Then "shop the look": the scenes with a dot on each tile (backend/homepage.py, Admin > Settings > Home page). */
+/* The top of the home page: the owner's film, or a slow camera move across the showroom pictures until there is one.
+   Then "shop the showroom": the displays with a dot on each tile and bathroom set (backend/homepage.py,
+   Admin > Settings > Home page). */
+const WHERE = { floor: "on the floor", wall: "on the wall", sample: "sample", product: "bathroom set" };
+const MADE = { render: "3D render of our showroom", "ai-photo": "Photo made with AI from our 3D showroom", ai: "Made with AI", visualiser: "Made with our visualiser" };
 let HOME = null, filmTimer = null;
 async function homeFilm(products) {
   clearInterval(filmTimer);
@@ -560,7 +565,7 @@ async function homeFilm(products) {
   const film = $("#film"); if (!film) return;
   const scenes = HOME.scenes || [], still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const cap = $("#filmCap");
-  const say = sc => { cap.innerHTML = sc ? `<b>${esc(sc.title)}</b>${sc.spots.length ? "<br>" + sc.spots.map(p => esc(p.name) + " " + p.surface).join(" · ") : ""}` : ""; };
+  const say = sc => { cap.innerHTML = sc ? `<b>${esc(sc.title)}</b>${sc.spots.length ? `<br>${sc.spots.length} of our products on show` : ""}` : ""; };
   if (HOME.film) {
     const v = Object.assign(document.createElement("video"), { src: HOME.film, muted: true, loop: true, playsInline: true, autoplay: !still, preload: "auto" });
     v.setAttribute("muted", ""); v.setAttribute("playsinline", ""); v.setAttribute("aria-hidden", "true");
@@ -593,8 +598,8 @@ function shopTheLook(products) {
   if (!box || !scenes.length) { if (box) box.remove(); return; }
   const by = Object.fromEntries(products.map(p => [p.sku, p]));
   let at = 0;
-  box.innerHTML = `<div class="head"><div><h2>Shop the look</h2><p>Tap a dot to see the tile, its price and stock.</p></div>
-      <div class="arrows"><button type="button" aria-label="Previous room" data-go="-1">‹</button><button type="button" aria-label="Next room" data-go="1">›</button></div></div>
+  box.innerHTML = `<div class="head"><div><h2>Shop the showroom</h2><p>Walk past our displays and tap a dot to see the tile or bathroom set, its price and stock.</p></div>
+      <div class="arrows"><button type="button" aria-label="Previous display" data-go="-1">‹</button><button type="button" aria-label="Next display" data-go="1">›</button></div></div>
     <div class="scene" id="lkScene"><img id="lkImg" alt=""></div>
     <div class="inroom" id="lkIn"></div>
     <div class="thumbs" id="lkThumbs">${scenes.map((sc, i) => `<button type="button" data-i="${i}"><img src="${esc(sc.image)}" alt="" loading="lazy"><span>${esc(sc.title)}</span></button>`).join("")}</div>`;
@@ -604,11 +609,12 @@ function shopTheLook(products) {
     if (!p) return;
     const el = document.createElement("div"); el.className = "pcard"; el.setAttribute("role", "dialog"); el.setAttribute("aria-label", p.name);
     el.innerHTML = `<button class="x" type="button" aria-label="Close">×</button><img src="${esc(p.image || IMG_BLANK)}" alt="" onerror="this.src='${IMG_BLANK}'">
-      <div><b>${esc(p.name)}</b><span class="muted small">${esc((p.size_cm || "").replace("x", " × "))} cm · ${esc(p.finish || "")}</span>
-        <div class="price">${money(p.price)} <span class="muted small">/ m²</span></div>
+      <div><b>${esc(p.name)}</b><span class="muted small">${p.kind === "set" ? esc(p.finish || "Bathroom set") : `${esc((p.size_cm || "").replace("x", " × "))} cm · ${esc(p.finish || "")}`}</span>
+        <div class="price">${money(p.price)} <span class="muted small">/ ${p.kind === "set" ? "set" : "m²"}</span></div>
         <span class="tag ${p.availability === "In stock" ? "ok" : /low|few/i.test(p.availability || "") ? "low" : "out"}">${esc(p.availability || "")}</span></div>
       <div class="acts"><a class="btn ghost" href="#/p/${encodeURIComponent(p.sku)}">See details</a>
-        <a class="btn" href="/assistant?sku=${encodeURIComponent(p.sku)}#/rooms">Try in my room</a></div>`;
+        ${p.kind === "set" ? `<a class="btn" href="/assistant?sku=${encodeURIComponent(p.sku)}">Ask about it</a>`
+          : `<a class="btn" href="/assistant?sku=${encodeURIComponent(p.sku)}#/rooms">Try in my room</a>`}</div>`;
     el.querySelector(".x").onclick = () => card(null);
     scene.append(el);
   };
@@ -621,24 +627,25 @@ function shopTheLook(products) {
       img.style.opacity = 1;
       for (const sp of sc.spots) {
         const p = by[sp.sku]; if (!p) continue;
-        const d = document.createElement("button"); d.type = "button"; d.className = "dot";
+        const d = document.createElement("button"); d.type = "button"; d.className = "dot" + (sp.x > 70 ? " left" : "");
         d.style.left = sp.x + "%"; d.style.top = sp.y + "%";
-        d.setAttribute("aria-label", `${p.name} on the ${sp.surface}: see the tile`);
+        d.setAttribute("aria-label", `${p.name}, ${WHERE[sp.surface] || sp.surface}: see price and stock`);
         d.innerHTML = `<span class="lbl">${esc(p.name)}</span>`;
         d.onclick = e => { e.stopPropagation(); card(p, d); };
         scene.append(d);
       }
+      if (MADE[sc.made]) { const t = document.createElement("span"); t.className = "tag made"; t.textContent = MADE[sc.made]; scene.append(t); }
     };
     if (img.getAttribute("src") === sc.image) put(); else { img.onload = put; img.onerror = put; img.src = sc.image; }
     img.alt = sc.title + " with " + sc.spots.map(sp => (by[sp.sku] || {}).name).filter(Boolean).join(" and ");
-    $("#lkIn").innerHTML = sc.spots.length ? "In this room: " + sc.spots.filter(sp => by[sp.sku]).map(sp =>
-      `<a href="#/p/${encodeURIComponent(sp.sku)}">${esc(by[sp.sku].name)} · ${sp.surface}</a>`).join("") : "";
+    $("#lkIn").innerHTML = sc.spots.length ? "On show here: " + sc.spots.filter(sp => by[sp.sku]).map(sp =>
+      `<a href="#/p/${encodeURIComponent(sp.sku)}">${esc(by[sp.sku].name)} · ${WHERE[sp.surface] || sp.surface}</a>`).join("") : "";
     box.querySelectorAll("#lkThumbs button").forEach((b, j) => b.classList.toggle("on", j === at));
   };
   box.querySelectorAll("[data-go]").forEach(b => b.onclick = () => show(at + +b.dataset.go));
   $("#lkThumbs").onclick = e => { const b = e.target.closest("button"); if (b) show(+b.dataset.i); };
   scene.onclick = e => { if (e.target === scene || e.target.id === "lkImg") card(null); };
-  let x0 = null;                                   // swipe left / right between rooms
+  let x0 = null;                                   // swipe left / right between displays
   scene.addEventListener("pointerdown", e => { x0 = e.clientX; });
   scene.addEventListener("pointerup", e => { if (x0 != null && Math.abs(e.clientX - x0) > 50) show(at + (e.clientX < x0 ? 1 : -1)); x0 = null; });
   show(0);

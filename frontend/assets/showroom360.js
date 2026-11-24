@@ -9,7 +9,7 @@
  * three.js is MIT licensed (vendor/THREE-LICENSE.txt). */
 import * as THREE from "./vendor/three.module.min.js";
 
-const ORDER = ["s1", "s7", "s3", "s2", "s5", "s4", "s6"];          // the "views" you swipe through, inside the shop
+const ORDER_DEFAULT = ["s1", "s7", "s3", "s2", "s5", "s4", "s6"];  // the "views" you swipe through (spots.json "order" wins)
 const CSS = `
 .sr-hs { position:absolute; left:0; top:0; z-index:2; transform:translate(-50%,-50%); border:0; padding:0; cursor:pointer; background:none; }
 .sr-hs.walk { width:54px; height:54px; border-radius:50%; border:3px solid rgba(255,255,255,.95); background:rgba(255,255,255,.18);
@@ -55,6 +55,7 @@ export async function create(canvas, products, { onPick = () => {}, onHover = ()
   if (!document.getElementById("sr360css")) { const st = document.createElement("style"); st.id = "sr360css"; st.textContent = CSS; document.head.append(st); }
   const spots = Object.fromEntries(data.spots.map(s => [s.id, s]));
   const booths = Object.fromEntries(data.booths.map(b => [b.id, b]));
+  const ORDER = data.order || ORDER_DEFAULT;
   const bySku = sku => products.find(p => p.sku === sku);
   const small = matchMedia("(max-width: 900px)").matches;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;

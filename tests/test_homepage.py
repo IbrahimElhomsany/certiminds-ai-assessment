@@ -1,4 +1,4 @@
-"""The home page: film at the top and "shop the look" scenes, managed by the owner (backend/homepage.py).
+"""The home page: film at the top and "shop the showroom" displays, managed by the owner (backend/homepage.py).
 OpenAI is replaced by a fake, so these tests cost nothing."""
 from datetime import date
 
@@ -39,12 +39,13 @@ def H(who="owner"):
     return {"Authorization": f"Bearer {r.json()['token']}"}
 
 
-def test_shop_gets_the_built_in_scenes_with_product_names():
+def test_shop_gets_the_built_in_showroom_with_product_names():
     d = client.get("/api/shop/home").json()
-    assert d["film"] is None and len(d["scenes"]) == 6
-    first = d["scenes"][0]
-    assert first["spots"][0] == {"sku": "CN006", "surface": "floor", "x": 52, "y": 84, "name": "Royal Calacatta"}
+    assert d["film"] is None and len(d["scenes"]) == 8 and d["scenes"][0]["id"] == "overview"
+    skus = {p["sku"] for s in d["scenes"] for p in s["spots"]}
+    assert {"SN001", "SN002", "SN003"} <= skus and len([k for k in skus if k.startswith("CN")]) >= 12   # tiles and bathroom sets
     for s in d["scenes"]:
+        assert s["made"] == "render" and s["spots"] and all(p["name"] and 0 <= p["x"] <= 100 for p in s["spots"])
         assert (homepage.visual.ROOT / s["image"].lstrip("/")).exists()
 
 
@@ -56,7 +57,7 @@ def test_owner_makes_an_ai_scene_and_it_comes_first(setup):
     assert "professional interior photograph" in setup.calls[0]["data"]["prompt"]
     assert len(setup.calls[0]["files"]) == 3                      # room + floor tile + wall tile
     home = client.get("/api/shop/home").json()
-    assert home["scenes"][0]["id"] == s["id"] and len(home["scenes"]) == 7
+    assert home["scenes"][0]["id"] == s["id"] and len(home["scenes"]) == 9
     assert client.get(s["image"]).status_code == 200
 
 
@@ -71,14 +72,49 @@ def test_wrong_choices_are_named_by_field():
 
 def test_move_dots_rename_reorder_and_delete():
     h = H()
-    r = client.patch("/api/admin/homepage/scenes/kitchen", json={"title": "Family kitchen", "move": -1,
-                     "spots": [{"sku": "CN003", "surface": "floor", "x": 41.26, "y": 90}]}, headers=h).json()
-    assert [s["id"] for s in r["scenes"]][:2] == ["kitchen", "living"]
-    assert r["scenes"][0]["title"] == "Family kitchen" and r["scenes"][0]["spots"][0]["x"] == 41.3
-    assert client.patch("/api/admin/homepage/scenes/kitchen", json={"spots": [{"sku": "XX9", "surface": "floor", "x": 1, "y": 1}]},
+    r = client.patch("/api/admin/homepage/scenes/samples", json={"title": "Our sample wall", "move": -1,
+                     "spots": [{"sku": "CN003", "surface": "sample", "x": 41.26, "y": 90},
+                               {"sku": "SN002", "surface": "product", "x": 10, "y": 20}]}, headers=h).json()
+    assert [s["id"] for s in r["scenes"]][:2] == ["samples", "overview"]
+    first = r["scenes"][0]
+    assert first["title"] == "Our sample wall" and first["spots"][0]["x"] == 41.3 and first["spots"][1]["name"] == "Aria Shower Set"
+    assert client.patch("/api/admin/homepage/scenes/samples", json={"spots": [{"sku": "XX9", "surface": "floor", "x": 1, "y": 1}]},
                         headers=h).status_code == 422
-    assert client.delete("/api/admin/homepage/scenes/terrace", headers=h).json()["scenes"][-1]["id"] == "bathroom"
-    assert client.post("/api/admin/homepage/reset", headers=h).json()["scenes"][0]["id"] == "living"
+    assert client.delete("/api/admin/homepage/scenes/outdoor", headers=h).json()["scenes"][-1]["id"] == "bathwall"
+    assert client.post("/api/admin/homepage/reset", headers=h).json()["scenes"][0]["id"] == "overview"
+
+
+def test_make_a_render_photo_real_and_go_back(setup):
+    h = H()
+    before = {s["id"]: s for s in client.get("/api/shop/home").json()["scenes"]}["gallery"]
+    r = client.post("/api/admin/homepage/scenes/gallery/photoreal", json={"quality": "medium"}, headers=h)
+    assert r.status_code == 200, r.text
+    after = {s["id"]: s for s in r.json()["scenes"]}["gallery"]
+    assert after["made"] == "ai-photo" and after["image"].startswith("/api/shop/home/files/gallery_real_")
+    assert client.get(after["image"]).status_code == 200
+    call = setup.calls[0]
+    assert len(call["files"]) == 1 and call["data"]["size"] == "1536x1024" and "same spot, angle and framing" in call["data"]["prompt"]
+    # the render is 16:9 and the AI picture 3:2, so the dots move with the crop (and ones cut off are dropped)
+    assert all(2 <= p["x"] <= 98 for p in after["spots"]) and len(after["spots"]) <= len(before["spots"])
+    assert client.post("/api/admin/homepage/scenes/gallery/photoreal", json={}, headers=h).status_code == 409
+    back = {s["id"]: s for s in client.post("/api/admin/homepage/scenes/gallery/render", headers=h).json()["scenes"]}["gallery"]
+    assert back["image"] == before["image"] and back["spots"] == before["spots"] and back["made"] == "render"
+    assert client.post("/api/admin/homepage/scenes/gallery/render", headers=h).status_code == 409
+
+
+def test_refit_spots_follows_the_crop():
+    spots = [{"sku": "CN001", "surface": "sample", "x": 50, "y": 50}, {"sku": "CN002", "surface": "sample", "x": 3, "y": 50}]
+    out = homepage.refit_spots(spots, 1920, 1080, "1536x1024")
+    assert out == [{"sku": "CN001", "surface": "sample", "x": 50.0, "y": 50.0}]          # the one at the far left is cut off
+
+
+def test_old_saved_home_page_keeps_the_owners_ai_pictures(setup, tmp_path):
+    import json
+    (tmp_path / "home.json").write_text(json.dumps({"film": None, "scenes": [
+        {"id": "living", "title": "Living room", "image": "/images/home/scene_living.jpg", "made": "visualiser", "spots": []},
+        {"id": "sabc12", "title": "My kitchen", "image": "/api/shop/home/files/sabc12.jpg", "made": "ai", "spots": []}]}))
+    ids = [s["id"] for s in client.get("/api/shop/home").json()["scenes"]]
+    assert ids[0] == "sabc12" and "living" not in ids and "overview" in ids
 
 
 def test_film_upload_checks_the_file():

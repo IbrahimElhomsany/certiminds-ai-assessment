@@ -1,0 +1,344 @@
+{
+ "overview": {
+  "title": "Our showroom",
+  "image": "/images/home/show_overview.jpg",
+  "spots": [
+   {
+    "sku": "CN005",
+    "surface": "floor",
+    "x": 81.2,
+    "y": 76.1
+   },
+   {
+    "sku": "CN006",
+    "surface": "wall",
+    "x": 62.9,
+    "y": 40.1
+   },
+   {
+    "sku": "CN007",
+    "surface": "wall",
+    "x": 29.6,
+    "y": 49.5
+   },
+   {
+    "sku": "CN010",
+    "surface": "wall",
+    "x": 20.7,
+    "y": 49.5
+   },
+   {
+    "sku": "SN001",
+    "surface": "product",
+    "x": 5.3,
+    "y": 57.3
+   },
+   {
+    "sku": "CN015",
+    "surface": "wall",
+    "x": 91.9,
+    "y": 40.1
+   },
+   {
+    "sku": "CN013",
+    "surface": "wall",
+    "x": 5.5,
+    "y": 36.3
+   }
+  ]
+ },
+ "samples": {
+  "title": "Tile sample wall",
+  "image": "/images/home/show_samples.jpg",
+  "spots": [
+   {
+    "sku": "CN009",
+    "surface": "sample",
+    "x": 94.9,
+    "y": 44.1
+   },
+   {
+    "sku": "CN015",
+    "surface": "wall",
+    "x": 8.4,
+    "y": 33.8
+   },
+   {
+    "sku": "CN004",
+    "surface": "sample",
+    "x": 77.3,
+    "y": 44.5
+   },
+   {
+    "sku": "CN012",
+    "surface": "sample",
+    "x": 65.5,
+    "y": 44.8
+   },
+   {
+    "sku": "CN011",
+    "surface": "sample",
+    "x": 65.6,
+    "y": 24.9
+   },
+   {
+    "sku": "CN005",
+    "surface": "sample",
+    "x": 56.9,
+    "y": 45.1
+   },
+   {
+    "sku": "CN008",
+    "surface": "sample",
+    "x": 56.9,
+    "y": 27.9
+   },
+   {
+    "sku": "CN003",
+    "surface": "sample",
+    "x": 50.4,
+    "y": 45.2
+   }
+  ]
+ },
+ "baths": {
+  "title": "Bath displays",
+  "image": "/images/home/show_baths.jpg",
+  "spots": [
+   {
+    "sku": "CN005",
+    "surface": "floor",
+    "x": 50.3,
+    "y": 84.7
+   },
+   {
+    "sku": "CN003",
+    "surface": "floor",
+    "x": 68.0,
+    "y": 75.2
+   },
+   {
+    "sku": "CN006",
+    "surface": "wall",
+    "x": 18.4,
+    "y": 21.3
+   },
+   {
+    "sku": "CN015",
+    "surface": "wall",
+    "x": 62.2,
+    "y": 24.7
+   },
+   {
+    "sku": "CN012",
+    "surface": "sample",
+    "x": 93.4,
+    "y": 31.3
+   },
+   {
+    "sku": "CN011",
+    "surface": "sample",
+    "x": 94.3,
+    "y": 16.4
+   },
+   {
+    "sku": "CN008",
+    "surface": "sample",
+    "x": 85.1,
+    "y": 18.1
+   }
+  ]
+ },
+ "gallery": {
+  "title": "Big tile gallery",
+  "image": "/images/home/show_gallery.jpg",
+  "spots": [
+   {
+    "sku": "CN011",
+    "surface": "sample",
+    "x": 85.2,
+    "y": 41.6
+   },
+   {
+    "sku": "CN015",
+    "surface": "sample",
+    "x": 66.5,
+    "y": 42.6
+   },
+   {
+    "sku": "CN002",
+    "surface": "sample",
+    "x": 54.6,
+    "y": 43.2
+   },
+   {
+    "sku": "CN001",
+    "surface": "sample",
+    "x": 46.4,
+    "y": 43.6
+   },
+   {
+    "sku": "CN012",
+    "surface": "floor",
+    "x": 14.6,
+    "y": 74.4
+   },
+   {
+    "sku": "SN002",
+    "surface": "product",
+    "x": 22.4,
+    "y": 53.2
+   },
+   {
+    "sku": "CN008",
+    "surface": "wall",
+    "x": 25.9,
+    "y": 40.4
+   }
+  ]
+ },
+ "podium": {
+  "title": "WC and basin podium",
+  "image": "/images/home/show_podium.jpg",
+  "spots": [
+   {
+    "sku": "SN001",
+    "surface": "product",
+    "x": 33.3,
+    "y": 53.4
+   },
+   {
+    "sku": "CN013",
+    "surface": "wall",
+    "x": 21.5,
+    "y": 8.5
+   },
+   {
+    "sku": "SN003",
+    "surface": "product",
+    "x": 47.7,
+    "y": 54.5
+   },
+   {
+    "sku": "CN010",
+    "surface": "wall",
+    "x": 47.4,
+    "y": 35.9
+   },
+   {
+    "sku": "CN007",
+    "surface": "wall",
+    "x": 57.0,
+    "y": 34.9
+   },
+   {
+    "sku": "CN002",
+    "surface": "sample",
+    "x": 6.6,
+    "y": 27.2
+   }
+  ]
+ },
+ "showers": {
+  "title": "Shower wall",
+  "image": "/images/home/show_showers.jpg",
+  "spots": [
+   {
+    "sku": "SN002",
+    "surface": "product",
+    "x": 62.8,
+    "y": 54.6
+   },
+   {
+    "sku": "CN011",
+    "surface": "wall",
+    "x": 67.9,
+    "y": 62.3
+   }
+  ]
+ },
+ "bathwall": {
+  "title": "Bathroom wall",
+  "image": "/images/home/show_bathwall.jpg",
+  "spots": [
+   {
+    "sku": "CN011",
+    "surface": "wall",
+    "x": 25.9,
+    "y": 32.2
+   },
+   {
+    "sku": "CN002",
+    "surface": "floor",
+    "x": 52.9,
+    "y": 85.0
+   },
+   {
+    "sku": "SN001",
+    "surface": "product",
+    "x": 50.1,
+    "y": 62.3
+   },
+   {
+    "sku": "CN015",
+    "surface": "wall",
+    "x": 49.8,
+    "y": 37.0
+   },
+   {
+    "sku": "CN012",
+    "surface": "floor",
+    "x": 63.9,
+    "y": 68.5
+   },
+   {
+    "sku": "SN002",
+    "surface": "product",
+    "x": 58.4,
+    "y": 50.2
+   },
+   {
+    "sku": "CN008",
+    "surface": "wall",
+    "x": 59.2,
+    "y": 38.8
+   },
+   {
+    "sku": "CN001",
+    "surface": "sample",
+    "x": 77.4,
+    "y": 41.9
+   }
+  ]
+ },
+ "outdoor": {
+  "title": "Outdoor tiles",
+  "image": "/images/home/show_outdoor.jpg",
+  "spots": [
+   {
+    "sku": "CN014",
+    "surface": "floor",
+    "x": 53.5,
+    "y": 72.5
+   },
+   {
+    "sku": "CN005",
+    "surface": "floor",
+    "x": 78.6,
+    "y": 67.2
+   },
+   {
+    "sku": "CN004",
+    "surface": "floor",
+    "x": 66.9,
+    "y": 58.5
+   },
+   {
+    "sku": "CN009",
+    "surface": "wall",
+    "x": 40.9,
+    "y": 52.7
+   }
+  ]
+ }
+}

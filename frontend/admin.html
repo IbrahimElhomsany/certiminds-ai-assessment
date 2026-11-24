@@ -266,7 +266,7 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
   .hp-pic img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; pointer-events:none; }
   .hp-dot { position:absolute; width:24px; height:24px; margin:-12px 0 0 -12px; border-radius:50%; background:#fff; border:3px solid #111; cursor:grab;
     box-shadow:0 1px 6px rgba(0,0,0,.4); }
-  .hp-dot.wall { border-color:#3d6fd8; } .hp-dot:active { cursor:grabbing; }
+  .hp-dot.wall { border-color:#3d6fd8; } .hp-dot.sample { border-color:#b5862f; } .hp-dot.product { border-color:#7a4fd0; } .hp-dot:active { cursor:grabbing; }
   .hp-dot span { position:absolute; left:26px; top:50%; transform:translateY(-50%); white-space:nowrap; background:rgba(0,0,0,.75); color:#fff; font-size:11px; padding:2px 6px; border-radius:5px; pointer-events:none; }
   .hp-film video { width:100%; max-width:520px; border-radius:10px; display:block; background:#000; }
   .sr-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:14px; }
@@ -1522,14 +1522,17 @@ async function sampleRoomsView() {
 async function homepageView() {
   shell("homepage", topbar("Home page") + loading());
   const d = await api("/homepage");
-  const tiles = Object.fromEntries(d.tiles.map(t => [t.sku, t]));
+  const WHERE = {floor: "on the floor", wall: "on the wall", sample: "sample", product: "bathroom set"};
+  const MADE = {render: ["3D render", ""], "ai-photo": ["AI photo", "ok"], ai: ["Made by AI", "ok"], visualiser: ["Visualiser", ""]};
   const sceneCard = (sc, i) => `<div class="sr-card" data-sid="${sc.id}">
       <div class="hp-pic" data-pic="${sc.id}"><img src="${esc(sc.image)}" alt="">${sc.spots.map((p, j) =>
-        `<div class="hp-dot ${p.surface}" data-j="${j}" style="left:${p.x}%;top:${p.y}%" title="Drag onto the ${p.surface}"><span>${esc(p.name)}</span></div>`).join("")}</div>
+        `<div class="hp-dot ${p.surface}" data-j="${j}" style="left:${p.x}%;top:${p.y}%" title="Drag onto the product"><span>${esc(p.name)}</span></div>`).join("")}</div>
       <div class="b"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b>${esc(sc.title)}</b>
-        <span class="tag ${sc.made === "ai" ? "ok" : ""}">${sc.made === "ai" ? "Made by AI" : "Visualiser"}</span></div>
-        <div class="small muted">${sc.spots.map(p => `${esc(p.name)} on the ${p.surface}`).join(" · ")}</div>
+        <span class="tag ${(MADE[sc.made] || ["", ""])[1]}">${(MADE[sc.made] || [sc.made || ""])[0]}</span></div>
+        <div class="small muted">${sc.spots.map(p => `${esc(p.name)} (${WHERE[p.surface] || p.surface})`).join(" · ")}</div>
         <div class="actions">
+          ${sc.made === "render" ? `<button class="btn sm" data-real="${sc.id}" ${d.ai_on ? "" : "disabled title='Needs OPENAI_API_KEY in Render'"}>Make photo-real (AI)</button>` : ""}
+          ${sc.made === "ai-photo" ? `<button class="btn ghost sm" data-back="${sc.id}">Back to the render</button>` : ""}
           <button class="btn ghost sm" data-mv="${sc.id}" data-d="-1" ${i === 0 ? "disabled" : ""} title="Show earlier">↑</button>
           <button class="btn ghost sm" data-mv="${sc.id}" data-d="1" ${i === d.scenes.length - 1 ? "disabled" : ""} title="Show later">↓</button>
           <button class="btn ghost sm" data-ren="${sc.id}" data-t="${esc(sc.title)}">Rename</button>
@@ -1538,22 +1541,23 @@ async function homepageView() {
     <div class="card hp-film" style="margin-bottom:14px"><h3 style="margin:0 0 4px">Film at the top</h3>
       ${d.film ? `<video src="${esc(d.film)}" muted loop autoplay playsinline></video>
         <div class="actions" style="margin-top:10px"><label class="btn ghost sm" for="hpFile">Replace the video</label><button class="btn ghost sm" id="hpNoFilm">Remove the video</button></div>`
-      : `<p class="muted small" style="margin:0 0 10px">No video yet. Until you upload one, the top of the shop moves slowly across the first 4 rooms below, like a camera.</p>
+      : `<p class="muted small" style="margin:0 0 10px">No video yet. Until you upload one, the top of the shop moves slowly across the first 4 showroom pictures below, like a camera.</p>
         <label class="btn sm" for="hpFile">Upload a video (MP4, up to 40 MB)</label>`}
       <input type="file" id="hpFile" accept="video/mp4,video/webm" hidden><div class="field-err" id="hpFileErr"></div>
       <details style="margin-top:10px"><summary class="small">How to make the video</summary><div class="small muted" style="margin-top:6px;line-height:1.6">
-        1. Download one of the rooms below (right-click the picture, Save image).<br>
+        1. Download one of the showroom pictures below (right-click the picture, Save image). The first one, "Our showroom", works best.<br>
         2. In an AI video app that can start from a picture (for example Kling, Runway or Google Veo), upload it and ask for:<br>
-        <i>"Slow, smooth cinematic camera glide forward through this room, about 10 seconds. Keep the room, furniture and tiles exactly as they are.
-        Soft natural daylight, gentle light movement, no people, no text, no cuts. Real photograph look, 1080p."</i><br>
+        <i>"Slow, smooth cinematic camera glide forward through this tile and bathroom showroom, past the displays, about 10 seconds.
+        Keep every display, bath, basin and tile exactly as it is. Bright, soft showroom lighting, no people, no text, no cuts. Real photograph look, 1080p."</i><br>
         3. Download it as MP4 (1080p, 10 to 20 seconds) and upload it here. It plays silently on a loop.<br>
         Check the app's terms allow use on a business website.</div></details></div>
     <div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
-      <div><h3 style="margin:0">Shop-the-look rooms</h3><div class="small muted">Customers swipe through these and tap a dot to see the tile. Drag a dot onto the right floor or wall.</div></div>
+      <div><h3 style="margin:0">Shop the showroom</h3><div class="small muted">Customers swipe through these displays and tap a dot to see the tile or bathroom set. Drag a dot onto its product.
+        "Make photo-real" lets OpenAI re-draw a 3D render as a real photo (about $0.20 each); check the tiles still match before you keep it.</div></div>
       <button class="btn" id="hpNew" ${d.ai_on ? "" : "disabled"}>+ Make a room with AI</button></div>
       ${d.ai_on ? "" : `<div class="notice warn" style="margin-bottom:12px">Making rooms with AI needs OPENAI_API_KEY in Render.</div>`}
       <div class="hp-grid">${d.scenes.map(sceneCard).join("")}</div>
-      ${d.customised ? `<div style="margin-top:14px"><button class="btn ghost sm" id="hpReset">Go back to the built-in rooms</button></div>` : ""}</div>`;
+      ${d.customised ? `<div style="margin-top:14px"><button class="btn ghost sm" id="hpReset">Go back to the built-in showroom pictures</button></div>` : ""}</div>`;
 
   // drag the dots; saved when you let go
   document.querySelectorAll(".hp-pic").forEach(pic => {
@@ -1596,8 +1600,16 @@ async function homepageView() {
     if (await ask(`Remove “${b.dataset.t}”?`, [], "Remove", "Customers no longer see this room on the home page.")) act(() => api(`/homepage/scenes/${b.dataset.rm}`, {method: "DELETE"}), "Removed.");
   });
   if ($("#hpReset")) $("#hpReset").onclick = async () => {
-    if (await ask("Go back to the built-in rooms?", [], "Go back", "Your AI rooms and the video are deleted, and the 6 rooms the shop came with come back.")) act(() => api("/homepage/reset", {method: "POST"}), "Back to the built-in rooms.");
+    if (await ask("Go back to the built-in showroom pictures?", [], "Go back", "Your AI pictures and the video are deleted, and the showroom pictures the shop came with come back.")) act(() => api("/homepage/reset", {method: "POST"}), "Back to the built-in pictures.");
   };
+  document.querySelectorAll("[data-real]").forEach(b => b.onclick = async () => {
+    const made = await ask("Make this picture photo-real?", [
+      {name: "quality", label: "Quality", type: "select", options: [["high", "Best (about 1 to 2 minutes, about $0.20)"], ["medium", "Standard (about 30 seconds, about $0.05)"]], value: "high", required: true}],
+      "Make it photo-real", "OpenAI re-draws this 3D render as a real photograph of the same showroom. The render is kept, so you can go back. Please keep this window open.",
+      v => api(`/homepage/scenes/${b.dataset.real}/photoreal`, {method: "POST", body: {quality: v.quality}}));
+    if (made) { toast("Done. Check the tiles still match; if not, press Back to the render."); route(); }
+  });
+  document.querySelectorAll("[data-back]").forEach(b => b.onclick = () => act(() => api(`/homepage/scenes/${b.dataset.back}/render`, {method: "POST"}), "Back to the 3D render."));
   $("#hpNew").onclick = async () => {
     const floors = [["", "Keep the floor as it is"], ...d.tiles.filter(t => t.surfaces.includes("floor")).map(t => [t.sku, `${t.name}${t.locations.includes("outdoor") ? " (outdoor)" : ""}`])];
     const walls = [["", "Keep the walls as they are"], ...d.tiles.filter(t => t.surfaces.includes("wall")).map(t => [t.sku, t.name])];

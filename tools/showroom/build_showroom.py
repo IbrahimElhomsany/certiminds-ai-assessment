@@ -4,13 +4,17 @@ Why: a browser can only fake light, so the live 3D showroom looked like a game. 
 works out real light (soft shadows, light bouncing off walls, reflections in glossy tiles), so each 360°
 picture looks like a photo. The visitor glides from spot to spot and looks around (frontend/assets/showroom.js).
 
-Every booth uses our own tiles at their real size (images/<SKU>.jpg + data/catalog.json). Furniture, plants
+The hall is laid out like a real tile and bathroom showroom: a wall of framed tile samples, freestanding baths on
+tiled plinths, shower sets on display boards, a gallery of big slabs, a lit WC and basin podium, tiled bathroom wall
+sections and an outdoor corner. Every display uses our own tiles at their real size (images/<SKU>.jpg + data/catalog.json). Furniture, plants
 and the sky are free CC0 assets from Poly Haven (polyhaven.com, no credit needed, commercial use allowed),
 fetched with tools/showroom/fetch_assets.py. Bathtub, basins, WC and shower are modelled here.
 
 Run (Blender as a Python module: pip install bpy==4.5.0 on Python 3.11):
     python tools/showroom/build_showroom.py --assets <dir> [--res 4096] [--samples 96] [--only s1,s2]
 Writes images/showroom/<spot>.jpg (+ _s.jpg, 2048 wide for phones) and images/showroom/spots.json.
+With --views it renders the flat home-page pictures instead (images/home/show_<view>.jpg + views.json with the dots);
+then run tools/showroom/home_scenes.py to make data/homepage.json.
 A new or changed tile needs a new render (about 20 to 30 minutes per spot on 4 processor cores).
 """
 from __future__ import annotations
@@ -35,6 +39,9 @@ ap.add_argument("--res", type=int, default=4096)
 ap.add_argument("--samples", type=int, default=96)
 ap.add_argument("--only", default="")
 ap.add_argument("--still", default="", help="render a normal photo from x,y,z,yaw_deg instead (for checks)")
+ap.add_argument("--views", action="store_true", help="render the flat display photos for the home page instead")
+ap.add_argument("--home", default=os.path.join(ROOT, "images", "home"))
+ap.add_argument("--pct", type=int, default=100, help="render at this percent of full size (quick previews)")
 args = ap.parse_args(sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else sys.argv[1:])
 IMG = os.path.join(ROOT, "images")
 TEX = os.path.join(args.out, "_tex")
@@ -60,7 +67,7 @@ def glossy(sku):
 
 def lay(sku, wcm, hcm, k=4, grout=(212, 208, 200), turn=False):
     """Colour image + grout mask for tiles laid at real size over wcm x hcm cm (k pixels per cm)."""
-    key = f"{sku}_{int(wcm)}x{int(hcm)}_{k}{'_t' if turn else ''}"
+    key = f"{sku}_{int(wcm)}x{int(hcm)}_{k}{'_t' if turn else ''}" + ("" if grout == (212, 208, 200) else "_g%02x%02x%02x" % grout)
     pc, pm = os.path.join(TEX, key + ".jpg"), os.path.join(TEX, key + "_g.png")
     if os.path.exists(pc) and os.path.exists(pm):
         return pc, pm
@@ -163,7 +170,7 @@ matte_black = material("matte black metal", (0.02, 0.02, 0.02), 0.5, 0.3)
 ceramic = material("sanitary ceramic", (0.93, 0.93, 0.92), 0.05, coat=1.0)
 mirror_m = material("mirror", (0.96, 0.96, 0.96), 0.0, 1.0)
 glass = material("glass", (0.96, 0.98, 0.98), 0.0, transmission=1.0)
-oak = material("oak", (0.45, 0.3, 0.18), 0.45)
+oak = material("oak", (0.2, 0.12, 0.065), 0.45)
 cladding = material("facade cladding", (0.06, 0.06, 0.06), 0.55, 0.2)
 
 
@@ -253,173 +260,271 @@ def asset(name, loc, height, rot_z=0.0, parent=None):
     return root
 
 
-# ================================================================== the booths
-BOOTH_W, BOOTH_D, BOOTH_H, T = 2.4, 1.7, 2.8, 0.1
-BOOTHS = []          # {sku, set, title, center (world), front (world)}
+# ================================================================== the displays
+# Laid out like a real tile and bathroom showroom: a wall of framed tile samples (left), freestanding baths on
+# tiled plinths (middle left), shower sets on display boards (back left), a gallery of big slabs (back right),
+# a lit podium with WCs and a basin (middle right), bathroom wall sections (right) and an outdoor corner (front).
+BOOTHS = []          # every display the tour points at: {id, title, sku, floor, set, center (world)}
+MARKS = []           # (display id, sku, surface, world point): the dots on the flat home-page pictures
+charcoal = material("charcoal panel", (0.04, 0.04, 0.045), 0.42, 0.1)
+alu = material("brushed aluminium", (0.78, 0.78, 0.78), 0.22, 1.0)
+gold = material("brushed gold", (0.83, 0.6, 0.3), 0.22, 1.0)
+board = material("display board", (0.9, 0.9, 0.88), 0.55)
+navy = material("nova navy", (0.03, 0.06, 0.16), 0.4)
+led = material("led strip", (1.0, 0.86, 0.68), 0.5, emission=18)
+bulb = material("filament bulb", (1.0, 0.72, 0.4), 0.2, emission=30)
+label_m = material("price label", (0.95, 0.95, 0.94), 0.6)
 
 
-def booth(name, pos, rot_z, wall, floor, props=(), sets=None, title=""):
-    """A corner booth like a real showroom stand: tiled back wall + left side wall with black frames, and a
-    floor sample. Built facing +y around the origin, then moved to pos and turned by rot_z."""
+def group(name, pos, rot_z=0.0):
     e = bpy.data.objects.new(name, None); bpy.context.collection.objects.link(e)
-    w, d, h = BOOTH_W, BOOTH_D, BOOTH_H
-    box("back panel", (w, T, h), (0, 0, h / 2), white, bevel=0.002, parent=e)
-    box("side panel", (T, d, h), (-w / 2 + T / 2, d / 2, h / 2), white, bevel=0.002, parent=e)
-    for (x, y, sx, sy, sz, z) in [(w / 2, 0, 0.05, T + 0.03, h + 0.02, h / 2), (-w / 2 + T / 2, d, T + 0.03, 0.05, h + 0.02, h / 2),
-                                  (0, 0, w + 0.04, T + 0.03, 0.05, h), (-w / 2 + T / 2, d / 2, T + 0.03, d + 0.02, 0.05, h)]:
-        box("frame", (sx, sy, sz), (x, y, z), black, bevel=0.003, parent=e)
-    plane("tiles back", w - T - 0.02, h - 0.03, (T / 2, T / 2 + 0.002, h / 2), (math.pi / 2, 0, 0),
-          tile_mat(wall, int((w - T) * 100), int(h * 100)), parent=e)
-    plane("tiles side", d - T / 2, h - 0.03, (-w / 2 + T + 0.002, d / 2 + T / 4, h / 2), (math.pi / 2, 0, math.pi / 2),
-          tile_mat(wall, int(d * 100), int(h * 100)), parent=e)
-    box("floor sample", (w + 0.06, d + 0.35, 0.025), (0, (d + 0.35) / 2 - T / 2, 0.0125),
-        tile_mat(floor, int((w + 0.06) * 100), int((d + 0.35) * 100), k=3), bevel=0.002, parent=e)
-    for pr in props:
-        PROPS[pr[0]](e, *pr[1:])
     e.location = pos; e.rotation_euler = (0, 0, rot_z)
     bpy.context.view_layer.update()
-    mw = e.matrix_world
-    BOOTHS.append({"id": name, "sku": wall, "floor": floor, "set": sets, "title": title,
-                   "center": tuple(mw @ Vector((0.1, 0.35, 1.6))), "front": tuple(mw @ Vector((0, 3.2, 0)))})
     return e
 
 
-# ---- props, in booth coordinates (back wall at y = 0, opening towards +y)
-def p_washstand(e, x=0.15):
-    o = bpy.ops.mesh.primitive_cylinder_add(vertices=96, radius=0.36, depth=0.03, location=(x, T / 2 + 0.02, 1.68), rotation=(math.pi / 2, 0, 0))
-    o = bpy.context.object; o.data.materials.append(matte_black); o.parent = e; smooth(o)
-    bpy.ops.mesh.primitive_cylinder_add(vertices=96, radius=0.34, depth=0.03, location=(x, T / 2 + 0.03, 1.68), rotation=(math.pi / 2, 0, 0))
-    o = bpy.context.object; o.data.materials.append(mirror_m); o.parent = e
-    for dx in (-0.16, 0.16):
-        for dy in (0.2, 0.52):
-            box("leg", (0.022, 0.022, 0.86), (x + dx, dy, 0.43), matte_black, bevel=0, parent=e)
-    box("towel shelf", (0.34, 0.34, 0.015), (x, 0.36, 0.28), matte_black, bevel=0.002, parent=e)
-    box("towel", (0.3, 0.2, 0.05), (x, 0.38, 0.31), material("towel", (0.08, 0.1, 0.13), 0.95), bevel=0.02, parent=e)
-    bowl = loft("basin", [(0.13, 0.13, 0.86), (0.2, 0.2, 0.89), (0.235, 0.235, 0.96), (0.24, 0.24, 1.0), (0.225, 0.225, 1.0),
-                          (0.215, 0.215, 0.96), (0.18, 0.18, 0.91), (0.05, 0.05, 0.895)], ceramic, cap_bottom=False, parent=e, p=2.0)
-    bowl.location = (x, 0.36, 0)
-    box("tap", (0.03, 0.03, 0.28), (x, 0.13, 1.12), matte_black, bevel=0.006, parent=e)
-    box("spout", (0.028, 0.16, 0.028), (x, 0.2, 1.25), matte_black, bevel=0.006, parent=e)
+def wpt(e, p):
+    bpy.context.view_layer.update()
+    return tuple(e.matrix_world @ Vector(p))
 
 
-def p_vanity(e, x=0.2):
-    box("vanity", (1.0, 0.48, 0.42), (x, 0.3, 0.68), oak, bevel=0.006, parent=e)
-    box("vanity top", (1.02, 0.5, 0.025), (x, 0.3, 0.9), material("white quartz", (0.88, 0.88, 0.86), 0.2, coat=0.5), bevel=0.003, parent=e)
-    for dx in (-0.25, 0.25):
-        box("handle", (0.2, 0.015, 0.015), (x + dx, 0.545, 0.84), matte_black, bevel=0.003, parent=e)
-    bowl = loft("countertop basin", [(0.2, 0.15, 0.912), (0.26, 0.19, 0.95), (0.27, 0.2, 1.04), (0.255, 0.185, 1.04),
-                                      (0.24, 0.17, 0.98), (0.1, 0.07, 0.93)], ceramic, cap_bottom=False, parent=e, p=2.4)
-    bowl.location = (x, 0.32, 0)
-    box("mirror frame", (0.82, 0.03, 1.02), (x, T / 2 + 0.018, 1.7), matte_black, bevel=0.004, parent=e)
-    box("mirror", (0.78, 0.01, 0.98), (x, T / 2 + 0.035, 1.7), mirror_m, bevel=0, parent=e)
-    box("tap", (0.03, 0.03, 0.22), (x, 0.13, 1.03), chrome, bevel=0.006, parent=e)
-    box("spout", (0.028, 0.14, 0.028), (x, 0.19, 1.13), chrome, bevel=0.006, parent=e)
-    asset("ceramic_vase_01", (x + 0.38, 0.22, 0.915), 0.22, parent=e)
+def register(did, title, sku, center, floor=None, sets=None, marks=()):
+    BOOTHS.append({"id": did, "sku": sku, "floor": floor, "set": sets, "title": title, "center": tuple(center)})
+    for s_, surf, p in marks:
+        MARKS.append((did, s_, surf, tuple(p)))
 
 
-def p_tub(e, x=0.25):
+def tmat(sku, wcm, hcm, k=4, turn=False, grout=(212, 208, 200)):
+    c, g = lay(sku, wcm, hcm, k, grout=grout, turn=turn)
+    gl = glossy(sku)
+    return material(f"tile {os.path.basename(c)}", rough=0.07 if gl else 0.42, img=c, grout=g, coat=0.5 if gl else 0.0)
+
+
+def wall_tiles(name, w, h, loc, sku, parent, k=3, side=False, turn=False):
+    """Tiles on a wall that faces +y (or +x with side=True), in the parent's coordinates."""
+    rot = (math.pi / 2, 0, math.pi / 2) if side else (math.pi / 2, 0, 0)
+    return plane(name, w, h, loc, rot, tmat(sku, int(w * 100), int(h * 100), k=k, turn=turn), parent=parent)
+
+
+def floor_tiles(name, w, d, loc, sku, parent, k=3):
+    return plane(name, w, d, loc, (0, 0, 0), tmat(sku, int(w * 100), int(d * 100), k=k), parent=parent)
+
+
+def tub(e, x, y, z=0.0, mat=None):
     rings = [(0.66, 0.27, 0.0), (0.74, 0.32, 0.12), (0.83, 0.38, 0.42), (0.86, 0.4, 0.58), (0.86, 0.4, 0.6),
              (0.835, 0.375, 0.6), (0.82, 0.36, 0.56), (0.76, 0.31, 0.28), (0.66, 0.24, 0.1), (0.45, 0.15, 0.08)]
-    tub = loft("bathtub", rings, ceramic, parent=e, p=2.3)
-    tub.location = (x, 0.62, 0.025)
-    sub = tub.modifiers.new("s", "SUBSURF"); sub.levels = 1; sub.render_levels = 2
-    box("tub mixer", (0.035, 0.035, 1.05), (x + 1.0, 0.62, 0.53), matte_black, bevel=0.008, parent=e)
-    box("tub spout", (0.2, 0.03, 0.03), (x + 0.92, 0.62, 1.04), matte_black, bevel=0.008, parent=e)
-    box("bath stool", (0.32, 0.32, 0.45), (x - 1.0, 0.85, 0.25), oak, bevel=0.02, parent=e)
-    asset("ceramic_vase_03", (x - 1.0, 0.85, 0.475), 0.3, parent=e)
+    t = loft("freestanding bath", rings, mat or ceramic, parent=e, p=2.3)
+    t.location = (x, y, z)
+    sub = t.modifiers.new("s", "SUBSURF"); sub.levels = 1; sub.render_levels = 2
+    return t
 
 
-def p_shower(e, x=0.2):
-    g = box("shower glass", (0.012, 1.1, 2.0), (x + 0.5, 0.6, 1.04), glass, bevel=0, parent=e)
-    box("glass profile", (0.03, 0.03, 2.0), (x + 0.5, 0.06, 1.04), matte_black, bevel=0, parent=e)
-    box("glass bar", (0.02, 1.1, 0.02), (x + 0.5, 0.6, 2.04), matte_black, bevel=0, parent=e)
-    box("shower arm", (0.025, 0.4, 0.025), (x - 0.2, 0.25, 2.2), matte_black, bevel=0.005, parent=e)
-    bpy.ops.mesh.primitive_cylinder_add(vertices=64, radius=0.15, depth=0.015, location=(x - 0.2, 0.45, 2.19))
-    o = bpy.context.object; o.data.materials.append(matte_black); o.parent = e; smooth(o)
-    box("valve", (0.18, 0.03, 0.18), (x - 0.2, T / 2 + 0.015, 1.15), matte_black, bevel=0.01, parent=e)
-    box("drain", (0.7, 0.08, 0.004), (x - 0.2, 0.25, 0.03), matte_black, bevel=0, parent=e)
+def floor_mixer(e, x, y, z, finish, toward=1):
+    box("bath mixer", (0.035, 0.035, 1.02), (x, y, z + 0.51), finish, bevel=0.008, parent=e)
+    box("bath mixer spout", (0.22, 0.03, 0.03), (x + toward * 0.1, y, z + 1.01), finish, bevel=0.008, parent=e)
+    box("hand shower", (0.04, 0.04, 0.2), (x - toward * 0.05, y + 0.03, z + 0.78), finish, bevel=0.012, parent=e)
 
 
-def p_wc(e, x=0.3):
-    wc = loft("wall-hung wc", [(0.17, 0.25, 0.32), (0.18, 0.27, 0.36), (0.185, 0.28, 0.42), (0.18, 0.27, 0.43)], ceramic, parent=e, p=3.0)
-    wc.location = (x, 0.33, 0.0)
-    sub = wc.modifiers.new("s", "SUBSURF"); sub.levels = 1; sub.render_levels = 2
-    box("seat", (0.36, 0.5, 0.025), (x, 0.36, 0.445), ceramic, bevel=0.012, parent=e)
-    box("flush plate", (0.24, 0.012, 0.16), (x, T / 2 + 0.006, 1.05), matte_black, bevel=0.004, parent=e)
-    box("paper holder", (0.14, 0.06, 0.02), (x + 0.4, T / 2 + 0.03, 0.75), matte_black, bevel=0.004, parent=e)
+def wc(e, x, y, z):
+    w = loft("wall-hung wc", [(0.17, 0.25, 0.32), (0.18, 0.27, 0.36), (0.185, 0.28, 0.42), (0.18, 0.27, 0.43)], ceramic, parent=e, p=3.0)
+    w.location = (x, y + 0.29, z)
+    sub = w.modifiers.new("s", "SUBSURF"); sub.levels = 1; sub.render_levels = 2
+    box("seat", (0.36, 0.5, 0.025), (x, y + 0.32, z + 0.445), ceramic, bevel=0.012, parent=e)
+    box("flush plate", (0.24, 0.012, 0.16), (x, y + 0.006, z + 1.05), matte_black, bevel=0.004, parent=e)
 
 
-def p_plant(e, name="potted_plant_02", x=0.8, y=0.5, h=1.3):
-    asset(name, (x, y, 0.025), h, rot_z=random.uniform(0, 6.28), parent=e)
+def vanity(e, x, y, z, finish=chrome):
+    box("vanity", (1.0, 0.48, 0.42), (x, y + 0.25, z + 0.68), oak, bevel=0.006, parent=e)
+    box("vanity top", (1.02, 0.5, 0.025), (x, y + 0.25, z + 0.9), material("white quartz", (0.88, 0.88, 0.86), 0.2, coat=0.5), bevel=0.003, parent=e)
+    for dx in (-0.25, 0.25):
+        box("handle", (0.2, 0.015, 0.015), (x + dx, y + 0.495, z + 0.84), matte_black, bevel=0.003, parent=e)
+    bowl = loft("countertop basin", [(0.2, 0.15, 0.912), (0.26, 0.19, 0.95), (0.27, 0.2, 1.04), (0.255, 0.185, 1.04),
+                                      (0.24, 0.17, 0.98), (0.1, 0.07, 0.93)], ceramic, cap_bottom=False, parent=e, p=2.4)
+    bowl.location = (x, y + 0.27, z)
+    box("mirror frame", (0.72, 0.03, 0.92), (x, y + 0.018, z + 1.62), matte_black, bevel=0.004, parent=e)
+    box("mirror", (0.68, 0.01, 0.88), (x, y + 0.035, z + 1.62), mirror_m, bevel=0, parent=e)
+    box("tap", (0.03, 0.03, 0.22), (x, y + 0.08, z + 1.03), finish, bevel=0.006, parent=e)
+    box("spout", (0.028, 0.14, 0.028), (x, y + 0.14, z + 1.13), finish, bevel=0.006, parent=e)
 
 
-def p_living(e):
-    asset("Ottoman_01", (-0.2, 0.9, 0.025), 0.42, parent=e)
-    asset("coffee_table_round_01", (0.55, 0.7, 0.025), 0.45, parent=e)
-    asset("ceramic_vase_03", (0.55, 0.7, 0.475), 0.28, parent=e)
+def shower_set(e, x, y, finish, rain=True):
+    box("shower mixer", (0.36, 0.06, 0.06), (x, y + 0.04, 1.05), finish, bevel=0.02, parent=e)
+    for dx in (-0.19, 0.19):
+        bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=0.032, depth=0.05, location=(x + dx, y + 0.04, 1.05), rotation=(0, math.pi / 2, 0))
+        o = bpy.context.object; o.data.materials.append(finish); o.parent = e; smooth(o)
+    box("slide rail", (0.022, 0.022, 0.9), (x + 0.13, y + 0.03, 1.55), finish, bevel=0.005, parent=e)
+    box("hand shower", (0.045, 0.045, 0.24), (x + 0.13, y + 0.06, 1.72), finish, bevel=0.015, parent=e)
+    if rain:
+        box("riser", (0.026, 0.026, 0.92), (x - 0.02, y + 0.03, 1.56), finish, bevel=0.006, parent=e)
+        box("shower arm", (0.025, 0.34, 0.025), (x - 0.02, y + 0.19, 2.02), finish, bevel=0.005, parent=e)
+        bpy.ops.mesh.primitive_cylinder_add(vertices=64, radius=0.14, depth=0.014, location=(x - 0.02, y + 0.34, 2.0))
+        o = bpy.context.object; o.data.materials.append(finish); o.parent = e; smooth(o)
 
 
-def p_bar(e):
-    box("counter", (1.6, 0.6, 0.9), (0.2, 0.45, 0.45), material("white lacquer", (0.85, 0.85, 0.83), 0.25, coat=0.4), bevel=0.01, parent=e)
-    box("counter top", (1.7, 0.66, 0.03), (0.2, 0.47, 0.915), tile_mat("CN011", 170, 66, k=3), bevel=0.004, parent=e)
-    for dx in (-0.25, 0.55):
-        asset("bar_chair_round_01", (dx, 1.05, 0.025), 0.95, rot_z=math.pi, parent=e)
+def pendant(x, y, z_bulb):
+    box("pendant cable", (0.006, 0.006, H - z_bulb - 0.05), (x, y, (H + z_bulb) / 2), black, bevel=0)
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=24, ring_count=12, radius=0.055, location=(x, y, z_bulb))
+    o = bpy.context.object; o.data.materials.append(bulb); smooth(o)
+    bpy.ops.object.light_add(type="POINT", location=(x, y, z_bulb - 0.08)); L = bpy.context.object
+    L.data.energy = 18; L.data.shadow_soft_size = 0.05; L.data.color = (1, 0.75, 0.45)
 
 
-PROPS = {"washstand": p_washstand, "vanity": p_vanity, "tub": p_tub, "shower": p_shower, "wc": p_wc,
-         "plant": p_plant, "living": p_living, "bar": p_bar}
+def led_line(name, size, loc, parent=None):
+    return box(name, size, loc, led, bevel=0, parent=parent)
+
+
+# ---- 1. the sample wall (left wall): framed tile samples in rows, like a tile shop's display wall
+SAMPLE_ORDER = ["CN010", "CN013", "CN007", "CN008", "CN011", "CN015", "CN006",
+                "CN001", "CN002", "CN003", "CN005", "CN012", "CN004", "CN009",
+                "CN014", "CN008", "CN010", "CN013", "CN007", "CN011", "CN003"]
+sw = group("sample wall", (-W / 2, -0.6, 0), -math.pi / 2)        # local +y points into the hall, local +x to the back
+done_skus = set()
+for i, sku in enumerate(SAMPLE_ORDER):
+    row, col = divmod(i, 7)
+    x, z = 3.0 - col * 1.0, 2.52 - row * 0.9
+    repeat = sku in done_skus
+    box("sample frame", (0.86, 0.035, 0.86), (x, 0.0175, z), black, bevel=0.003, parent=sw)
+    plane("sample", 0.8, 0.8, (x, 0.0365, z), (math.pi / 2, 0, 0),
+          tmat(sku, 80, 80, k=5, turn=repeat, grout=(55, 55, 55) if repeat else (212, 208, 200)), parent=sw)
+    box("price label", (0.09, 0.006, 0.045), (x + 0.31, 0.04, z + 0.36), label_m, bevel=0.001, parent=sw)
+    if not repeat:
+        done_skus.add(sku)
+        register(f"sample_{sku}", CAT[sku]["name"], sku, wpt(sw, (x, 0.3, z)), marks=[(sku, "sample", wpt(sw, (x, 0.04, z)))])
+box("sample wall cove", (7.3, 0.2, 0.12), (0, 0.1, 3.18), white, bevel=0.002, parent=sw)
+led_line("sample wall led", (7.2, 0.01, 0.012), (0, 0.19, 3.115), parent=sw)
+
+# ---- 2. bathroom vignettes: two tiled plinths with freestanding baths, split by a tiled partition
+vg = group("bath vignettes", (-3.4, -0.6, 0), 0)
+for cx, wall, flo, finish, did, title in [(-1.2, "CN015", "CN003", gold, "vig_oak", "Concrete and oak bathroom"),
+                                          (1.2, "CN006", "CN005", matte_black, "vig_marble", "Calacatta bathroom")]:
+    box("plinth", (2.32, 2.12, 0.1), (cx, 1.05, 0.05), alu, bevel=0.004, parent=vg)
+    floor_tiles("plinth tiles", 2.28, 2.08, (cx, 1.05, 0.101), flo, vg)
+    box("back wall", (2.32, 0.1, 2.5), (cx, -0.05, 1.25), white, bevel=0.002, parent=vg)
+    wall_tiles("back wall tiles", 2.28, 2.45, (cx, 0.002, 1.3), wall, vg)
+    box("wall cap", (2.34, 0.12, 0.025), (cx, -0.05, 2.51), alu, bevel=0.002, parent=vg)
+    tub(vg, cx + 0.15, 1.0, 0.1)
+    floor_mixer(vg, cx - 0.92, 1.0, 0.1, finish)
+    register(did, title, wall, wpt(vg, (cx, 0.6, 1.6)), floor=flo,
+             marks=[(wall, "wall", wpt(vg, (cx + (-0.6 if cx < 0 else 0.6), 0.01, 1.95))),
+                    (flo, "floor", wpt(vg, (cx + (0.55 if cx < 0 else -0.55), 1.85, 0.101)))])
+box("partition", (0.1, 1.3, 2.5), (0, 0.65, 1.25), white, bevel=0.002, parent=vg)
+wall_tiles("partition left", 1.28, 2.45, (-0.052, 0.65, 1.3), "CN015", vg, side=True)
+wall_tiles("partition right", 1.28, 2.45, (0.052, 0.65, 1.3), "CN006", vg, side=True)
+box("partition post", (0.12, 0.04, 2.52), (0, 1.3, 1.26), alu, bevel=0.003, parent=vg)
+box("outer post", (0.04, 0.12, 2.52), (-2.38, -0.05, 1.26), alu, bevel=0.003, parent=vg)
+box("outer post", (0.04, 0.12, 2.52), (2.38, -0.05, 1.26), alu, bevel=0.003, parent=vg)
+for (px, py, pz) in [(-1.6, 0.7, 2.25), (-1.0, 1.2, 2.05), (-0.5, 0.8, 2.35), (0.7, 0.9, 2.15), (1.3, 1.3, 2.4), (1.8, 0.7, 2.0)]:
+    p_ = wpt(vg, (px, py, pz)); pendant(p_[0], p_[1], p_[2])
+
+# ---- 3. the shower wall (back wall, left): shower sets on white boards against dark marble
+sh = group("shower wall", (-4.75, -D / 2, 0), 0)
+wall_tiles("shower wall tiles", 7.9, 2.7, (0, 0.004, 1.35), "CN011", sh, k=2, turn=True)
+box("shower wall fascia", (7.95, 0.26, 0.22), (0, 0.13, 2.81), charcoal, bevel=0.003, parent=sh)
+led_line("shower wall led", (7.9, 0.012, 0.012), (0, 0.255, 2.69), parent=sh)
+for i in range(7):
+    x = -3.3 + i * 1.1
+    box("display board", (0.52, 0.03, 2.1), (x, 0.06, 1.2), board, bevel=0.003, parent=sh)
+    box("board band", (0.52, 0.032, 0.08), (x, 0.061, 2.21), navy, bevel=0.002, parent=sh)
+    shower_set(sh, x, 0.075, chrome if i % 2 == 0 else matte_black, rain=(i % 3 != 1))
+register("showers", "Shower sets", "CN011", wpt(sh, (0, 1.2, 1.5)), sets="SN002",
+         marks=[("SN002", "product", wpt(sh, (-1.1, 0.12, 1.05))), ("CN011", "wall", wpt(sh, (-1.65, 0.006, 0.6)))])
+for tx in (-7.2, -2.2):                                # two more baths in front of the shower wall
+    g_ = group("bath", (tx, -4.45, 0), math.radians(4 if tx < -4 else -4))
+    tub(g_, 0, 0, 0)
+    floor_mixer(g_, -1.05, 0, 0, chrome if tx < -4 else matte_black)
+    pendant(tx - 0.3, -4.5, 2.3); pendant(tx + 0.35, -4.3, 2.55)
+
+# ---- 4. the slab gallery (back wall, right): big tiles in tall lit bays on a marble step
+gl = group("slab gallery", (4.75, -D / 2, 0), 0)
+box("gallery back", (7.9, 0.06, 3.0), (0, 0.03, 1.5), charcoal, bevel=0.002, parent=gl)
+box("gallery step", (7.9, 0.9, 0.12), (0, 0.51, 0.06), charcoal, bevel=0.003, parent=gl)
+floor_tiles("gallery step top", 7.88, 0.88, (0, 0.51, 0.121), "CN006", gl, k=2)
+led_line("gallery step led", (7.9, 0.012, 0.015), (0, 0.965, 0.03), parent=gl)
+box("gallery fascia", (7.95, 0.32, 0.2), (0, 0.16, 3.0), charcoal, bevel=0.003, parent=gl)
+led_line("gallery top led", (7.9, 0.012, 0.012), (0, 0.315, 2.89), parent=gl)
+for i, sku in enumerate(["CN006", "CN011", "CN015", "CN002", "CN001", "CN012"]):
+    x = -3.3 + i * 1.32
+    box("slab backing", (1.22, 0.03, 2.42), (x, 0.075, 1.45), charcoal, bevel=0.002, parent=gl)
+    wall_tiles("slab", 1.2, 2.4, (x, 0.092, 1.45), sku, gl, k=3)
+    for dx in (-0.66, 0.66):
+        box("gallery pier", (0.1, 0.14, 2.8), (x + dx, 0.07, 1.52), charcoal, bevel=0.003, parent=gl)
+        led_line("pier led", (0.012, 0.012, 2.5), (x + dx, 0.142, 1.45), parent=gl)
+    register(f"slab_{sku}", CAT[sku]["name"], sku, wpt(gl, (x, 0.6, 1.45)), marks=[(sku, "sample", wpt(gl, (x, 0.095, 1.7)))])
+
+# ---- 5. the podium: WCs and a basin on a lit charcoal platform with tiled backdrops
+pd = group("wc podium", (3.9, -0.7, 0), 0)
+box("podium", (3.4, 1.7, 0.14), (0, 0.85, 0.09), charcoal, bevel=0.004, parent=pd)
+floor_tiles("podium top", 3.36, 1.66, (0, 0.85, 0.161), "CN005", pd)
+box("podium glow", (3.36, 1.66, 0.01), (0, 0.85, 0.01), led, bevel=0, parent=pd)
+box("podium back", (3.4, 0.15, 1.5), (0, 0.075, 0.91), charcoal, bevel=0.003, parent=pd)
+led_line("podium back led", (3.4, 0.012, 0.012), (0, 0.155, 1.655), parent=pd)
+for x, sku, did in [(-1.1, "CN007", "pod_wc1"), (0.0, "CN010", "pod_wc2")]:
+    box("backdrop", (0.95, 0.06, 1.25), (x, 0.18, 0.84), white, bevel=0.002, parent=pd)
+    wall_tiles("backdrop tiles", 0.93, 1.23, (x, 0.2115, 0.84), sku, pd, k=5)
+    wc(pd, x, 0.212, 0.16)
+    register(did, CAT[sku]["name"] + " with WC", sku, wpt(pd, (x, 0.6, 0.9)), sets="SN003",
+             marks=[(sku, "wall", wpt(pd, (x - 0.3, 0.213, 1.3))), ("SN003", "product", wpt(pd, (x, 0.6, 0.6)))])
+box("backdrop tall", (1.05, 0.06, 2.3), (1.15, 0.18, 1.31), white, bevel=0.002, parent=pd)
+wall_tiles("backdrop tall tiles", 1.03, 2.28, (1.15, 0.2115, 1.31), "CN013", pd, k=5)
+vanity(pd, 1.15, 0.212, 0.16)
+register("pod_vanity", "Pearl Mosaic with basin", "CN013", wpt(pd, (1.15, 0.6, 1.2)), sets="SN001",
+         marks=[("CN013", "wall", wpt(pd, (1.5, 0.213, 2.2))), ("SN001", "product", wpt(pd, (1.15, 0.715, 0.84)))])
+
+# ---- 6. the bathroom wall (right wall): three tiled sections, each with its own floor sample
+bw = group("bathroom wall", (W / 2, -1.0, 0), math.pi / 2)         # local +y into the hall, local +x to the front
+for sx, wall, flo, kind, did, title, sets in [(-2.6, "CN008", "CN012", "shower", "wall_aqua", "Aqua Shield shower", "SN002"),
+                                              (0.0, "CN015", "CN002", "vanity", "wall_concrete", "Concrete Light bathroom", "SN001"),
+                                              (2.6, "CN011", "CN005", "wc", "wall_onyx", "Black Onyx bathroom", "SN003")]:
+    wall_tiles("section tiles", 2.4, 2.6, (sx, 0.004, 1.3), wall, bw)
+    floor_tiles("section floor", 2.4, 1.4, (sx, 0.7, 0.004), flo, bw)
+    for dx in (-1.22, 1.22):
+        box("section trim", (0.03, 0.03, 2.62), (sx + dx, 0.015, 1.31), alu, bevel=0.002, parent=bw)
+    box("section fascia", (2.46, 0.2, 0.16), (sx, 0.1, 2.68), charcoal, bevel=0.003, parent=bw)
+    led_line("section led", (2.4, 0.012, 0.012), (sx, 0.195, 2.6), parent=bw)
+    if kind == "shower":
+        shower_set(bw, sx - 0.3, 0.004, matte_black)
+        box("shower glass", (0.012, 1.1, 2.0), (sx + 0.4, 0.58, 1.04), glass, bevel=0, parent=bw)
+        box("glass profile", (0.03, 0.03, 2.0), (sx + 0.4, 0.03, 1.04), matte_black, bevel=0, parent=bw)
+        prod = (sx - 0.3, 0.08, 1.05)
+    elif kind == "vanity":
+        vanity(bw, sx, 0.004, 0.0); prod = (sx, 0.5, 0.68)
+    else:
+        wc(bw, sx, 0.004, 0.0); prod = (sx, 0.4, 0.42)
+        asset("potted_plant_01", wpt(bw, (sx + 0.8, 0.5, 0)), 0.9)
+    register(did, title, wall, wpt(bw, (sx, 0.6, 1.5)), floor=flo, sets=sets,
+             marks=[(wall, "wall", wpt(bw, (sx - 0.75, 0.006, 1.95))), (flo, "floor", wpt(bw, (sx + 0.7, 1.15, 0.005))),
+                    (sets, "product", wpt(bw, prod))])
+
+# ---- 7. the outdoor corner (front right, by the window): outdoor tiles on a deck with planters
+od = group("outdoor corner", (7.1, 4.0, 0), 0)
+box("deck", (2.62, 2.22, 0.12), (0, 0, 0.06), alu, bevel=0.004, parent=od)
+floor_tiles("deck slate", 1.3, 2.2, (-0.655, 0, 0.121), "CN014", od)
+floor_tiles("deck grip", 1.3, 2.2, (0.655, 0, 0.121), "CN004", od)
+box("planter wall", (2.6, 0.32, 0.45), (0, 0.95, 0.345), white, bevel=0.003, parent=od)
+wall_tiles("planter tiles", 2.58, 0.44, (0, 0.785, 0.345), "CN009", od, k=4)
+plane("planter top", 2.58, 0.3, (0, 0.95, 0.571), (0, 0, 0), tmat("CN009", 258, 30, k=4), parent=od)
+asset("potted_plant_02", wpt(od, (-0.8, 0.95, 0.57)), 1.2)
+asset("calathea_orbifolia_01", wpt(od, (0.7, 0.95, 0.57)), 0.6)
+asset("coffee_table_round_01", wpt(od, (0.2, -0.2, 0.12)), 0.45)
+asset("Ottoman_01", wpt(od, (-0.6, -0.4, 0.12)), 0.42)
+register("out_slate", "Garden Slate (outdoor)", "CN014", wpt(od, (-0.6, 0, 0.5)), floor="CN004",
+         marks=[("CN014", "floor", wpt(od, (-0.8, -0.85, 0.122))), ("CN004", "floor", wpt(od, (0.85, -0.85, 0.122))),
+                ("CN009", "wall", wpt(od, (-0.2, 0.784, 0.3)))])
+register("out_terra", "Terra Rustic (outdoor)", "CN009", wpt(od, (0.2, 0.8, 0.4)))
 
 # ================================================================== the hall
 random.seed(7)
-fl = tile_mat("CN015", 600, 600, k=1.2)
-floor = plane("hall floor", W, D, (0, 0, 0), (0, 0, 0), material("hall floor", rough=0.32, img=lay("CN015", 600, 600, 1.2)[0],
-                                                                   grout=lay("CN015", 600, 600, 1.2)[1], repeat=(W / 6, D / 6)))
+hf_c, hf_g = lay("CN001", 600, 600, 2)
+floor = plane("hall floor", W, D, (0, 0, 0), (0, 0, 0), material("hall floor", rough=0.18, img=hf_c, grout=hf_g, coat=0.3,
+                                                                   repeat=(W / 6, D / 6)))
 plane("ceiling", W, D, (0, 0, H), (math.pi, 0, 0), ceiling_m)
 plane("back wall", W, H, (0, -D / 2, H / 2), (math.pi / 2, 0, 0), white)
 plane("left wall", D, H, (-W / 2, 0, H / 2), (math.pi / 2, 0, -math.pi / 2), white)
 plane("right wall", D, H, (W / 2, 0, H / 2), (math.pi / 2, 0, math.pi / 2), white)
 for (x, y, sx, sy) in [(0, -D / 2 + 0.006, W, 0.012), (-W / 2 + 0.006, 0, 0.012, D), (W / 2 - 0.006, 0, 0.012, D)]:
     box("skirting", (sx, sy, 0.08), (x, y, 0.04), material("skirting", (0.75, 0.75, 0.73), 0.5), bevel=0)
-
-# booths: back row, then the left and right walls
-by = -D / 2 + 0.45
-booth("b_metro", (-6.0, by, 0), 0, "CN010", "CN003", [("vanity",), ("plant", "potted_plant_01", 0.95, 0.35, 0.9)], "SN001", "Metro White")
-booth("b_aqua", (-3.0, by, 0), 0, "CN008", "CN007", [("shower",), ("plant", "calathea_orbifolia_01", -0.75, 1.2, 0.7)], "SN002", "Aqua Shield")
-booth("b_calacatta", (0.0, by, 0), 0, "CN006", "CN006", [("washstand",), ("plant", "potted_plant_02", 0.85, 0.45, 1.25)], None, "Royal Calacatta")
-booth("b_onyx", (3.0, by, 0), 0, "CN011", "CN005", [("tub",)], None, "Black Onyx")
-booth("b_mosaic", (6.0, by, 0), 0, "CN013", "CN012", [("wc",), ("plant", "anthurium_botany_01", -0.7, 0.5, 0.6)], "SN003", "Pearl Mosaic")
-booth("b_concrete", (-W / 2 + 0.45, -1.4, 0), -math.pi / 2, "CN015", "CN015", [("living",)], None, "Concrete Light")
-booth("b_sand", (-W / 2 + 0.45, 1.9, 0), -math.pi / 2, "CN002", "CN002", [("bar",)], None, "Desert Sand")
-booth("b_ocean", (W / 2 - 0.45, -1.4, 0), math.pi / 2, "CN014", "CN004", [("plant", "potted_plant_01", 0.6, 0.6, 1.1), ("plant", "potted_plant_02", -0.5, 0.9, 1.4)], None, "Garden Slate")
-booth("b_terra", (W / 2 - 0.45, 1.9, 0), math.pi / 2, "CN001", "CN009", [("living",)], None, "Arctic Pearl")
-
-# slab racks in the middle: big tiles fanned on black stands (like a real showroom)
-for (cx, cy, rz, skus) in [(-2.6, -1.0, math.radians(18), ["CN012", "CN005", "CN002", "CN001"]),
-                           (2.6, -1.0, math.radians(-18), ["CN003", "CN009", "CN014", "CN004"])]:
-    for i, sku in enumerate(skus):
-        tw, th = tile_size(sku)
-        sw, sh = (0.6, 1.2) if max(tw, th) >= 120 or (tw, th) == (60, 60) else (0.6, 1.2)
-        mat_ = tile_mat(sku, 60, 120, k=4, turn=False)
-        dx = (i - 1.5) * 0.07
-        box("slab", (sw * 1.4, 0.012, sh), (cx + dx * math.cos(rz), cy + dx * math.sin(rz), 0.64), mat_,
-            rot=(math.radians(-14), 0, rz), bevel=0.002)
-    box("rack", (1.1, 0.36, 0.05), (cx, cy + 0.1, 0.03), matte_black, rot=(0, 0, rz), bevel=0.004)
-    box("rack back", (1.1, 0.03, 0.08), (cx, cy - 0.18, 0.1), matte_black, rot=(0, 0, rz), bevel=0.004)
-
-# consultation desk with a screen for Ceramica Nova AI
-desk_y = 1.6
-box("desk", (2.2, 0.75, 0.74), (0, desk_y, 0.37), material("white lacquer", (0.85, 0.85, 0.83), 0.25, coat=0.4), bevel=0.01)
-box("desk top", (2.3, 0.85, 0.04), (0, desk_y, 0.76), oak, bevel=0.006)
-scr = text_image(os.path.join(TEX, "screen.png"), (1600, 900), [
-    ("Ceramica Nova AI", FONT, 110, 300, (255, 255, 255)), ("Ask me about tiles, quantities and prices", FONT_L, 52, 460, (200, 210, 230))],
-    (26, 46, 92), (255, 255, 255))
-box("screen stand", (0.06, 0.06, 0.32), (0, desk_y - 0.15, 0.94), matte_black, bevel=0.004)
-box("screen frame", (0.82, 0.03, 0.48), (0, desk_y - 0.13, 1.28), matte_black, bevel=0.006)
-plane("screen", 0.78, 0.44, (0, desk_y - 0.112, 1.28), (math.pi / 2, 0, math.pi), material("screen", (1, 1, 1), 0.2, img=scr))
-MATS["screen"].node_tree.nodes["Principled BSDF"].inputs["Emission Strength"].default_value = 0.0
-for dx in (-0.6, 0.6):
-    asset("bar_chair_round_01", (dx, desk_y - 0.8, 0), 0.95)
-asset("potted_plant_02", (-1.5, desk_y + 0.1, 0), 1.6)
+asset("potted_plant_02", (0.0, -5.5, 0), 1.7)
+asset("potted_plant_01", (-8.4, 4.9, 0), 1.2)
 
 # ================================================================== the shop front, the square outside and the sky
 DOOR_W, GLASS_H = 2.6, 3.0
@@ -478,30 +583,38 @@ mp.inputs["Rotation"].default_value = (0, 0, math.radians(200))
 world.node_tree.links.new(tc.outputs["Generated"], mp.inputs["Vector"]); world.node_tree.links.new(mp.outputs[0], env.inputs[0])
 
 # ================================================================== lights inside
-for x in (-6, -3, 0, 3, 6):                           # a light track over each back-row booth
-    box("track", (2.6, 0.04, 0.04), (x, -2.9, H - 0.02), matte_black, bevel=0)
-    for dx in (-0.75, 0.75):
-        bpy.ops.object.light_add(type="SPOT", location=(x + dx, -2.9, H - 0.12)); L = bpy.context.object
-        L.data.energy = 260; L.data.spot_size = math.radians(60); L.data.spot_blend = 0.7; L.data.shadow_soft_size = 0.05
-        L.data.color = (1, 0.93, 0.84); L.rotation_euler = (math.radians(-38), 0, 0)
-        bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.045, depth=0.13, location=(x + dx, -2.9, H - 0.08), rotation=(math.radians(-38), 0, 0))
-        bpy.context.object.data.materials.append(matte_black)
-for side in (-1, 1):                                  # tracks over the side booths
-    for y in (-1.4, 1.9):
-        box("track", (0.04, 2.6, 0.04), (side * (W / 2 - 3.0), y, H - 0.02), matte_black, bevel=0)
-        for dy in (-0.75, 0.75):
-            bpy.ops.object.light_add(type="SPOT", location=(side * (W / 2 - 3.0), y + dy, H - 0.12)); L = bpy.context.object
-            L.data.energy = 260; L.data.spot_size = math.radians(60); L.data.spot_blend = 0.7; L.data.shadow_soft_size = 0.05
-            L.data.color = (1, 0.93, 0.84); L.rotation_euler = (0, math.radians(side * 38), 0)
-            bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.045, depth=0.13, location=(side * (W / 2 - 3.0), y + dy, H - 0.08), rotation=(0, math.radians(side * 38), 0))
-            bpy.context.object.data.materials.append(matte_black)
+def spot(loc, target, energy=240, size=50):
+    """A track spotlight aimed at a point (with its black housing)."""
+    d = (Vector(target) - Vector(loc)).normalized()
+    rot = d.to_track_quat("-Z", "Y").to_euler()
+    bpy.ops.object.light_add(type="SPOT", location=Vector(loc) + d * 0.08); L = bpy.context.object
+    L.data.energy = energy; L.data.spot_size = math.radians(size); L.data.spot_blend = 0.7; L.data.shadow_soft_size = 0.05
+    L.data.color = (1, 0.93, 0.84); L.rotation_euler = rot
+    bpy.ops.mesh.primitive_cylinder_add(vertices=24, radius=0.045, depth=0.13, location=loc)
+    c = bpy.context.object; c.rotation_euler = rot; c.data.materials.append(matte_black)
+
+
+def track(a, b, n, aim):
+    """A black ceiling track from a to b (x, y) with n spots, each aimed by aim(x, y) -> target."""
+    (x0, y0), (x1, y1) = a, b
+    box("track", (max(0.04, abs(x1 - x0)), max(0.04, abs(y1 - y0)), 0.04), ((x0 + x1) / 2, (y0 + y1) / 2, H - 0.02), matte_black, bevel=0)
+    for i in range(n):
+        t = (i + 0.5) / n; x, y = x0 + (x1 - x0) * t, y0 + (y1 - y0) * t
+        spot((x, y, H - 0.1), aim(x, y))
+
+
+track((-8.5, -4.4), (-1.0, -4.4), 6, lambda x, y: (x, -D / 2, 1.3))           # shower wall
+track((1.0, -4.3), (8.5, -4.3), 6, lambda x, y: (x, -D / 2, 1.4))             # slab gallery
+track((-7.3, -3.9), (-7.3, 2.7), 6, lambda x, y: (-W / 2, y, 1.6))            # sample wall
+track((7.4, -4.0), (7.4, 2.4), 5, lambda x, y: (W / 2, y, 1.3))               # bathroom wall
+track((2.4, 1.9), (5.4, 1.9), 3, lambda x, y: (x, 0.0, 0.6))                  # podium
 glowm = bpy.data.materials.new("downlight"); glowm.use_nodes = True
 em = glowm.node_tree.nodes.new("ShaderNodeEmission"); em.inputs["Strength"].default_value = 25; em.inputs["Color"].default_value = (1, 0.95, 0.88, 1)
 glowm.node_tree.links.new(em.outputs[0], glowm.node_tree.nodes["Material Output"].inputs[0])
 for x in (-6, -3, 0, 3, 6):
-    for y in (-0.5, 2.8):
+    for y in (-2.4, 1.0, 4.0):
         bpy.ops.object.light_add(type="AREA", location=(x, y, H - 0.02)); L = bpy.context.object
-        L.data.size = 0.5; L.data.energy = 110; L.data.color = (1, 0.96, 0.9)
+        L.data.size = 0.5; L.data.energy = 100; L.data.color = (1, 0.96, 0.9)
         bpy.ops.mesh.primitive_circle_add(vertices=32, radius=0.08, fill_type="NGON", location=(x, y, H - 0.004))
         bpy.context.object.data.materials.append(glowm)
 
@@ -509,15 +622,28 @@ for x in (-6, -3, 0, 3, 6):
 SPOTS = [
     {"id": "s0", "name": "Outside the shop", "pos": (0.0, FRONT + 6.0), "look": (0, -1)},
     {"id": "s1", "name": "Entrance", "pos": (0.0, FRONT - 1.6), "look": (0, -1)},
-    {"id": "s2", "name": "Bathrooms, left", "pos": (-4.5, -2.4), "look": (-1, -1)},
-    {"id": "s3", "name": "Marble booth", "pos": (0.0, -2.6), "look": (0, -1)},
-    {"id": "s4", "name": "Bathrooms, right", "pos": (4.5, -2.4), "look": (1, -1)},
-    {"id": "s5", "name": "Floor tiles", "pos": (-5.6, 0.3), "look": (-1, 0)},
-    {"id": "s6", "name": "Outdoor and floor", "pos": (5.6, 0.3), "look": (1, 0)},
-    {"id": "s7", "name": "Ceramica Nova AI desk", "pos": (0.0, 0.2), "look": (0, -1)},
+    {"id": "s2", "name": "Tile sample wall", "pos": (-6.3, 0.0), "look": (-1, 0)},
+    {"id": "s3", "name": "Bath displays", "pos": (-3.3, 2.5), "look": (0, -1)},
+    {"id": "s4", "name": "Shower wall", "pos": (-4.7, -2.9), "look": (0, -1)},
+    {"id": "s7", "name": "Middle of the showroom", "pos": (0.0, -2.0), "look": (0, -1)},
+    {"id": "s5", "name": "Big tile gallery", "pos": (4.6, -3.3), "look": (0, -1)},
+    {"id": "s6", "name": "WC and basin podium", "pos": (3.9, 2.3), "look": (0, -1)},
+    {"id": "s8", "name": "Bathroom wall", "pos": (6.6, -1.0), "look": (1, 0)},
+    {"id": "s9", "name": "Outdoor tiles", "pos": (5.0, 3.5), "look": (1, 0)},
 ]
-LINKS = {"s0": ["s1"], "s1": ["s0", "s7", "s5", "s6"], "s7": ["s1", "s3", "s2", "s4", "s5", "s6"], "s2": ["s3", "s5", "s7"],
-         "s3": ["s2", "s4", "s7"], "s4": ["s3", "s6", "s7"], "s5": ["s2", "s7", "s1"], "s6": ["s4", "s7", "s1"]}
+LINKS = {"s0": ["s1"], "s1": ["s0", "s3", "s6", "s7", "s9"], "s2": ["s3", "s4", "s7"], "s3": ["s1", "s2", "s4", "s7"],
+         "s4": ["s2", "s3", "s7"], "s7": ["s1", "s3", "s4", "s5", "s6", "s2"], "s5": ["s7", "s6", "s8"],
+         "s6": ["s1", "s5", "s8", "s9", "s7"], "s8": ["s5", "s6", "s9"], "s9": ["s1", "s6", "s8"]}
+
+# flat "display" pictures for the home page: (id, title, camera, target, lens in mm)
+VIEWS = [("overview", "Our showroom", (0.0, 5.3, 1.7), (0.0, -4.0, 1.0), 17),
+         ("samples", "Tile sample wall", (-5.0, 3.6, 1.55), (-8.6, -1.2, 1.35), 22),
+         ("baths", "Bath displays", (-1.2, 3.7, 1.6), (-3.7, -0.3, 0.8), 22),
+         ("gallery", "Big tile gallery", (1.6, -2.0, 1.55), (6.2, -6.0, 1.3), 20),
+         ("podium", "WC and basin podium", (6.6, 3.1, 1.6), (3.5, -0.3, 0.7), 22),
+         ("showers", "Shower wall", (-4.6, -1.0, 1.55), (-4.6, -6.0, 1.3), 18),
+         ("bathwall", "Bathroom wall", (6.3, 2.6, 1.6), (9.0, -1.8, 1.2), 18),
+         ("outdoor", "Outdoor tiles", (3.9, 1.4, 1.6), (7.4, 4.3, 0.4), 22)]
 
 
 def uv_of(cam, target):
@@ -557,6 +683,54 @@ if args.still:                                        # a normal photo, for chec
     doors_open(1.0)
     bpy.ops.render.render(write_still=True); print("still done"); sys.exit(0)
 
+if args.views:                                        # flat "display" photos for the home page's shop-the-look
+    from bpy_extras.object_utils import world_to_camera_view
+    sc.render.resolution_x, sc.render.resolution_y = 1920, 1080
+    sc.render.resolution_percentage = args.pct
+    doors_open(1.0)
+
+    def visible(p):
+        dg = bpy.context.evaluated_depsgraph_get()
+        o = cam.matrix_world.translation.copy(); t = Vector(p)
+        while True:
+            d = t - o; dist = d.length
+            hit, loc, _n, _i, ob, _m = sc.ray_cast(dg, o, d.normalized(), distance=max(0.0, dist - 0.01))
+            if not hit or (loc - t).length < 0.08:
+                return True
+            if "glass" in ob.name:
+                o = loc + d.normalized() * 0.02; continue
+            return False
+
+    def dots():
+        here = cam.matrix_world.translation
+        found = {}
+        for _did, sku, surface, p in MARKS:
+            c = world_to_camera_view(sc, cam, Vector(p))
+            if c.z <= 0.3 or c.z > 7.5 or not (0.05 < c.x < 0.95 and 0.08 < c.y < 0.93) or not visible(p):
+                continue
+            dist = (Vector(p) - here).length
+            if sku not in found or dist < found[sku][0]:        # one dot per product: the nearest one
+                found[sku] = (dist, {"sku": sku, "surface": surface, "x": round(c.x * 100, 1), "y": round((1 - c.y) * 100, 1)})
+        return [v for _d, v in sorted(found.values(), key=lambda t: t[0])[:8]]
+
+    keep = set(filter(None, args.only.split(",")))
+    os.makedirs(args.home, exist_ok=True)
+    jp = os.path.join(args.home, "views.json")
+    res = json.load(open(jp)) if os.path.exists(jp) else {}
+    for vid, title, loc, target, lens in VIEWS:
+        cam.location = loc; cam.data.lens = lens
+        cam.rotation_euler = (Vector(target) - Vector(loc)).to_track_quat("-Z", "Y").to_euler()
+        bpy.context.view_layer.update()
+        res[vid] = {"title": title, "image": f"/images/home/show_{vid}.jpg", "spots": dots()}
+        if keep and vid not in keep:
+            continue
+        sc.render.filepath = os.path.join(args.home, f"show_{vid}.jpg")
+        bpy.ops.render.render(write_still=True)
+        print("view", vid, res[vid]["spots"], flush=True)
+        json.dump({k: res[k] for k in [v[0] for v in VIEWS] if k in res}, open(jp, "w"), indent=1)
+    json.dump({k: res[k] for k in [v[0] for v in VIEWS] if k in res}, open(jp, "w"), indent=1)
+    print("views done"); sys.exit(0)
+
 cam.data.type = "PANO"; cam.data.panorama_type = "EQUIRECTANGULAR"
 sc.render.resolution_x, sc.render.resolution_y = args.res, args.res // 2
 only = set(filter(None, args.only.split(",")))
@@ -592,6 +766,7 @@ for s in SPOTS:
         print("rendered", path, flush=True)
     doors_open(1.0)
 out["booths"] = [{"id": b["id"], "sku": b["sku"], "floor": b["floor"], "set": b["set"], "title": b["title"]} for b in BOOTHS]
+out["order"] = [s["id"] for s in SPOTS if s["id"] != "s0"]
 out["closed"] = "/images/showroom/s0_closed.jpg"
 json.dump(out, open(os.path.join(args.out, "spots.json"), "w"), indent=1)
 print("spots.json written")

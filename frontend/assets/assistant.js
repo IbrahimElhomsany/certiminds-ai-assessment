@@ -366,6 +366,8 @@ function renderVisControls() {
     ? "A walkable 3D version of this room, made by an AI (World Labs) from our 360° picture. Edges and corners the camera never saw can look soft or smeared. Your floor tile is laid over the floor; to tile the walls, use the 360° view."
     : room.kind === "3d"
     ? "A 3D room made by Ceramica Nova. Walk around to see your tiles from every side, at their real size. Colours on screen can look slightly different from the real tile."
+    : room.kind === "pano" && room.id.startsWith("ph_")
+    ? "A real 360° photo of a real room (from Poly Haven, free to use), with your tiles laid on the floor and walls our room AI found. Drag to look all around. Colours on screen can look slightly different from the real tile."
     : room.kind === "pano" && room.id !== "pano"
     ? "A 360° room by Ceramica Nova, with the tiles laid on the floor the AI found in the picture. Drag to look all around. Colours on screen can look slightly different from the real tile."
     : room.kind === "pano"

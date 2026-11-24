@@ -227,6 +227,26 @@ window.NOVA_ROOMS.push(
       { name: "By the TV", photo: "/images/pano_tvroom_tv.jpg", at: [0.75, -0.55], turn: -54.2 },
       { name: "Reading corner", photo: "/images/pano_tvroom_corner.jpg", at: [0.5, -1.65], turn: 0.3 },
     ] },
+  // Real 360° photos of real rooms from Poly Haven (polyhaven.com, CC0: free for any use, no credit needed), most of them
+  // empty, so the floor and walls are clear for tiles. The floor and walls were found by our room AI (tools/roomai_pano.py).
+  { id: "ph_small_empty_room_1", kind: "pano", name: "Empty room, daylight 360°", location: "indoor", photo: "/images/pano_ph_small_empty_room_1.jpg", thumb: "/images/pano_ph_small_empty_room_1_thumb.jpg",
+    width: 800, height: 500, surfaces: { floor: [{}], wall: [{}] } },
+  { id: "ph_lebombo", kind: "pano", name: "Empty house, sunny 360°", location: "indoor", photo: "/images/pano_ph_lebombo.jpg", thumb: "/images/pano_ph_lebombo_thumb.jpg",
+    width: 800, height: 500, surfaces: { floor: [{}], wall: [{}] } },
+  { id: "ph_small_empty_house", kind: "pano", name: "Empty house with kitchen 360°", location: "indoor", photo: "/images/pano_ph_small_empty_house.jpg", thumb: "/images/pano_ph_small_empty_house_thumb.jpg",
+    width: 800, height: 500, surfaces: { floor: [{}], wall: [{}] } },
+  { id: "ph_unfinished_office", kind: "pano", name: "Bright empty room 360°", location: "indoor", photo: "/images/pano_ph_unfinished_office.jpg", thumb: "/images/pano_ph_unfinished_office_thumb.jpg",
+    width: 800, height: 500, surfaces: { floor: [{}], wall: [{}] } },
+  { id: "ph_modern_bathroom", kind: "pano", name: "Modern bathroom 360°", location: "indoor", photo: "/images/pano_ph_modern_bathroom.jpg", thumb: "/images/pano_ph_modern_bathroom_thumb.jpg",
+    width: 800, height: 500, surfaces: { floor: [{}], wall: [{}] } },
+  { id: "ph_bathroom", kind: "pano", name: "Family bathroom 360°", location: "indoor", photo: "/images/pano_ph_bathroom.jpg", thumb: "/images/pano_ph_bathroom_thumb.jpg",
+    width: 800, height: 500, surfaces: { floor: [{}], wall: [{}] } },
+  { id: "ph_kiara_interior", kind: "pano", name: "Living room and kitchen 360°", location: "indoor", photo: "/images/pano_ph_kiara_interior.jpg", thumb: "/images/pano_ph_kiara_interior_thumb.jpg",
+    width: 800, height: 500, surfaces: { floor: [{}], wall: [{}] } },
+  { id: "ph_studio_country_hall", kind: "pano", name: "Country kitchen 360°", location: "indoor", photo: "/images/pano_ph_studio_country_hall.jpg", thumb: "/images/pano_ph_studio_country_hall_thumb.jpg",
+    width: 800, height: 500, surfaces: { floor: [{}], wall: [{}] } },
+  { id: "ph_brown_photostudio_04", kind: "pano", name: "Modern living room 360°", location: "indoor", photo: "/images/pano_ph_brown_photostudio_04.jpg", thumb: "/images/pano_ph_brown_photostudio_04_thumb.jpg",
+    width: 800, height: 500, surfaces: { floor: [{}], wall: [{}] } },
   // a walkable version of the TV lounge, made by World Labs from the 360° picture (backend/worlds.py). It is only
   // listed once it has been made (GET /api/worlds/tvroom says "ready").
   { id: "world_tvroom", kind: "splat", world: "tvroom", name: "TV lounge, walk around", location: "indoor",

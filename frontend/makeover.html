@@ -87,6 +87,23 @@
   .history { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
   .history button { border:1px solid var(--line); border-radius:8px; padding:0; width:96px; height:64px; overflow:hidden; cursor:pointer; background:#fff; }
   .history button img { width:100%; height:100%; object-fit:cover; display:block; }
+  .plan { margin-top:12px; border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:#fafafa; font-size:13px; }
+  .plan h3 { margin:0 0 8px; font-size:14px; color:var(--ink); }
+  .plan ul { list-style:none; margin:0; padding:0; display:grid; gap:8px; }
+  .plan li { display:grid; grid-template-columns:20px 1fr; gap:6px; align-items:start; }
+  .plan li .i { font-weight:700; text-align:center; } .plan li.ok .i { color:var(--ok); } .plan li.swap .i { color:var(--accent); }
+  .plan li.no .i { color:var(--bad); } .plan li.mood .i { color:var(--muted); }
+  .plan .sugg { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .plan .sugg button { display:flex; align-items:center; gap:6px; border:1px solid var(--line); background:#fff; border-radius:999px; padding:3px 10px 3px 3px; font:inherit; font-size:12px; cursor:pointer; }
+  .plan .sugg button:hover { border-color:var(--accent); color:var(--accent); }
+  .plan .sugg img { width:24px; height:24px; border-radius:50%; object-fit:cover; }
+  .plan .acts { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; } .plan .acts .btn { width:auto; padding:10px 16px; }
+  .look { margin-top:14px; } .look h3 { font-size:15px; color:var(--ink); margin:0 0 8px; }
+  .look .items { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:8px; }
+  .look a.item { display:grid; grid-template-columns:56px 1fr; gap:10px; align-items:center; border:1px solid var(--line); border-radius:12px; padding:8px; text-decoration:none; }
+  .look a.item:hover { border-color:var(--accent); } .look img { width:56px; height:56px; border-radius:8px; object-fit:cover; }
+  .look b { display:block; color:var(--ink); font-size:14px; } .look small { color:var(--muted); display:block; } .look .go { color:var(--accent); font-size:12px; font-weight:600; }
+  .look ul { margin:10px 0 0; padding-left:18px; color:var(--muted); font-size:13px; }
   .toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:var(--ink); color:#fff; padding:10px 16px; border-radius:10px; font-size:14px; display:none; }
 </style>
 </head>
@@ -140,6 +157,7 @@
         <textarea id="request" maxlength="300" placeholder="e.g. paint the walls light grey"></textarea>
         <div class="chips" id="chips"></div>
         <div class="ferr" id="e-request"></div>
+        <div class="plan" id="plan" hidden aria-live="polite"></div>
       </div>
 
       <div class="card">
@@ -168,6 +186,7 @@
           <span class="tag" id="rTiles"></span><small style="color:var(--muted)" id="rInfo"></small>
           <span class="sp"><button class="btn ghost" type="button" id="dl">Download</button><button class="btn ghost" type="button" id="share">Copy link</button></span>
         </div>
+        <div class="look" id="look"></div>
         <p class="note">Drawn by an AI image model (OpenAI). The tile look is close to ours, but exact size and pattern can differ, and small things in the room can shift. For exact tiles at real size, use the <a href="/assistant#/rooms">Room visualiser</a>.</p>
         <details><summary>What we asked the AI</summary><pre id="rPrompt"></pre></details>
         <div class="history" id="history"></div>
@@ -186,7 +205,8 @@ const USER_ID = (() => {
     return id;
   } catch { return "USR-" + String(Math.floor(Math.random() * 1e10)).padStart(10, "0"); }
 })();
-const S = { photo: null, floor: null, wall: null, on: false, last: null, history: [] };
+const S = { photo: null, floor: null, wall: null, on: false, last: null, history: [], tiles: {}, okKey: null };
+const money = (v, cur) => `${cur || "QAR"} ${Number(v || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 const SAMPLES = [["Living room", "vis_living"], ["TV lounge", "vis_tvroom"], ["Bedroom", "vis_bedroom"], ["Kitchen", "vis_kitchen"],
   ["Bathroom", "vis_bathroom"], ["Spa bathroom", "vis_spa"], ["Office", "vis_office"], ["Terrace", "vis_terrace"], ["Showroom lounge", "showroom_lounge"]]
   .map(([n, f]) => [n, `/images/${f}.jpg`]);
@@ -210,13 +230,18 @@ function tileGrid(el, list, kind) {
     `<button type="button" class="tile" data-sku="${t.sku}" title="${esc(t.name)}, ${esc(t.size_cm)} cm"><img src="${t.image}" alt="" loading="lazy"><b>${esc(t.name)}</b><i>${esc(t.size_cm)} cm · ${esc(t.finish)}</i></button>`).join("");
   el.addEventListener("click", e => {
     const b = e.target.closest(".tile"); if (!b) return;
-    el.querySelectorAll(".tile").forEach(x => x.classList.toggle("on", x === b));
-    S[kind] = b.dataset.sku || null; clearErr(kind); clearErr("request");
+    pickTile(kind, b.dataset.sku || null);
   });
+}
+function pickTile(kind, sku) {
+  const el = $(kind === "floor" ? "floorTiles" : "wallTiles");
+  el.querySelectorAll(".tile").forEach(x => x.classList.toggle("on", (x.dataset.sku || null) === sku));
+  S[kind] = sku; clearErr(kind); clearErr("request"); hidePlan();
 }
 async function loadStatus() {
   try {
     const d = await (await fetch("/api/v1/makeover")).json();
+    for (const t of d.tiles) S.tiles[t.sku] = t;
     S.on = d.on; $("off").style.display = d.on ? "none" : "block"; $("go").disabled = !d.on;
     tileGrid($("floorTiles"), d.tiles.filter(t => t.surfaces.includes("floor")), "floor");
     tileGrid($("wallTiles"), d.tiles.filter(t => t.surfaces.includes("wall")), "wall");
@@ -293,8 +318,37 @@ $("samples").onclick = async e => {
   try { const blob = await (await fetch(b.dataset.u)).blob(); usePhoto(blob, b); } catch { showErr("photo", "That sample could not be loaded."); }
 };
 $("chips").innerHTML = CHIPS.map(c => `<button type="button">${c}</button>`).join("");
-$("chips").onclick = e => { const b = e.target.closest("button"); if (!b) return; $("request").value = b.textContent; clearErr("request"); };
-$("request").oninput = () => clearErr("request");
+$("chips").onclick = e => { const b = e.target.closest("button"); if (!b) return; $("request").value = b.textContent; clearErr("request"); hidePlan(); };
+$("request").oninput = () => { clearErr("request"); hidePlan(); };
+
+// ------------------------------------------------ check the words against what we sell, before drawing
+const planKey = () => JSON.stringify([S.floor, S.wall, $("request").value.trim().toLowerCase().replace(/\s+/g, " ")]);
+function hidePlan() { $("plan").hidden = true; $("plan").innerHTML = ""; S.okKey = null; }
+const ICON = { tile: ["ok", "✓"], swap: ["swap", "⇄"], missing: ["no", "✕"], left_out: ["no", "✕"], paint: ["mood", "•"], light: ["mood", "•"] };
+function renderPlan(d) {
+  const sugg = l => !l.suggest.length ? "" : `<div class="sugg">${l.suggest.map(s => S.tiles[s] ?
+    `<button type="button" data-surface="${l.surface}" data-sku="${s}"><img src="${S.tiles[s].image}" alt="">${esc(S.tiles[s].name)}</button>` : "").join("")}</div>`;
+  $("plan").innerHTML = `<h3>${d.empty ? "We can't draw this with our products" : "Here is what the AI will draw"}</h3>
+    <ul>${d.lines.map(l => `<li class="${ICON[l.kind][0]}"><span class="i" aria-hidden="true">${ICON[l.kind][1]}</span><div>${esc(l.text)}${sugg(l)}</div></li>`).join("")}</ul>
+    ${d.empty ? "" : `<div class="acts"><button type="button" class="btn" id="planGo">✨ Make it like this</button><button type="button" class="btn ghost" id="planEdit">Change my words</button></div>`}`;
+  $("plan").hidden = false;
+  const go = $("planGo"); if (go) go.onclick = () => { S.okKey = planKey(); $("form").requestSubmit(); };
+  const ed = $("planEdit"); if (ed) ed.onclick = () => { hidePlan(); $("request").focus(); };
+}
+$("plan").addEventListener("click", async e => {
+  const b = e.target.closest(".sugg button"); if (!b) return;
+  pickTile(b.dataset.surface, b.dataset.sku);
+  const d = await checkWords(); if (d) renderPlan(d);
+});
+async function checkWords() {
+  try {
+    const r = await fetch("/api/v1/makeover/check", { method: "POST", headers: { "Content-Type": "application/json", "X-User-Id": USER_ID },
+      body: JSON.stringify({ floor: S.floor, wall: S.wall, request: $("request").value.trim() }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { const det = d.detail || {}; showErr(det.field || "request", det.message || "We couldn't check your words just now. Please try again."); return null; }
+    return d;
+  } catch { showErr("general", "No answer from the server. Check your connection and try again."); return null; }
+}
 
 // ------------------------------------------------ make it
 $("form").onsubmit = async e => {
@@ -304,6 +358,14 @@ $("form").onsubmit = async e => {
   if (!S.photo) { showErr("photo", "Upload a photo of your room first, or pick one of ours."); bad = true; }
   if (!S.floor && !S.wall && !text) { showErr("request", "Pick a floor or wall tile, or write what you'd like to change."); bad = true; }
   if (bad) return;
+  if (text && S.okKey !== planKey()) {           // words: show what we'll draw (our products only) before paying for a picture
+    $("go").disabled = true;
+    const d = await checkWords(); $("go").disabled = !S.on;
+    if (!d) return;
+    if (d.empty) { renderPlan(d); showErr("request", d.message); return; }
+    if (d.needs_ok) { renderPlan(d); $("plan").scrollIntoView({ behavior: "smooth", block: "center" }); return; }
+    S.okKey = planKey();
+  }
   $("go").disabled = true; $("busy").classList.add("show"); $("empty").hidden = true;
   const t0 = Date.now(), tick = setInterval(() => $("secs").textContent = Math.round((Date.now() - t0) / 1000), 500);
   try {
@@ -331,6 +393,10 @@ function show(d) {
   if (innerWidth <= 900) $("stage").scrollIntoView({ behavior: "smooth", block: "start" });
   $("rTiles").textContent = d.tiles; $("rInfo").textContent = `Made in ${d.seconds} s · ${d.quality === "high" ? "best" : "standard"} quality`;
   $("rPrompt").textContent = d.prompt; $("result").classList.add("show");
+  const notes = (d.notes || []).filter(n => ["swap", "missing", "left_out", "paint"].includes(n.kind));
+  $("look").innerHTML = (d.products && d.products.length ? `<h3>Shop this look</h3><div class="items">${d.products.map(p =>
+    `<a class="item" href="${esc(p.url)}"><img src="${esc(p.image)}" alt=""><span><b>${esc(p.name)}</b><small>${esc(p.where === "floor" ? "Floor" : "Walls")} · ${money(p.price, p.currency)} / m²</small><span class="go">See it in the shop →</span></span></a>`).join("")}</div>` : "")
+    + (notes.length ? `<ul>${notes.map(n => `<li>${esc(n.text.replace(/ Pick one of ours instead:$/, ""))}</li>`).join("")}</ul>` : "");
 }
 function renderHistory() {
   $("history").innerHTML = S.history.length < 2 ? "" : S.history.map((h, i) => `<button type="button" data-i="${i}" title="${esc(h.tiles)}"><img src="${h.after}" alt=""></button>`).join("");

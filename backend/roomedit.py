@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 from PIL import Image, UnidentifiedImageError
 
 from backend.catalog import CATALOG
+from backend import makeover_plan as mp
 from backend.observability import log_event
 from backend.ratelimit import RateLimiter
 from backend import visual
@@ -37,6 +38,7 @@ FALLBACK_MODELS = ("gpt-image-2", "gpt-image-1.5")   # if the first is not on th
 SIZES = {"1536x1024": 1.5, "1024x1024": 1.0, "1024x1536": 2 / 3}
 COST_USD = {"medium": 0.05, "high": 0.20}            # rough price of one picture, shown to the customer
 limiter = RateLimiter(max_requests=int(os.getenv("MAKEOVER_RATE_PER_MIN", "3")), window_seconds=60)
+limiter_check = RateLimiter(max_requests=20, window_seconds=60)
 _day = {"date": None, "count": 0}
 _lock = threading.Lock()
 ROOT = visual.ROOT
@@ -68,7 +70,9 @@ def describe(sku: str) -> str:
             f"each tile {p.tile_width_cm} x {p.tile_length_cm} cm")
 
 
-def build_prompt(floor: Optional[str], wall: Optional[str], request: str, source: str = "photo") -> str:
+def build_prompt(floor: Optional[str], wall: Optional[str], extras: Optional[list[str]] = None, source: str = "photo") -> str:
+    """Written only from our catalogue and the plan (makeover_plan.py). The customer's own words never reach the AI,
+    so it can only draw products we sell (plus, if asked, a paint colour or a light change)."""
     parts = ["Edit this room photo (the first image)."]
     if source == "view":
         parts = ["The first image is one view inside a computer-made 3D model of a room, seen from where the customer "
@@ -79,13 +83,17 @@ def build_prompt(floor: Optional[str], wall: Optional[str], request: str, source
                      "Lay them in straight rows with thin grout lines, following the floor's perspective, at true "
                      "size for this room (judge the scale from the furniture and doors). Rugs stay on top of the new floor.")
         n += 1
+    else:
+        parts.append("FLOOR: leave the floor exactly as it is.")
     if wall:
         parts.append(f"WALLS: cover the main painted walls with the tile shown in image {n}, {describe(wall)}, "
                      "at true size, with thin grout lines. Windows, doors, frames, TV, shelves and switches stay in front.")
-    if request:
-        parts.append(f"The customer also asks: \"{request}\". Do only that kind of change to floors, walls or colours.")
+    elif not any(e.startswith("WALL PAINT") for e in extras or []):
+        parts.append("WALLS: leave the walls exactly as they are.")
+    parts += list(extras or [])
     parts.append("Keep everything else exactly as it is: furniture, rugs, objects, plants, windows, doors, ceiling, "
-                 "camera angle and framing. Keep the room's own light, and add the natural reflections and soft "
+                 "camera angle and framing. Do not add anything new: no lamps or wall lights, panels, cladding, "
+                 "wallpaper, furniture or decorations. Keep the room's own light, and add the natural reflections and soft "
                  "shadows the new surface would have. Photorealistic, like a real photo of the same room.")
     return "\n".join(parts)
 
@@ -175,7 +183,8 @@ def _count_today() -> bool:
 def status():
     """Whether AI makeovers are switched on, and the tiles that can be used."""
     tiles = [{"sku": p.sku, "name": p.name, "surfaces": p.surfaces, "style": p.style, "finish": p.finish,
-              "size_cm": f"{p.tile_width_cm}x{p.tile_length_cm}", "image": f"/images/{p.sku}.jpg"}
+              "size_cm": f"{p.tile_width_cm}x{p.tile_length_cm}", "image": f"/images/{p.sku}.jpg",
+              "price": p.price_per_m2, "currency": p.currency}
              for p in CATALOG.values() if (ROOT / "images" / f"{p.sku}.jpg").exists()]
     return {"on": is_on(), "tiles": tiles, "cost_usd": COST_USD}
 
@@ -204,6 +213,10 @@ def makeover(req: MakeoverRequest, request: Request, x_user_id: Optional[str] = 
         err("request", "Pick a floor or wall tile, or write what you'd like to change.")
     if not is_on():
         err("general", "AI makeovers are not switched on yet (the shop owner adds an OpenAI key).", 503)
+    plan = mp.make_plan(text, floor, wall)          # the words become our products (or are left out)
+    if plan.empty:
+        err("request", nothing_to_draw(plan))
+    floor, wall, extras = plan.floor, plan.wall, mp.instructions(plan)
     path = visual._own_photo(req.photo_id, x_user_id)
     if not limiter.allow(x_user_id):
         err("general", "Please wait a minute before the next makeover.", 429)
@@ -214,7 +227,7 @@ def makeover(req: MakeoverRequest, request: Request, x_user_id: Optional[str] = 
         before, size = fit_preset(Image.open(path).convert("RGB"))
     except (UnidentifiedImageError, OSError):
         err("photo", "This photo can't be read. Please upload it again.")
-    prompt = build_prompt(floor, wall, text, req.source)
+    prompt = build_prompt(floor, wall, extras, req.source)
     refs = [tile_picture(s) for s in (floor, wall) if s]
     t0 = time.time()
     out, model = edit_image(_jpeg(before, 92), refs, prompt, size, req.quality)
@@ -226,12 +239,51 @@ def makeover(req: MakeoverRequest, request: Request, x_user_id: Optional[str] = 
     if after.size != before.size:
         after = after.resize(before.size, Image.LANCZOS)
 
-    names = [f"{CATALOG[floor].name} floor" if floor else "", f"{CATALOG[wall].name} walls" if wall else ""]
-    tiles = " and ".join(n for n in names if n) or text[:120]
+    names = [f"{CATALOG[floor].name} floor" if floor else "", f"{CATALOG[wall].name} walls" if wall else "",
+             f"{plan.paint} paint" if plan.paint else "", mp.LIGHT_WORDS[plan.light] if plan.light else ""]
+    tiles = " and ".join(n for n in names if n)
     b = visual.save_image(_jpeg(before), x_user_id, "render", {"room": "AI makeover (before)", "tiles": ""})
     a = visual.save_image(_jpeg(after), x_user_id, "render", {"room": "AI makeover", "tiles": tiles,
                                                               "model": model, "seconds": seconds})
     log_event("makeover_done", model=model, seconds=seconds, quality=req.quality, floor=floor, wall=wall)
     return {"before": b["url"], "after": a["url"], "share_url": f"{visual._public_base(request)}{a['url']}",
             "tiles": tiles, "model": model, "width": before.width, "height": before.height, "seconds": seconds, "quality": req.quality,
-            "cost_usd": COST_USD[req.quality], "prompt": prompt}
+            "cost_usd": COST_USD[req.quality], "prompt": prompt,
+            "products": [used(s, where) for s, where in ((floor, "floor"), (wall, "walls")) if s],
+            "notes": [l.model_dump() for l in plan.lines]}
+
+
+def used(sku: str, where: str) -> dict:
+    p = CATALOG[sku]
+    return {"sku": sku, "name": p.name, "where": where, "price": p.price_per_m2, "currency": p.currency,
+            "image": f"/images/{sku}.jpg", "url": f"/#/p/{sku}"}
+
+
+def nothing_to_draw(plan: "mp.Plan") -> str:
+    left = [l for l in plan.lines if l.kind in ("missing", "left_out")]
+    return (left[0].text.split(" Pick one")[0] + " " if left else "") + "Pick one of our floor or wall tiles above, or ask for a wall colour or brighter light."
+
+
+class CheckRequest(BaseModel):
+    floor: Optional[str] = Field(default=None, max_length=20)
+    wall: Optional[str] = Field(default=None, max_length=20)
+    request: str = Field(default="", max_length=300)
+
+
+@router.post("/api/v1/makeover/check")
+def check(req: CheckRequest, x_user_id: Optional[str] = Header(default=None)):
+    """Before drawing: what the AI will put in the room, what was swapped for our closest product, and what is
+    left out because we don't sell it. The page shows this next to the customer's words."""
+    if not x_user_id or not visual.VISITOR.match(x_user_id):
+        raise HTTPException(status_code=400, detail="Missing visitor id.")
+    floor, wall, text = (req.floor or None), (req.wall or None), " ".join(req.request.split())
+    if floor and not mp.fits(floor, "floor"):
+        err("floor", "Pick one of our floor tiles.")
+    if wall and not mp.fits(wall, "wall"):
+        err("wall", "Pick one of our wall tiles.")
+    if text and not limiter_check.allow(x_user_id):
+        err("request", "Please wait a moment before checking again.", 429)
+    plan = mp.make_plan(text, floor, wall)
+    return {"floor": plan.floor, "wall": plan.wall, "paint": plan.paint, "light": plan.light,
+            "needs_ok": plan.needs_ok, "empty": plan.empty, "lines": [l.model_dump() for l in plan.lines],
+            "message": nothing_to_draw(plan) if plan.empty else ""}

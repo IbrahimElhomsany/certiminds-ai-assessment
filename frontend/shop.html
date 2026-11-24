@@ -408,7 +408,6 @@
       <a href="#/shop?kind=tile&location=outdoor" data-k="outdoor">Outdoor</a>
       <a href="#/shop?kind=set" data-k="set">Bathroom sets</a>
       <a href="#/shop?kind=acc" data-k="acc">Grout &amp; adhesive</a>
-      <a href="/assistant#/rooms" class="vizlink">Room visualiser</a>
       <a href="/makeover" class="vizlink">AI room makeover</a>
     </nav>
     <form class="search" id="searchForm" role="search">
@@ -424,7 +423,6 @@
     <a href="#/shop?kind=tile&location=outdoor" data-k="outdoor">Outdoor</a>
     <a href="#/shop?kind=set" data-k="set">Bathroom sets</a>
     <a href="#/shop?kind=acc" data-k="acc">Grout &amp; adhesive</a>
-    <a href="/assistant#/rooms" class="vizlink">Room visualiser</a>
       <a href="/makeover" class="vizlink">AI room makeover</a>
     <a href="#/shop" data-k="all">All products</a>
   </nav>
@@ -524,7 +522,7 @@ async function home() {
       <p>Porcelain, marble-look and outdoor tiles, delivered across Qatar. See them in your own room before you buy.</p>
       <div class="cta">
         <a class="btn" href="#/shop?kind=tile">Shop tiles ${ICON.arrow}</a>
-        <a class="btn blue" href="/assistant#/rooms"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><circle cx="12" cy="12.5" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/></svg> See our tiles in your room</a>
+        <a class="btn blue" href="/makeover"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><circle cx="12" cy="12.5" r="3.5"/><path d="M8 6l1.5-2h5L16 6"/></svg> See our tiles in your room</a>
         <button class="btn line" type="button" id="tourBtn"><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg> <span class="tl">Full-screen tour</span><span class="ts">Full screen</span></button>
       </div>
     </div>
@@ -624,7 +622,7 @@ function shopTheLook(products) {
         <span class="tag ${p.availability === "In stock" ? "ok" : /low|few/i.test(p.availability || "") ? "low" : "out"}">${esc(p.availability || "")}</span></div>
       <div class="acts"><a class="btn ghost" href="#/p/${encodeURIComponent(p.sku)}">See details</a>
         ${p.kind === "set" ? `<a class="btn" href="/assistant?sku=${encodeURIComponent(p.sku)}">Ask about it</a>`
-          : `<a class="btn" href="/assistant?sku=${encodeURIComponent(p.sku)}#/rooms">Try in my room</a>`}</div>`;
+          : `<a class="btn" href="/makeover?sku=${encodeURIComponent(p.sku)}">Try in my room</a>`}</div>`;
     el.querySelector(".x").onclick = () => card(null);
     scene.append(el);
   };
@@ -696,7 +694,7 @@ async function heroTour(products) {
         <div class="price">${money(p.price)} <span class="muted small">/ ${unit}</span></div>
         <span class="tag ${p.availability === "In stock" ? "ok" : /low|few/i.test(p.availability || "") ? "low" : "out"}">${esc(p.availability || "")}</span></div>
       <div class="acts"><a class="btn ghost" href="#/p/${encodeURIComponent(p.sku)}">See details</a>
-        ${tile ? `<a class="btn" href="/assistant?sku=${encodeURIComponent(p.sku)}#/rooms">Try in my room</a>` : `<a class="btn" href="/assistant?sku=${encodeURIComponent(p.sku)}">Ask Ceramica Nova AI</a>`}</div>`;
+        ${tile ? `<a class="btn" href="/makeover?sku=${encodeURIComponent(p.sku)}">Try in my room</a>` : `<a class="btn" href="/assistant?sku=${encodeURIComponent(p.sku)}">Ask Ceramica Nova AI</a>`}</div>`;
     el.querySelector(".x").onclick = () => card(null);
     box.append(el);
   };

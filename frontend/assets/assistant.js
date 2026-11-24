@@ -53,9 +53,21 @@ const fits = (sku, surface) => isTile(sku) && (BY[sku].surfaces || []).includes(
 // ---------------------------------------------------------------- routing + step bar
 const PAGES = { "": "start", chat: "chat", rooms: "rooms", mark: "mark", visual: "visual", project: "project" };
 const STEP_OF = { rooms: "visual", mark: "visual" };
+// The AI makeover (/makeover) replaced this visualiser (Ibrahim, 2026-11-24). It stays as the "Old Version":
+// /assistant?old=1#/rooms opens it, and it stays open for the rest of the visit.
+function oldVisualiser() {
+  try {
+    if (new URLSearchParams(location.search).get("old") === "1") sessionStorage.setItem("nova_old_vis", "1");
+    return sessionStorage.getItem("nova_old_vis") === "1";
+  } catch { return /[?&]old=1/.test(location.search); }
+}
 function route() {
   const key = (location.hash.replace(/^#\/?/, "").split("?")[0]) || "";
   const page = PAGES[key] || "start";
+  if ((page === "rooms" || page === "visual" || page === "mark") && !oldVisualiser()) {
+    const sku = S.selected || new URLSearchParams(location.search).get("sku");
+    location.replace("/makeover" + (sku ? "?sku=" + encodeURIComponent(sku) : "")); return;
+  }
   document.body.dataset.page = page; document.body.dataset.step = STEP_OF[page] || page;
   ["Start", "Chat", "Rooms", "Mark", "Visual", "Project"].forEach(n => $("p" + n).hidden = page !== n.toLowerCase());
   if (page !== "visual") { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); $("stagewrap").classList.remove("fs"); }
@@ -275,7 +287,8 @@ function tileSpec(sku) {
   const p = BY[sku]; const [w, h] = String(p.size_cm).split("x").map(Number);
   const f = (p.finish || "").toLowerCase();
   const gloss = /polish|gloss|lappato/.test(f) ? 0.5 : /satin|semi|silk/.test(f) ? 0.25 : 0.08;
-  return { image: p.image, w, h, patch: PATCHES[sku] || null, gloss };
+  // the visualisers draw one clean tile face (images/tex, tools/tiles/make_faces.py); p.image is the shop picture
+  return { image: `/images/tex/${encodeURIComponent(sku)}.jpg`, w, h, patch: PATCHES[sku] || null, gloss };
 }
 async function showVisual() {
   if (!S.vis.picked && !S.selected) { location.replace("#/rooms"); return; }

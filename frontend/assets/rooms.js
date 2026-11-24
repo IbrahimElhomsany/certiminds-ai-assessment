@@ -258,4 +258,4 @@ for (const r of window.NOVA_ROOMS) { const p = window.NOVA_ROOMS.find(q => q.kin
 
 /* Product photos that already show several small tiles (mosaic, subway, herringbone brick...):
  * they are repeated as a patch of this many cm instead of being cut into single tiles. */
-window.NOVA_TILE_PATCHES = { CN007: [120, 120], CN008: [150, 150], CN009: [120, 120], CN010: [75, 75], CN013: [60, 60] };
+window.NOVA_TILE_PATCHES = {};   // every tile face (images/tex) is now one tile; the visualiser draws the grout

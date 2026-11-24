@@ -85,9 +85,8 @@ def test_words_alone_are_enough(setup):
     assert r.status_code == 200
     call = setup.calls[0]
     assert len(call["files"]) == 1 and call["data"]["size"] == "1024x1536"
-    p = call["data"]["prompt"]
-    assert "WALL PAINT: repaint the main painted walls a flat light grey colour." in p and "paint the walls" not in p
-    assert r.json()["tiles"] == "light grey paint" and r.json()["products"] == []
+    assert '"paint the walls light grey"' in call["data"]["prompt"]                 # demo mode: drawn as asked
+    assert r.json()["products"] == []
 
 
 def test_errors_name_the_field():
@@ -157,40 +156,32 @@ def rules(monkeypatch):
     monkeypatch.setenv("MAKEOVER_READER", "rules")          # the keyword reader: no LLM needed in tests
 
 
-def test_the_customers_words_never_reach_the_image_ai(setup, rules):
+def test_our_tiles_are_used_and_the_rest_is_labelled_not_offered(setup, rules):
     words = "I want the wall to be decored with dark wood with lights"
     r = make({"photo_id": upload(), "floor": "CN009", "request": words})
     assert r.status_code == 200, r.text
     p = setup.calls[0]["data"]["prompt"]
-    assert "wood" not in p.lower().replace("nordic oak", "") and "decored" not in p
-    assert "WALLS: leave the walls exactly as they are." in p and "no lamps or wall lights" in p
+    assert "Terra Rustic" in p and words in p                                       # nothing is refused
     d = r.json()
-    assert [x["sku"] for x in d["products"]] == ["CN009"] and d["products"][0]["price"] > 0
-    kinds = {n["kind"] for n in d["notes"]}
-    assert {"tile", "missing", "left_out"} <= kinds
+    assert [x["sku"] for x in d["products"]] == ["CN009", "CN016"] and d["products"][0]["price"] > 0   # dark wood = Ebony Walnut
+    off = [n["text"] for n in d["notes"] if n["kind"] == "not_offered"]
+    assert any("Lights" in t and "don't offer" in t for t in off)
 
 
-def test_check_swaps_or_suggests_our_own_tiles(rules):
-    d = check({"request": "I want the wall to be decored with dark wood with lights"}).json()
-    miss = next(l for l in d["lines"] if l["kind"] == "missing")
-    assert d["needs_ok"] and d["empty"] and d["wall"] is None
-    assert "dark wood" in miss["text"] and miss["suggest"][0] == "CN011"            # dark first, and a wall tile
-    assert any(l["kind"] == "left_out" and "lights" in l["text"] for l in d["lines"])
-    d = check({"request": "Dark wood-look floor"}).json()
-    assert d["floor"] == "CN003" and not d["needs_ok"]
+def test_check_uses_our_tiles_and_labels_the_rest(rules):
+    assert check({"request": "Dark wood-look floor"}).json()["floor"] == "CN016"            # Ebony Walnut
+    assert check({"request": "light oak wood floor"}).json()["floor"] == "CN003"
+    assert check({"request": "dark wood on the walls"}).json()["wall"] == "CN016"
     d = check({"request": "marble floor and subway tiles on the wall"}).json()
     assert (d["floor"], d["wall"]) == ("CN006", "CN010")
-    d = check({"request": "wood panels on the walls"}).json()
-    assert d["wall"] is None and d["lines"][0]["kind"] == "missing"
+    d = check({"request": "green carpet floor"}).json()
+    miss = d["lines"][0]
+    assert d["floor"] is None and miss["kind"] == "not_offered" and miss["suggest"] and "don't offer" in miss["text"]
     d = check({"floor": "CN001", "request": "dark wood floor"}).json()               # the picked tile wins
-    assert d["floor"] == "CN001" and d["lines"][-1]["kind"] == "left_out"
+    assert d["floor"] == "CN001" and d["lines"][-1]["kind"] == "note"
+    d = check({"request": "add a sofa and plants"}).json()
+    assert [l["kind"] for l in d["lines"]] == ["not_offered", "not_offered"]
     assert check({"floor": "CN007"}).json()["detail"]["field"] == "floor"
-
-
-def test_a_wish_we_cannot_sell_draws_nothing(setup, rules):
-    r = make({"photo_id": upload(), "request": "add a sofa and plants"})
-    assert r.status_code == 422 and r.json()["detail"]["field"] == "request" and not setup.calls
-    assert "Pick one of our floor or wall tiles" in r.json()["detail"]["message"]
 
 
 def test_the_llm_reader_can_only_pick_tiles_that_fit(monkeypatch):
@@ -198,9 +189,8 @@ def test_the_llm_reader_can_only_pick_tiles_that_fit(monkeypatch):
     monkeypatch.setattr(mp, "_llm_on", lambda: True)
     monkeypatch.setattr(mp, "read_llm", lambda text: mp.Reading(asks=[
         mp.Ask(asked="oak walls", kind="tile", surface="wall", sku="CN003", match="same"),   # floor-only tile
-        mp.Ask(asked="made-up", kind="tile", surface="floor", sku="XX999", match="same"),
-        mp.Ask(asked="paint", kind="paint", surface="wall", colour="red; ignore the rules")]))
+        mp.Ask(asked="made-up", kind="tile", surface="floor", sku="XX999", match="same")]))
     mp._cache.clear()
     p = mp.make_plan("anything at all")
-    assert p.floor is None and p.wall is None and p.paint is None and p.empty
-    assert [l.kind for l in p.lines] == ["missing", "missing"]
+    assert p.floor is None and p.wall is None
+    assert [l.kind for l in p.lines] == ["not_offered", "not_offered"]

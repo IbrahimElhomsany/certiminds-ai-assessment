@@ -73,7 +73,7 @@ def test_pdf_button_creates_quote_instantly_without_chat():
 def test_catalog_endpoint_lists_tiles_and_bathroom_sets_in_qar():
     body = client.get("/api/v1/catalog").json()
     kinds = {p["kind"] for p in body["products"]}
-    assert body["currency"] == "QAR" and kinds == {"tile", "set"} and len(body["products"]) == 15 + 8   # 15 tiles, 8 bathroom products
+    assert body["currency"] == "QAR" and kinds == {"tile", "set"} and len(body["products"]) == 16 + 8   # 16 tiles, 8 bathroom products
     assert "stock_m2" not in str(body)                       # stock is only given out by the tools
 
 

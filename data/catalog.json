@@ -330,5 +330,28 @@
     "stock_m2": 560.0,
     "tiles_per_box": 2,
     "style": "Contemporary"
+  },
+  {
+    "sku": "CN016",
+    "name": "Ebony Walnut",
+    "material": "porcelain",
+    "tile_width_cm": 20,
+    "tile_length_cm": 120,
+    "application": "Indoor floor and wall",
+    "surfaces": [
+      "floor",
+      "wall"
+    ],
+    "locations": [
+      "indoor"
+    ],
+    "commercial": false,
+    "finish": "matt",
+    "slip_rating": "R10",
+    "price_per_m2": 44.0,
+    "currency": "USD",
+    "stock_m2": 380.0,
+    "tiles_per_box": 5,
+    "style": "Wood"
   }
 ]

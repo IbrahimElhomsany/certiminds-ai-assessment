@@ -30,6 +30,7 @@ SET_IMAGES = {"basin": "/images/BASIN.jpg", "shower": "/images/SHOWER.jpg", "wc"
 # The first three bathroom sets use the demo's shared random numbers; sets added later get their own,
 # so adding a product never changes the rest of the demo data (orders, customers, prices paid).
 FIRST_SETS = ("SN001", "SN002", "SN003")
+FIRST_TILES = tuple(f"CN{i:03d}" for i in range(1, 16))   # later tiles get their own rng, so the demo data stays the same
 
 STAFF = [  # email, name, role, discount limit %, branch
     ("owner@ceramicanova.demo", "Business Owner", "owner", 15, "Doha"),
@@ -91,15 +92,7 @@ def later(t: datetime, days: float) -> datetime:
 def seed_products(db: Session, tenant: Tenant, rng: random.Random) -> dict[str, Product]:
     products = {}
     for p in CATALOG.values():
-        box_m2 = p.tile_width_cm * p.tile_length_cm / 10000 * p.tiles_per_box
-        products[p.sku] = Product(
-            tenant_id=tenant.id, sku=p.sku, name=p.name, kind="tile", category=p.style, unit="m2",
-            price=q2(p.price_per_m2), cost_price=q2(p.price_per_m2 * rng.uniform(0.55, 0.66)),
-            reorder_point=Decimal(150), image=f"/images/{p.sku}.jpg",
-            attributes={"material": p.material, "finish": p.finish, "size_cm": f"{p.tile_width_cm}x{p.tile_length_cm}",
-                        "tiles_per_box": p.tiles_per_box, "box_m2": round(box_m2, 4), "slip_rating": p.slip_rating,
-                        "surfaces": p.surfaces, "locations": p.locations, "catalog_stock_m2": p.stock_m2,
-                        "commercial": p.commercial, "application": p.application})
+        products[p.sku] = tile_product(tenant, p, rng if p.sku in FIRST_TILES else random.Random(p.sku))
     for s in SANITARY.values():
         products[s.sku] = set_product(tenant, s, rng if s.sku in FIRST_SETS else random.Random(s.sku))
     for a in ACCESSORIES:
@@ -107,6 +100,18 @@ def seed_products(db: Session, tenant: Tenant, rng: random.Random) -> dict[str, 
     db.add_all(products.values())
     db.flush()
     return products
+
+
+def tile_product(tenant: Tenant, p, rng: random.Random) -> Product:
+    box_m2 = p.tile_width_cm * p.tile_length_cm / 10000 * p.tiles_per_box
+    return Product(
+        tenant_id=tenant.id, sku=p.sku, name=p.name, kind="tile", category=p.style, unit="m2",
+        price=q2(p.price_per_m2), cost_price=q2(p.price_per_m2 * rng.uniform(0.55, 0.66)),
+        reorder_point=Decimal(150), image=f"/images/{p.sku}.jpg",
+        attributes={"material": p.material, "finish": p.finish, "size_cm": f"{p.tile_width_cm}x{p.tile_length_cm}",
+                    "tiles_per_box": p.tiles_per_box, "box_m2": round(box_m2, 4), "slip_rating": p.slip_rating,
+                    "surfaces": p.surfaces, "locations": p.locations, "catalog_stock_m2": p.stock_m2,
+                    "commercial": p.commercial, "application": p.application})
 
 
 def set_product(tenant: Tenant, s, rng: random.Random) -> Product:
@@ -125,12 +130,13 @@ def accessory_product(tenant: Tenant, a: dict, rng: random.Random) -> Product:
 
 def ensure_accessories(db: Session) -> int:
     """Adds products that came later to companies created before them, one stock batch each: grout, adhesive
-    and spacers, and the newer bathroom sets. Returns how many were added."""
+    and spacers, the newer bathroom sets and newer tiles (Ebony Walnut). Returns how many were added."""
     added = 0
     for t in db.scalars(select(Tenant)):
         have = set(db.scalars(select(Product.sku).where(Product.tenant_id == t.id)))
         new = [(accessory_product(t, a, random.Random(a["sku"])), a["stock"]) for a in ACCESSORIES if a["sku"] not in have]
         new += [(set_product(t, s, random.Random(s.sku)), s.stock_units) for s in SANITARY.values() if s.sku not in have]
+        new += [(tile_product(t, p, random.Random(p.sku)), p.stock_m2) for p in CATALOG.values() if p.sku not in have]
         for p, stock in new:
             db.add(p)
             db.flush()
@@ -171,7 +177,7 @@ def seed_tenant(db: Session, slug: str = "ceramica-nova", name: str = "Ceramica 
 
     products = seed_products(db, tenant, rng)
     by_id = {p.id: p for p in products.values()}
-    tiles = {s: p for s, p in products.items() if p.kind == "tile"}
+    tiles = {s: p for s, p in products.items() if p.kind == "tile" and s in FIRST_TILES}   # newer tiles: no past orders
     sets = [p for p in products.values() if p.kind == "set"]
 
     counters = {"L": 0, "Q": 0, "O": 0}
@@ -394,8 +400,10 @@ def seed_batches(db: Session, tenant: Tenant, products: dict[str, Product], sold
     Received quantities are worked out so that today's stock matches the catalog's stock figure,
     with a small leftover in the older batches (odd boxes, as in a real warehouse)."""
     arrivals = [start - timedelta(days=20), start + timedelta(days=30), start + timedelta(days=60)]
+    shared = rng
     for p in products.values():
         tile = p.kind == "tile"
+        rng = random.Random(p.sku) if tile and p.sku not in FIRST_TILES else shared   # newer tiles: the rest stays the same
         target_left = Decimal(str(p.attributes["catalog_stock_m2" if tile else "catalog_stock_units"]))
         p_sales = [s for s in sold if s[1] is p]
         batches = []

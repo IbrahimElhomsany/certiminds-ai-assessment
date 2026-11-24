@@ -60,7 +60,8 @@ class Reading(BaseModel):
 
 # ------------------------------------------------------------------ reader 1: keyword rules (always available)
 LOOKS = [  # words -> our tiles, best first; surfaces are checked later
-    (r"wood|oak|timber|parquet|walnut|teak|plank", ["CN003"]),
+    (r"dark wood|walnut|ebony|wenge|espresso|dark oak", ["CN016"]),
+    (r"wood|oak|timber|parquet|teak|plank", ["CN003", "CN016"]),
     (r"calacatta|white marble|marble", ["CN006", "CN001", "CN011"]),
     (r"onyx|black|dark marble|nero", ["CN011", "CN005"]),
     (r"slate", ["CN014", "CN005"]),
@@ -113,6 +114,9 @@ def read_rules(text: str) -> Reading:
             asks.append(Ask(asked=part[:80], kind="light", surface="none", light=light))
             continue
         look = next(((re.search(pat, part).group(0), skus) for pat, skus in LOOKS if re.search(pat, part)), None)
+        if look:                       # the first of our tiles with that look that may go on that surface
+            where = surface if surface != "none" else ("wall" if other else "floor")
+            look = (look[0], sorted(look[1], key=lambda s: where not in CATALOG[s].surfaces))
         colour = re.search(PAINT_COLOURS, part)
         other = re.search(NOT_TILES, part)
         tone = re.search(r"\b(dark|light|warm|white|black)\b", part)
@@ -166,7 +170,7 @@ def read(text: str) -> tuple[Reading, str]:
 
 # ------------------------------------------------------------------ the plan
 class Line(BaseModel):
-    kind: Literal["tile", "swap", "missing", "paint", "light", "left_out"]
+    kind: Literal["tile", "not_offered", "light", "note"]
     text: str
     sku: Optional[str] = None
     surface: Optional[str] = None
@@ -179,12 +183,13 @@ class Plan(BaseModel):
     paint: Optional[str] = None
     light: Optional[str] = None
     lines: list[Line] = Field(default_factory=list)
-    needs_ok: bool = False             # something was swapped or left out: show it before drawing
+    needs_ok: bool = False
     reader: str = "none"
+    words: str = ""                    # the customer's own words (drawn as asked, see instructions())
 
     @property
     def empty(self) -> bool:
-        return not (self.floor or self.wall or self.paint or self.light)
+        return not (self.floor or self.wall or self.words)
 
 
 def fits(sku: Optional[str], surface: str) -> bool:
@@ -206,15 +211,17 @@ _cache: "OrderedDict[tuple, Plan]" = OrderedDict()
 
 
 def make_plan(text: str, floor: Optional[str] = None, wall: Optional[str] = None) -> Plan:
+    """Demo mode (Ibrahim, 2026-11-24): nothing is refused. Our tiles are used wherever we have one; anything else
+    the customer asks for is still drawn, and labelled "we don't offer this yet" (with our closest tiles)."""
     text = " ".join((text or "").split())
     key = (text.lower(), floor, wall)
     if key in _cache:
         _cache.move_to_end(key)
         return _cache[key]
-    plan, picked = Plan(floor=floor, wall=wall), {"floor": floor, "wall": wall}
+    plan, picked = Plan(floor=floor, wall=wall, words=text), {"floor": floor, "wall": wall}
     for s, sku in (("floor", floor), ("wall", wall)):
         if sku:
-            plan.lines.append(Line(kind="tile", sku=sku, surface=s, text=f"{CATALOG[sku].name} on the {s}{'s' if s == 'wall' else ''} (your pick)"))
+            plan.lines.append(Line(kind="tile", sku=sku, surface=s, text=f"{CATALOG[sku].name} on the {s}{'s' if s == 'wall' else ''}"))
     if text:
         reading, plan.reader = read(text)
         for a in reading.asks:
@@ -222,36 +229,30 @@ def make_plan(text: str, floor: Optional[str] = None, wall: Optional[str] = None
             if a.kind == "tile":
                 surface = a.surface if a.surface in ("floor", "wall") else "floor"
                 if picked[surface]:                      # the tile picked in the grid wins
-                    plan.lines.append(Line(kind="left_out", text=f"\"{asked}\": you picked {CATALOG[picked[surface]].name} for the {where}, so we used that."))
+                    plan.lines.append(Line(kind="note", text=f"\"{asked}\": you picked {CATALOG[picked[surface]].name} for the {where}, so we used that."))
                     continue
                 if getattr(plan, surface):               # already filled by an earlier part of the words
                     continue
-                if a.match in ("same", "close") and fits(a.sku, surface):
+                if a.match == "same" and fits(a.sku, surface):
                     setattr(plan, surface, a.sku)
-                    name = CATALOG[a.sku].name
-                    if a.match == "same":
-                        plan.lines.append(Line(kind="tile", sku=a.sku, surface=surface, text=f"{name} on the {where}"))
-                    else:
-                        plan.lines.append(Line(kind="swap", sku=a.sku, surface=surface,
-                                               text=f"We don't sell \"{asked}\". Closest from our range: {name}.",
-                                               suggest=[s for s in suggestions(surface, asked.lower(), a.sku) if s != a.sku]))
+                    plan.lines.append(Line(kind="tile", sku=a.sku, surface=surface, text=f"{CATALOG[a.sku].name} on the {where}"))
                 else:
-                    plan.lines.append(Line(kind="missing", surface=surface,
-                                           text=f"We don't sell \"{asked}\" for the {where}, so we'll leave the {where} as {'it is' if surface == 'floor' else 'they are'}. Pick one of ours instead:",
+                    plan.lines.append(Line(kind="not_offered", surface=surface,
+                                           text=f"{asked[:1].upper() + asked[1:]} on the {where}: we don't offer this yet. Our closest:",
                                            suggest=suggestions(surface, asked.lower(), a.sku if fits(a.sku, surface) else None)))
             elif a.kind == "paint":
-                colour = (a.colour or "").lower().strip()
+                colour = (a.colour or asked).lower().strip()
                 if plan.wall:
-                    plan.lines.append(Line(kind="left_out", text=f"\"{asked}\": the walls get {CATALOG[plan.wall].name} tiles, so no paint."))
-                elif COLOUR.match(colour) and not plan.paint:
-                    plan.paint = colour
-                    plan.lines.append(Line(kind="paint", text=f"Walls painted {colour} (paint is not a product we sell)"))
+                    plan.lines.append(Line(kind="note", text=f"\"{asked}\": the walls get {CATALOG[plan.wall].name} tiles, so no paint."))
+                elif not plan.paint:
+                    plan.paint = colour[:30]
+                    plan.lines.append(Line(kind="not_offered", text=f"{colour[:1].upper() + colour[1:]} wall paint: we don't offer paint yet."))
             elif a.kind == "light" and a.light in LIGHTS and not plan.light:
                 plan.light = a.light
-                plan.lines.append(Line(kind="light", text=f"{LIGHT_WORDS[a.light].capitalize()} (no new lamps are added)"))
+                plan.lines.append(Line(kind="light", text=LIGHT_WORDS[a.light].capitalize()))
             elif a.kind == "other":
-                plan.lines.append(Line(kind="left_out", text=f"\"{asked}\" is left out. The AI only puts in our tiles, a wall paint colour or a change of light."))
-    plan.needs_ok = any(l.kind in ("swap", "missing", "left_out") for l in plan.lines)
+                plan.lines.append(Line(kind="not_offered", text=f"{asked[:1].upper() + asked[1:]}: we don't offer this yet."))
+    plan.needs_ok = False
     _cache[key] = plan
     while len(_cache) > 512:
         _cache.popitem(last=False)
@@ -259,10 +260,9 @@ def make_plan(text: str, floor: Optional[str] = None, wall: Optional[str] = None
 
 
 def instructions(plan: Plan) -> list[str]:
-    """The only extra sentences that reach the image AI: written by us from the plan, never the customer's words."""
-    out = []
-    if plan.paint:
-        out.append(f"WALL PAINT: repaint the main painted walls a flat {plan.paint} colour.")
-    if plan.light:
-        out.append("LIGHT: " + LIGHTS[plan.light])
-    return out
+    """Extra sentences for the image AI. The customer's words go in as they wrote them (demo mode: nothing is
+    refused); where we chose one of our tiles for a surface, the tile instruction above wins."""
+    if not plan.words:
+        return []
+    return [f"THE CUSTOMER ALSO ASKS: \"{plan.words}\". Do this as asked. Where it names a floor or wall covering "
+            "for a surface that has one of our tiles above, use our tile for that surface."]

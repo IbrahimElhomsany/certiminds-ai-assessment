@@ -74,7 +74,7 @@ def lay(sku, wcm, hcm, k=4, grout=(212, 208, 200), turn=False):
     tw, th = tile_size(sku)
     if turn or (th > tw and th / tw < 2.5):           # lay rectangles landscape on walls, as showrooms do
         tw, th = th, tw
-    im = Image.open(os.path.join(IMG, sku + ".jpg")).convert("RGB")
+    im = Image.open(os.path.join(IMG, "tex", sku + ".jpg")).convert("RGB")   # one tile face (tools/tiles/make_faces.py)
     Wp, Hp = int(wcm * k), int(hcm * k)
     c = Image.new("RGB", (Wp, Hp)); m = Image.new("L", (Wp, Hp), 0)
     long = max(tw, th) / min(tw, th)

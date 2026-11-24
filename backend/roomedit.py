@@ -83,18 +83,18 @@ def build_prompt(floor: Optional[str], wall: Optional[str], extras: Optional[lis
                      "Lay them in straight rows with thin grout lines, following the floor's perspective, at true "
                      "size for this room (judge the scale from the furniture and doors). Rugs stay on top of the new floor.")
         n += 1
-    else:
+    elif not extras:
         parts.append("FLOOR: leave the floor exactly as it is.")
     if wall:
         parts.append(f"WALLS: cover the main painted walls with the tile shown in image {n}, {describe(wall)}, "
                      "at true size, with thin grout lines. Windows, doors, frames, TV, shelves and switches stay in front.")
-    elif not any(e.startswith("WALL PAINT") for e in extras or []):
+    elif not extras:
         parts.append("WALLS: leave the walls exactly as they are.")
     parts += list(extras or [])
-    parts.append("Keep everything else exactly as it is: furniture, rugs, objects, plants, windows, doors, ceiling, "
-                 "camera angle and framing. Do not add anything new: no lamps or wall lights, panels, cladding, "
-                 "wallpaper, furniture or decorations. Keep the room's own light, and add the natural reflections and soft "
-                 "shadows the new surface would have. Photorealistic, like a real photo of the same room.")
+    parts.append(("Apart from that, keep" if extras else "Keep") + " everything else exactly as it is: furniture, rugs, "
+                 "objects, plants, windows, doors, ceiling, camera angle and framing. "
+                 + ("" if extras else "Do not add anything new. ") + "Keep the room's own light, and add the natural "
+                 "reflections and soft shadows the new surface would have. Photorealistic, like a real photo of the same room.")
     return "\n".join(parts)
 
 
@@ -214,8 +214,6 @@ def makeover(req: MakeoverRequest, request: Request, x_user_id: Optional[str] = 
     if not is_on():
         err("general", "AI makeovers are not switched on yet (the shop owner adds an OpenAI key).", 503)
     plan = mp.make_plan(text, floor, wall)          # the words become our products (or are left out)
-    if plan.empty:
-        err("request", nothing_to_draw(plan))
     floor, wall, extras = plan.floor, plan.wall, mp.instructions(plan)
     path = visual._own_photo(req.photo_id, x_user_id)
     if not limiter.allow(x_user_id):
@@ -239,9 +237,8 @@ def makeover(req: MakeoverRequest, request: Request, x_user_id: Optional[str] = 
     if after.size != before.size:
         after = after.resize(before.size, Image.LANCZOS)
 
-    names = [f"{CATALOG[floor].name} floor" if floor else "", f"{CATALOG[wall].name} walls" if wall else "",
-             f"{plan.paint} paint" if plan.paint else "", mp.LIGHT_WORDS[plan.light] if plan.light else ""]
-    tiles = " and ".join(n for n in names if n)
+    names = [f"{CATALOG[floor].name} floor" if floor else "", f"{CATALOG[wall].name} walls" if wall else ""]
+    tiles = " and ".join(n for n in names if n) or "Your idea"
     b = visual.save_image(_jpeg(before), x_user_id, "render", {"room": "AI makeover (before)", "tiles": ""})
     a = visual.save_image(_jpeg(after), x_user_id, "render", {"room": "AI makeover", "tiles": tiles,
                                                               "model": model, "seconds": seconds})
@@ -259,11 +256,6 @@ def used(sku: str, where: str) -> dict:
             "image": f"/images/{sku}.jpg", "url": f"/#/p/{sku}"}
 
 
-def nothing_to_draw(plan: "mp.Plan") -> str:
-    left = [l for l in plan.lines if l.kind in ("missing", "left_out")]
-    return (left[0].text.split(" Pick one")[0] + " " if left else "") + "Pick one of our floor or wall tiles above, or ask for a wall colour or brighter light."
-
-
 class CheckRequest(BaseModel):
     floor: Optional[str] = Field(default=None, max_length=20)
     wall: Optional[str] = Field(default=None, max_length=20)
@@ -272,8 +264,7 @@ class CheckRequest(BaseModel):
 
 @router.post("/api/v1/makeover/check")
 def check(req: CheckRequest, x_user_id: Optional[str] = Header(default=None)):
-    """Before drawing: what the AI will put in the room, what was swapped for our closest product, and what is
-    left out because we don't sell it. The page shows this next to the customer's words."""
+    """What the AI will draw with our tiles, and what it draws that we don't offer yet (with our closest tiles)."""
     if not x_user_id or not visual.VISITOR.match(x_user_id):
         raise HTTPException(status_code=400, detail="Missing visitor id.")
     floor, wall, text = (req.floor or None), (req.wall or None), " ".join(req.request.split())
@@ -285,5 +276,4 @@ def check(req: CheckRequest, x_user_id: Optional[str] = Header(default=None)):
         err("request", "Please wait a moment before checking again.", 429)
     plan = mp.make_plan(text, floor, wall)
     return {"floor": plan.floor, "wall": plan.wall, "paint": plan.paint, "light": plan.light,
-            "needs_ok": plan.needs_ok, "empty": plan.empty, "lines": [l.model_dump() for l in plan.lines],
-            "message": nothing_to_draw(plan) if plan.empty else ""}
+            "lines": [l.model_dump() for l in plan.lines]}

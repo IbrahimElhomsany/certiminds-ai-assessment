@@ -104,19 +104,22 @@
   .look a.item:hover { border-color:var(--accent); } .look img { width:56px; height:56px; border-radius:8px; object-fit:cover; }
   .look b { display:block; color:var(--ink); font-size:14px; } .look small { color:var(--muted); display:block; } .look .go { color:var(--accent); font-size:12px; font-weight:600; }
   .look ul { margin:10px 0 0; padding-left:18px; color:var(--muted); font-size:13px; }
+  .top { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .oldbtn { padding:8px 14px; font-size:13px; } header nav a.oldv { color:var(--ink); font-weight:600; }
+  @media (max-width: 700px) { header nav a.oldv { display:none; } }
   .toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:var(--ink); color:#fff; padding:10px 16px; border-radius:10px; font-size:14px; display:none; }
 </style>
 </head>
 <body>
 <header>
   <a class="brand" href="/">CERAMICA NOVA</a>
-  <nav><a href="/">Shop</a><a href="/assistant#/rooms">Room visualiser</a><a href="/assistant">Ask Ceramica Nova AI</a></nav>
+  <nav><a href="/">Shop</a><a href="/assistant">Ask Ceramica Nova AI</a><a class="oldv" href="/assistant?old=1#/rooms">Old Version</a></nav>
 </header>
 <main>
-  <div class="kicker">AI ROOM MAKEOVER</div>
+  <div class="top"><div class="kicker">AI ROOM MAKEOVER</div><a class="btn ghost oldbtn" href="/assistant?old=1#/rooms" title="The earlier visualiser: our tiles laid at their exact size">Old Version</a></div>
   <h1>See our tiles in your room, drawn by AI</h1>
   <p class="lead">Upload a photo of your room, pick a floor or wall tile (or just say what you'd like), and the AI re-draws your photo with it.</p>
-  <div class="off" id="off">AI makeovers are not switched on yet. The shop owner needs to add an OpenAI key. You can still use the <a href="/assistant#/rooms">Room visualiser</a>.</div>
+  <div class="off" id="off">AI makeovers are not switched on yet. The shop owner needs to add an OpenAI key. You can still use the <a href="/assistant?old=1#/rooms">Old Version</a> (tiles at exact size).</div>
 
   <div class="grid">
     <form id="form" novalidate>
@@ -157,7 +160,6 @@
         <textarea id="request" maxlength="300" placeholder="e.g. paint the walls light grey"></textarea>
         <div class="chips" id="chips"></div>
         <div class="ferr" id="e-request"></div>
-        <div class="plan" id="plan" hidden aria-live="polite"></div>
       </div>
 
       <div class="card">
@@ -187,7 +189,7 @@
           <span class="sp"><button class="btn ghost" type="button" id="dl">Download</button><button class="btn ghost" type="button" id="share">Copy link</button></span>
         </div>
         <div class="look" id="look"></div>
-        <p class="note">Drawn by an AI image model (OpenAI). The tile look is close to ours, but exact size and pattern can differ, and small things in the room can shift. For exact tiles at real size, use the <a href="/assistant#/rooms">Room visualiser</a>.</p>
+        <p class="note">Drawn by an AI image model (OpenAI). The tile look is close to ours, but exact size and pattern can differ, and small things in the room can shift. For exact tiles at real size, use the <a href="/assistant?old=1#/rooms">Old Version</a>.</p>
         <details><summary>What we asked the AI</summary><pre id="rPrompt"></pre></details>
         <div class="history" id="history"></div>
       </div>
@@ -205,7 +207,7 @@ const USER_ID = (() => {
     return id;
   } catch { return "USR-" + String(Math.floor(Math.random() * 1e10)).padStart(10, "0"); }
 })();
-const S = { photo: null, floor: null, wall: null, on: false, last: null, history: [], tiles: {}, okKey: null };
+const S = { photo: null, floor: null, wall: null, on: false, last: null, history: [], tiles: {} };
 const money = (v, cur) => `${cur || "QAR"} ${Number(v || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 const SAMPLES = [["Living room", "vis_living"], ["TV lounge", "vis_tvroom"], ["Bedroom", "vis_bedroom"], ["Kitchen", "vis_kitchen"],
   ["Bathroom", "vis_bathroom"], ["Spa bathroom", "vis_spa"], ["Office", "vis_office"], ["Terrace", "vis_terrace"], ["Showroom lounge", "showroom_lounge"]]
@@ -236,7 +238,7 @@ function tileGrid(el, list, kind) {
 function pickTile(kind, sku) {
   const el = $(kind === "floor" ? "floorTiles" : "wallTiles");
   el.querySelectorAll(".tile").forEach(x => x.classList.toggle("on", (x.dataset.sku || null) === sku));
-  S[kind] = sku; clearErr(kind); clearErr("request"); hidePlan();
+  S[kind] = sku; clearErr(kind); clearErr("request");
 }
 async function loadStatus() {
   try {
@@ -245,6 +247,8 @@ async function loadStatus() {
     S.on = d.on; $("off").style.display = d.on ? "none" : "block"; $("go").disabled = !d.on;
     tileGrid($("floorTiles"), d.tiles.filter(t => t.surfaces.includes("floor")), "floor");
     tileGrid($("wallTiles"), d.tiles.filter(t => t.surfaces.includes("wall")), "wall");
+    const want = new URLSearchParams(location.search).get("sku"), t = want && S.tiles[want];    // "Try in my room" from the shop
+    if (t) pickTile(t.surfaces.includes("floor") ? "floor" : "wall", t.sku);
   } catch { showErr("general", "The page could not load our tiles. Please refresh."); }
 }
 
@@ -318,37 +322,18 @@ $("samples").onclick = async e => {
   try { const blob = await (await fetch(b.dataset.u)).blob(); usePhoto(blob, b); } catch { showErr("photo", "That sample could not be loaded."); }
 };
 $("chips").innerHTML = CHIPS.map(c => `<button type="button">${c}</button>`).join("");
-$("chips").onclick = e => { const b = e.target.closest("button"); if (!b) return; $("request").value = b.textContent; clearErr("request"); hidePlan(); };
-$("request").oninput = () => { clearErr("request"); hidePlan(); };
+$("chips").onclick = e => { const b = e.target.closest("button"); if (!b) return; $("request").value = b.textContent; clearErr("request"); };
+$("request").oninput = () => { clearErr("request"); };
 
-// ------------------------------------------------ check the words against what we sell, before drawing
-const planKey = () => JSON.stringify([S.floor, S.wall, $("request").value.trim().toLowerCase().replace(/\s+/g, " ")]);
-function hidePlan() { $("plan").hidden = true; $("plan").innerHTML = ""; S.okKey = null; }
-const ICON = { tile: ["ok", "✓"], swap: ["swap", "⇄"], missing: ["no", "✕"], left_out: ["no", "✕"], paint: ["mood", "•"], light: ["mood", "•"] };
-function renderPlan(d) {
-  const sugg = l => !l.suggest.length ? "" : `<div class="sugg">${l.suggest.map(s => S.tiles[s] ?
-    `<button type="button" data-surface="${l.surface}" data-sku="${s}"><img src="${S.tiles[s].image}" alt="">${esc(S.tiles[s].name)}</button>` : "").join("")}</div>`;
-  $("plan").innerHTML = `<h3>${d.empty ? "We can't draw this with our products" : "Here is what the AI will draw"}</h3>
-    <ul>${d.lines.map(l => `<li class="${ICON[l.kind][0]}"><span class="i" aria-hidden="true">${ICON[l.kind][1]}</span><div>${esc(l.text)}${sugg(l)}</div></li>`).join("")}</ul>
-    ${d.empty ? "" : `<div class="acts"><button type="button" class="btn" id="planGo">✨ Make it like this</button><button type="button" class="btn ghost" id="planEdit">Change my words</button></div>`}`;
-  $("plan").hidden = false;
-  const go = $("planGo"); if (go) go.onclick = () => { S.okKey = planKey(); $("form").requestSubmit(); };
-  const ed = $("planEdit"); if (ed) ed.onclick = () => { hidePlan(); $("request").focus(); };
-}
-$("plan").addEventListener("click", async e => {
+// ------------------------------------------------ labels: our tiles, and what the AI drew that we don't offer yet
+const sugg = l => !(l.suggest || []).length ? "" : `<div class="sugg">${l.suggest.map(s => S.tiles[s] ?
+  `<button type="button" data-surface="${l.surface}" data-sku="${s}" title="Use ${esc(S.tiles[s].name)} and make it again"><img src="${S.tiles[s].image}" alt="">${esc(S.tiles[s].name)}</button>` : "").join("")}</div>`;
+$("look").addEventListener("click", e => {
   const b = e.target.closest(".sugg button"); if (!b) return;
   pickTile(b.dataset.surface, b.dataset.sku);
-  const d = await checkWords(); if (d) renderPlan(d);
+  $("c-" + b.dataset.surface).scrollIntoView({ behavior: "smooth", block: "center" });
+  toast(`${S.tiles[b.dataset.sku].name} picked. Press "Make it" to see it in your room.`);
 });
-async function checkWords() {
-  try {
-    const r = await fetch("/api/v1/makeover/check", { method: "POST", headers: { "Content-Type": "application/json", "X-User-Id": USER_ID },
-      body: JSON.stringify({ floor: S.floor, wall: S.wall, request: $("request").value.trim() }) });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok) { const det = d.detail || {}; showErr(det.field || "request", det.message || "We couldn't check your words just now. Please try again."); return null; }
-    return d;
-  } catch { showErr("general", "No answer from the server. Check your connection and try again."); return null; }
-}
 
 // ------------------------------------------------ make it
 $("form").onsubmit = async e => {
@@ -358,14 +343,6 @@ $("form").onsubmit = async e => {
   if (!S.photo) { showErr("photo", "Upload a photo of your room first, or pick one of ours."); bad = true; }
   if (!S.floor && !S.wall && !text) { showErr("request", "Pick a floor or wall tile, or write what you'd like to change."); bad = true; }
   if (bad) return;
-  if (text && S.okKey !== planKey()) {           // words: show what we'll draw (our products only) before paying for a picture
-    $("go").disabled = true;
-    const d = await checkWords(); $("go").disabled = !S.on;
-    if (!d) return;
-    if (d.empty) { renderPlan(d); showErr("request", d.message); return; }
-    if (d.needs_ok) { renderPlan(d); $("plan").scrollIntoView({ behavior: "smooth", block: "center" }); return; }
-    S.okKey = planKey();
-  }
   $("go").disabled = true; $("busy").classList.add("show"); $("empty").hidden = true;
   const t0 = Date.now(), tick = setInterval(() => $("secs").textContent = Math.round((Date.now() - t0) / 1000), 500);
   try {
@@ -393,10 +370,11 @@ function show(d) {
   if (innerWidth <= 900) $("stage").scrollIntoView({ behavior: "smooth", block: "start" });
   $("rTiles").textContent = d.tiles; $("rInfo").textContent = `Made in ${d.seconds} s · ${d.quality === "high" ? "best" : "standard"} quality`;
   $("rPrompt").textContent = d.prompt; $("result").classList.add("show");
-  const notes = (d.notes || []).filter(n => ["swap", "missing", "left_out", "paint"].includes(n.kind));
+  const notes = d.notes || [], off = notes.filter(n => n.kind === "not_offered");
   $("look").innerHTML = (d.products && d.products.length ? `<h3>Shop this look</h3><div class="items">${d.products.map(p =>
     `<a class="item" href="${esc(p.url)}"><img src="${esc(p.image)}" alt=""><span><b>${esc(p.name)}</b><small>${esc(p.where === "floor" ? "Floor" : "Walls")} · ${money(p.price, p.currency)} / m²</small><span class="go">See it in the shop →</span></span></a>`).join("")}</div>` : "")
-    + (notes.length ? `<ul>${notes.map(n => `<li>${esc(n.text.replace(/ Pick one of ours instead:$/, ""))}</li>`).join("")}</ul>` : "");
+    + (off.length ? `<div class="plan"><h3>In the picture, but we don't offer it yet</h3><ul>${off.map(n =>
+      `<li class="no"><span class="i" aria-hidden="true">✕</span><div>${esc(n.text)}${sugg(n)}</div></li>`).join("")}</ul></div>` : "");
 }
 function renderHistory() {
   $("history").innerHTML = S.history.length < 2 ? "" : S.history.map((h, i) => `<button type="button" data-i="${i}" title="${esc(h.tiles)}"><img src="${h.after}" alt=""></button>`).join("");
@@ -412,6 +390,7 @@ $("stage").addEventListener("pointermove", e => { if (drag) at(e); });
 $("stage").addEventListener("pointerup", () => drag = false);
 $("dl").onclick = () => { if (!S.last) return; const a = Object.assign(document.createElement("a"), { href: S.last.after, download: "ceramica-nova-ai-makeover.jpg" }); document.body.appendChild(a); a.click(); a.remove(); };
 $("share").onclick = async () => { if (!S.last) return; try { await navigator.clipboard.writeText(S.last.share_url); toast("Link copied. Anyone with it can see the picture for 30 days."); } catch { prompt("Copy this link:", S.last.share_url); } };
+try { sessionStorage.removeItem("nova_old_vis"); } catch {}
 loadStatus();
 </script>
 </body>

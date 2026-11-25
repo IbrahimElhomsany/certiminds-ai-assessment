@@ -249,7 +249,12 @@ const worldReady = key => !!worlds[key];
 // the live-3D rooms (kind "3d") looked like a game next to the photos, so they are no longer offered (2026-11-18)
 const allRooms = () => [ownRoom(), panoRoom(), ...ROOMS.filter(r => r.kind !== "3d" && (!r.world || worldReady(r.world)))].filter(Boolean);
 const is3d = r => r && (r.kind === "3d" || r.kind === "pano" || r.kind === "splat");
-const curRoom = () => atSpot(allRooms().find(r => r.id === S.vis.room) || ROOMS[0]);
+// a 360° room the AI has redrawn (new version): same room and spot, with the AI's 360° picture instead
+let AI360 = null;                                   // { key, url }
+const curRoom = () => {
+  const r = atSpot(allRooms().find(r => r.id === S.vis.room) || ROOMS[0]);
+  return AI360 && AI360.key === roomKey(r) ? { ...r, photo: AI360.url, ai360: true } : r;
+};
 const roomKey = r => r.id === "own" ? "own:" + (S.own.rev || 0) : r.id === "pano" ? "pano:" + (S.pano.rev || 0) : r.spots ? r.id + ":" + (r.spot || 0) : r.id;
 // a 360° room you can move around in: the picture for the spot you stand on, and circles on the floor for the others
 function atSpot(r) {
@@ -301,6 +306,7 @@ function showAiShot(room, url) {
 // new version: a different room starts clean (no tiles, no AI picture, empty request)
 function resetPicks() {
   if (OLD_VIS) return;
+  AI360 = null;
   S.vis.floor = S.vis.wall = null; S.vis.surface = "floor";
   try { $("vaiText").value = ""; $("vaiErr").hidden = true; $("vaiBox").classList.remove("bad"); } catch {}
   showAiShot(curRoom(), null);
@@ -397,7 +403,9 @@ function renderVisControls() {
   $("rooms").innerHTML = allRooms().map(r => `<button type="button" class="room ${r.id === room.id ? "on" : ""}" data-room="${r.id}">
       <img src="${r.thumb || r.photo}" alt="" loading="lazy"><span>${esc(r.name)}</span>${is3d(r) ? `<i class="b3d">${r.kind === "pano" ? "360°" : r.kind === "splat" ? "Walk" : "3D"}</i>` : ""}</button>`).join("") +
     `<a class="room" href="#/rooms" style="display:grid;place-items:center;text-decoration:none;color:var(--ink);border:1.5px dashed #ccc;min-height:92px"><span style="text-align:center">+ Your own<br>photo</span></a>`;
-  $("visnote").innerHTML = room.kind === "splat"
+  $("visnote").innerHTML = room.ai360
+    ? "This 360° room was redrawn by AI with your choices, in 8 views joined together. Drag to look all around. Small details can differ between views, and tile size is close to, not exactly, the real one. Pick another room to go back."
+    : room.kind === "splat"
     ? "A walkable 3D version of this room, made by an AI (World Labs) from our 360° picture. Edges and corners the camera never saw can look soft or smeared. Your floor tile is laid over the floor; to tile the walls, use the 360° view."
     : room.kind === "3d"
     ? "A 3D room made by Ceramica Nova. Walk around to see your tiles from every side, at their real size. Colours on screen can look slightly different from the real tile."
@@ -888,9 +896,50 @@ async function photoReal() {
     st.classList.add("done"); $("aiDl").disabled = $("aiCopy").disabled = false;
     renderAiLook(d);
     if (!view) showAiShot(room, d.after);
+    offer360(room, d);
   } catch (e) {
     err.textContent = e.message || "The AI could not draw this room right now. Please try again."; err.hidden = false; $("aiAgain").hidden = false;
   } finally { clearInterval(tick); st.classList.remove("busy"); AI.busy = false; }
+}
+
+// After a makeover in a 360° room: the same makeover for the whole room (backend/makeover360.py)
+let job360 = null;
+function offer360(room, d) {
+  const pano = room.kind === "pano";
+  $("ai360").hidden = OLD_VIS || !pano; $("ai360Err").hidden = true; $("ai360Bar").hidden = true;
+  $("ai360Go").disabled = false; $("ai360Go").textContent = "✨ Make it 360°";
+  $("ai360").dataset.style = (d.after.match(/([a-f0-9]{32})\.jpg/) || [])[1] || "";
+}
+async function make360() {
+  const room = curRoom(), fail = msg => { $("ai360Err").textContent = msg; $("ai360Err").hidden = false; $("ai360Go").disabled = false; $("ai360Bar").hidden = true; job360 = null; };
+  if (job360) return;
+  const pick = s => room.surfaces[s] && fits(S.vis[s], s) && tileOkInRoom(S.vis[s], room) ? S.vis[s] : null;
+  const body = { style_id: $("ai360").dataset.style, floor: pick("floor"), wall: pick("wall"), request: $("vaiText").value.trim() };
+  if (room.id === "pano") body.photo_id = S.pano && S.pano.photo && S.pano.photo.id || "";
+  else body.pano = room.ai360 ? atSpot(allRooms().find(r => r.id === S.vis.room)).photo : room.photo;
+  $("ai360Err").hidden = true; $("ai360Go").disabled = true; $("ai360Go").textContent = "Drawing…";
+  $("ai360Bar").hidden = false; $("ai360Fill").style.width = "4%";
+  const key = roomKey(atSpot(allRooms().find(r => r.id === S.vis.room) || ROOMS[0]));
+  try {
+    const r = await fetch("/api/v1/makeover/360", { method: "POST", headers: { "Content-Type": "application/json", "X-User-Id": USER_ID }, body: JSON.stringify(body) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.detail && d.detail.message ? d.detail.message : r.status >= 502 ? "The shop is restarting for an update. Please try again in a minute." : "The 360° makeover could not start.");
+    job360 = d.job;
+    for (;;) {
+      await new Promise(ok => setTimeout(ok, 3000));
+      const q = await fetch(`/api/v1/makeover/360/${job360}`, { headers: { "X-User-Id": USER_ID } });
+      const j = await q.json().catch(() => ({}));
+      if (!q.ok) throw new Error(typeof j.detail === "string" ? j.detail : "We lost track of the 360° makeover. Please start it again.");
+      $("ai360Fill").style.width = Math.max(4, Math.round(100 * (j.done + (j.state === "joining" ? 0.5 : 0)) / (j.total + 1))) + "%";
+      $("ai360Go").textContent = j.state === "joining" ? "Joining the views…" : `Drawing view ${Math.min(j.total, j.done + 1)} of ${j.total}…`;
+      if (j.state === "failed") throw new Error(j.error || "The 360° picture could not be made. Please try again.");
+      if (j.state === "done") { AI360 = { key, url: j.after }; break; }
+    }
+    job360 = null; $("ai360Fill").style.width = "100%"; $("ai360Go").textContent = "Done";
+    $("aiModal").classList.remove("open");
+    if (S.vis.room && roomKey(atSpot(allRooms().find(r => r.id === S.vis.room) || ROOMS[0])) === key) { loadedKey = null; showVisual(); }
+    toast("Your room in 360°, redrawn by AI. Drag to look all around.");
+  } catch (e) { fail(e.message); }
 }
 
 // Under the AI picture: buy the tiles in it (same cart as the shop), and what is drawn that we don't offer yet
@@ -1441,6 +1490,7 @@ $("vaiChips").onclick = e => { const b = e.target.closest("button"); if (!b) ret
 $("vaiText").oninput = () => { $("vaiBox").classList.remove("bad"); $("vaiErr").hidden = true; };
 wireAiLook();
 $("aiClose").onclick = () => $("aiModal").classList.remove("open");
+$("ai360Go").onclick = make360;
 $("aiModal").onclick = e => { if (e.target.id === "aiModal") $("aiModal").classList.remove("open"); };
 $("aiAgain").onclick = photoReal;
 $("aiDl").onclick = () => { if (!AI.last) return; const a = Object.assign(document.createElement("a"), { href: AI.last.after, download: `ceramica-nova-${curRoom().id}-ai.jpg` }); document.body.appendChild(a); a.click(); a.remove(); };

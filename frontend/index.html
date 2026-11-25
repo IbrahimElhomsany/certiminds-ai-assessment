@@ -252,6 +252,12 @@
   .vaibox .btn { background:#3d6fd8; border-color:#3d6fd8; color:#fff; justify-content:center; }
   .vchips { display:flex; flex-wrap:wrap; gap:5px; } .vchips button { border:1px solid var(--line); background:#fff; border-radius:999px; padding:3px 9px; font:inherit; font-size:11.5px; cursor:pointer; }
   .vchips button:hover { border-color:#3d6fd8; color:#3d6fd8; } .vaierr { color:#c0392b; font-size:12.5px; }
+  .ai360 { margin-top:12px; display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:12px 14px; border:1px solid var(--accent); border-radius:12px; background:var(--accent-soft, #eef3fd); }
+  .ai360 > div:first-child { flex:1 1 260px; } .ai360 b { display:block; } .ai360 small { color:var(--muted); }
+  .ai360bar { flex:1 1 100%; height:6px; border-radius:99px; background:rgba(0,0,0,.08); overflow:hidden; }
+  .ai360bar span { display:block; height:100%; width:0; background:var(--accent); transition:width .4s; }
+  .ai360 .aierr { flex:1 1 100%; margin:0; }
+  body.oldvis .ai360 { display:none !important; }
   .ailook { margin-top:12px; } .ailook h4 { margin:0 0 8px; font-size:15px; }
   .ailook .items { display:grid; grid-template-columns:repeat(auto-fill, minmax(230px, 1fr)); gap:8px; }
   .ailook .buyc { border:1px solid var(--line); border-radius:12px; padding:10px; display:grid; gap:7px; } .ailook .buyc.bad { border-color:#c0392b; }
@@ -790,6 +796,12 @@
       <div class="aibusy" id="aiBusy"><div><div class="aispin"></div><b>The AI is re-drawing your room…</b><br><small><span id="aiSecs">0</span> s. Usually 20 to 60 seconds.</small></div></div>
     </div>
     <div class="aierr" id="aiErr" role="alert" hidden></div>
+    <div class="ai360" id="ai360" hidden>
+      <div><b>See the whole room like this, in 360°</b><small id="ai360Note">The AI redraws the whole 360° room the same way, in 8 views joined together. Takes 1 to 3 minutes.</small></div>
+      <button class="btn" type="button" id="ai360Go">✨ Make it 360°</button>
+      <div class="ai360bar" id="ai360Bar" hidden><span id="ai360Fill"></span></div>
+      <div class="aierr" id="ai360Err" role="alert" hidden></div>
+    </div>
     <div class="ailook" id="aiLook"></div>
     <div class="hint" style="margin-top:8px">Drawn by an AI image model (OpenAI). It looks like a real photo, but tile size and pattern can differ a little. The visualiser shows the exact tiles at real size.</div>
     <div class="sharebtns" style="margin-top:10px"><button class="btn" type="button" id="aiDl" disabled>Download</button><button class="btn ghost" type="button" id="aiCopy" disabled>Copy link</button><button class="btn ghost" type="button" id="aiAgain" hidden>Try again</button></div>

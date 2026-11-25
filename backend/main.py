@@ -34,6 +34,7 @@ from backend.admin_api import router as admin_router                 # noqa: E40
 from backend.shop_api import router as shop_router                   # noqa: E402
 from backend.visual import router as visual_router                   # noqa: E402
 from backend.roomedit import router as makeover_router               # noqa: E402
+from backend.makeover360 import router as makeover360_router         # noqa: E402
 from backend.homepage import router as homepage_router               # noqa: E402
 from backend.worlds import router as worlds_router                   # noqa: E402
 from backend.sample_rooms import router as sample_rooms_router       # noqa: E402
@@ -70,6 +71,7 @@ app.include_router(admin_router)
 app.include_router(shop_router)
 app.include_router(visual_router)
 app.include_router(makeover_router)
+app.include_router(makeover360_router)
 app.include_router(homepage_router)
 app.include_router(worlds_router)
 app.include_router(sample_rooms_router)

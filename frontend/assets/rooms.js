@@ -198,38 +198,10 @@ window.NOVA_ROOMS = [
       }],
     },
   },
-  {
-    id: "lounge", name: "Showroom lounge", location: "indoor", photo: "/images/showroom_lounge.jpg",
-    surfaces: {
-      floor: [{
-        quad: [[300, 700], [1372, 700], [1734, 941], [-62, 941]], size: [360, 190],
-        area: [[0, 700], [250, 700], [250, 598], [330, 598], [330, 700], [1360, 700], [1380, 746], [1672, 740], [1672, 941], [0, 941]],
-        keep: [
-          [[325, 650], [330, 600], [360, 560], [455, 530], [570, 528], [640, 545], [985, 545], [1030, 535], [1195, 533], [1235, 558], [1285, 575], [1290, 650], [1355, 662], [1362, 700], [1350, 790], [1300, 808], [1130, 812], [1010, 805], [985, 778], [560, 772], [450, 760], [330, 745]],
-          [[0, 860], [160, 815], [330, 770], [1000, 772], [1110, 800], [1345, 795], [1345, 930], [0, 935]],
-          [[1403, 586], [1534, 586], [1534, 772], [1403, 772]],
-        ],
-      }],
-      wall: [{
-        quad: [[570, 0], [1340, 0], [1340, 700], [570, 700]], size: [258, 235],
-        area: [[572, 0], [1338, 0], [1338, 700], [572, 700]],
-        keep: [
-          { ring: [693, 55, 204, 46, 186, 31] },
-          [[325, 650], [330, 600], [360, 560], [455, 530], [570, 528], [640, 545], [985, 545], [1030, 535], [1195, 533], [1235, 558], [1285, 575], [1290, 650], [1355, 662], [1362, 700], [325, 700]],
-          [[575, 515], [630, 505], [700, 500], [760, 525], [795, 555], [770, 600], [700, 640], [690, 700], [640, 700], [600, 620], [578, 580]],
-          [[1235, 330], [1300, 320], [1345, 330], [1345, 580], [1290, 570], [1250, 520], [1238, 450]],
-        ],
-      }],
-    },
-  },
 ];
 
-// 3D rooms (frontend/assets/walk3d.js): built in the browser, so customers can walk through them with the tiles they choose
+// 360° rooms (Ibrahim removed the 3D living room, 3D bathroom, TV lounge walk-around and five Poly Haven rooms on 2026-11-25)
 window.NOVA_ROOMS.push(
-  { id: "walk_living", kind: "3d", scene: "living", name: "3D living room", location: "indoor", photo: "/images/walk_living.jpg",
-    surfaces: { floor: [{}], wall: [{}] } },
-  { id: "walk_bath", kind: "3d", scene: "bath", name: "3D bathroom", location: "indoor", photo: "/images/walk_bath.jpg",
-    surfaces: { floor: [{}], wall: [{}] } },
   // 360° versions of the photo rooms (Ibrahim's own AI images, 2:1): look all around, the floor is found in the browser
   // spots: one 360° picture per place you can stand. at = metres from the first spot, turn = how far (degrees) that
   // picture is turned from the first one. Worked out from where the door, TV, armchair and console appear in each picture.
@@ -247,25 +219,10 @@ window.NOVA_ROOMS.push(
     width: 800, height: 500, surfaces: { floor: [{}], wall: [{}] } },
   { id: "ph_lebombo", kind: "pano", name: "Empty house, sunny 360°", location: "indoor", photo: "/images/pano_ph_lebombo.jpg", thumb: "/images/pano_ph_lebombo_thumb.jpg",
     width: 800, height: 500, surfaces: { floor: [{}], wall: [{}] } },
-  { id: "ph_small_empty_house", kind: "pano", name: "Empty house with kitchen 360°", location: "indoor", photo: "/images/pano_ph_small_empty_house.jpg", thumb: "/images/pano_ph_small_empty_house_thumb.jpg",
-    width: 800, height: 500, surfaces: { floor: [{}], wall: [{}] } },
-  { id: "ph_unfinished_office", kind: "pano", name: "Bright empty room 360°", location: "indoor", photo: "/images/pano_ph_unfinished_office.jpg", thumb: "/images/pano_ph_unfinished_office_thumb.jpg",
-    width: 800, height: 500, surfaces: { floor: [{}], wall: [{}] } },
   { id: "ph_modern_bathroom", kind: "pano", name: "Modern bathroom 360°", location: "indoor", photo: "/images/pano_ph_modern_bathroom.jpg", thumb: "/images/pano_ph_modern_bathroom_thumb.jpg",
-    width: 800, height: 500, surfaces: { floor: [{}], wall: [{}] } },
-  { id: "ph_bathroom", kind: "pano", name: "Family bathroom 360°", location: "indoor", photo: "/images/pano_ph_bathroom.jpg", thumb: "/images/pano_ph_bathroom_thumb.jpg",
-    width: 800, height: 500, surfaces: { floor: [{}], wall: [{}] } },
-  { id: "ph_kiara_interior", kind: "pano", name: "Living room and kitchen 360°", location: "indoor", photo: "/images/pano_ph_kiara_interior.jpg", thumb: "/images/pano_ph_kiara_interior_thumb.jpg",
-    width: 800, height: 500, surfaces: { floor: [{}], wall: [{}] } },
-  { id: "ph_studio_country_hall", kind: "pano", name: "Country kitchen 360°", location: "indoor", photo: "/images/pano_ph_studio_country_hall.jpg", thumb: "/images/pano_ph_studio_country_hall_thumb.jpg",
     width: 800, height: 500, surfaces: { floor: [{}], wall: [{}] } },
   { id: "ph_brown_photostudio_04", kind: "pano", name: "Modern living room 360°", location: "indoor", photo: "/images/pano_ph_brown_photostudio_04.jpg", thumb: "/images/pano_ph_brown_photostudio_04_thumb.jpg",
     width: 800, height: 500, surfaces: { floor: [{}], wall: [{}] } },
-  // a walkable version of the TV lounge, made by World Labs from the 360° picture (backend/worlds.py). It is only
-  // listed once it has been made (GET /api/worlds/tvroom says "ready").
-  { id: "world_tvroom", kind: "splat", world: "tvroom", name: "TV lounge, walk around", location: "indoor",
-    photo: "/images/pano_tvroom_thumb.jpg", thumb: "/images/pano_tvroom_thumb.jpg", from: "tvroom", width: 1600, height: 900,
-    surfaces: { floor: [{}] } },
 );
 // a photo room with a 360° version gets a "360° view" button instead of "Walk in 3D"
 for (const r of window.NOVA_ROOMS) { const p = window.NOVA_ROOMS.find(q => q.kind === "pano" && q.from === r.id); if (p) r.view360 = p.id; }

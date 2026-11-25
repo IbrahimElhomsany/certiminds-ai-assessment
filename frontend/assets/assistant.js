@@ -1478,9 +1478,9 @@ $("vspots").onclick = e => {
   const to = r.spots[j], dx = to.at[0] - r.spots[r.spot].at[0], dz = to.at[1] - r.spots[r.spot].at[1];
   jumpTo(j, Math.atan2(dx, dz) - r.spots[r.spot].turn * Math.PI / 180);
 };
-$("v3d").onclick = () => {                         // jump to the 3D room closest to the one on screen
-  const r = curRoom(), want = r.view360 || (/bath|spa/.test(r.id) ? "walk_bath" : "walk_living");
-  S.vis.room = is3d(r) ? (r.from || "living") : want; S.vis.picked = true; S.vis.spot = 0; S.vis.spotYaw = null; save(); showVisual();
+$("v3d").onclick = () => {                         // switch between a photo room and its own 360° picture
+  const r = curRoom();
+  S.vis.room = is3d(r) ? (r.from || "living") : (r.view360 || r.id); S.vis.picked = true; S.vis.spot = 0; S.vis.spotYaw = null; save(); showVisual();
 };
 $("vdl").onclick = downloadImage;
 $("vai").onclick = photoReal;

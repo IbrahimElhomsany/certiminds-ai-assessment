@@ -333,6 +333,50 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
   .learngrid { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:12px; }
   .learncard .up { color:#1d8a4f; } .learncard .down { color:#c0392b; }
   @media (max-width: 700px) { .learngrid { grid-template-columns:1fr; } }
+
+  /* long lists: search, filters, click-to-sort headers (tableTools) */
+  .ttools { margin:0 0 10px; } .ttools input[type=search] { min-width:230px; flex:0 1 300px; }
+  th.sortable { cursor:pointer; user-select:none; } th.sortable:hover { color:var(--text); }
+  th .arr { margin-left:4px; opacity:.3; font-size:10px; } th.sorted .arr { opacity:1; color:var(--accent); }
+  .tt-none { padding:18px; text-align:center; color:var(--muted); font-size:13px; }
+  /* discount approvals */
+  .apr-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(440px, 100%), 1fr)); gap:14px; }
+  .apr { display:flex; flex-direction:column; gap:12px; }
+  .apr-top { display:flex; gap:12px; align-items:center; }
+  .apr-pct { font-size:20px; font-weight:700; background:var(--accent-soft); color:var(--accent); border-radius:10px; padding:8px 0; width:66px; text-align:center; flex:none; }
+  .apr-top .grow { flex:1; min-width:0; } .apr-top .q { font-weight:700; font-size:15px; }
+  .apr-money { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; background:var(--panel2); border-radius:10px; padding:10px 12px; }
+  .apr-money span { display:block; font-size:11px; color:var(--muted); margin-bottom:2px; } .apr-money b { font-size:13.5px; white-space:nowrap; }
+  .apr-why { font-size:12.5px; line-height:1.55; padding-left:10px; border-left:3px solid var(--warn); }
+  .apr-why.low { border-color:var(--bad); }
+  .apr-foot { display:flex; align-items:center; gap:8px; border-top:1px solid var(--line); padding-top:10px; flex-wrap:wrap; }
+  .apr-foot .who { flex:1; min-width:160px; }
+  .sec-h { display:flex; align-items:center; gap:8px; margin:4px 0 10px; font-size:14px; font-weight:600; }
+  .sec-h .cnt { background:var(--warn); color:#fff; border-radius:9px; font-size:11px; padding:1px 7px; }
+  /* staff chat (Ask your data) */
+  .chat { display:flex; flex-direction:column; height:calc(100vh - 200px); min-height:480px; padding:0; overflow:hidden; }
+  .chat-log { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:16px; }
+  .msg { max-width:min(760px, 86%); line-height:1.55; font-size:13.5px; }
+  .msg.me { align-self:flex-end; background:var(--accent); color:#fff; border-radius:16px 16px 4px 16px; padding:10px 14px; white-space:pre-wrap; }
+  .msg.ai { align-self:flex-start; display:flex; gap:10px; }
+  .msg.ai .bub { background:var(--panel2); border:1px solid var(--line); border-radius:16px 16px 16px 4px; padding:12px 14px; min-width:0; }
+  .bot-av { width:30px; height:30px; border-radius:50%; flex:none; display:grid; place-items:center; background:var(--accent-soft); color:var(--accent); }
+  .bot-av .ico { width:16px; height:16px; }
+  .md p { margin:0 0 8px; } .md p:last-child { margin-bottom:0; } .md ul, .md ol { margin:2px 0 8px 20px; padding:0; } .md li { margin:2px 0; }
+  .bub .meta { margin-top:8px; font-size:11.5px; color:var(--muted); }
+  .bub .raterow { margin-top:6px; } .bub details.data { margin-top:8px; }
+  .typing { display:inline-flex; gap:4px; padding:4px 0; } .typing i { width:7px; height:7px; border-radius:50%; background:var(--muted); animation:blink 1.2s infinite; }
+  .typing i:nth-child(2) { animation-delay:.2s; } .typing i:nth-child(3) { animation-delay:.4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity:.25; } 40% { opacity:1; } }
+  .chat-hello { margin:auto; text-align:center; max-width:560px; padding:20px 0; }
+  .chat-hello .bot-av { width:48px; height:48px; margin:0 auto 10px; } .chat-hello .bot-av .ico { width:24px; height:24px; }
+  .chat-hello .chips { justify-content:center; margin-top:14px; }
+  .chat-in { border-top:1px solid var(--line); padding:12px 14px; display:flex; gap:8px; align-items:flex-end; background:var(--panel); }
+  .chat-in textarea { flex:1; resize:none; min-height:44px; max-height:140px; padding:11px 14px; line-height:1.4; font:inherit; }
+  .chat-sugg { display:flex; gap:6px; overflow-x:auto; padding:10px 14px 0; border-top:1px solid var(--line); }
+  .chat-sugg .chip { white-space:nowrap; }
+  .chat-note { font-size:11.5px; color:var(--muted); padding:0 14px 10px; background:var(--panel); }
+  .msg .err { color:var(--bad); }
 </style>
 </head>
 <body>
@@ -515,7 +559,7 @@ function toggleTheme() {
   try { localStorage.setItem("nova_admin_theme", isDark() ? "dark" : "light"); } catch (e) {}
   document.querySelectorAll(".theme-btn").forEach(b => b.outerHTML = themeBtn());
 }
-function logout() { S.token = null; S.me = null; try { sessionStorage.removeItem("nova_admin_token"); } catch (e) {} loginView(); }
+function logout() { S.token = null; S.me = null; S.asks = []; try { sessionStorage.removeItem("nova_admin_chat"); } catch (e) {} try { sessionStorage.removeItem("nova_admin_token"); } catch (e) {} loginView(); }
 
 /* ------------------------------------------------------------------ shell */
 function modules() {
@@ -823,6 +867,7 @@ async function leadsView(p) {
   $("#src").onchange = e => location.hash = link({source: e.target.value});
   if ($("#own")) $("#own").onchange = e => location.hash = link({owner_id: e.target.value});
   $("#sf").onsubmit = e => { e.preventDefault(); location.hash = link({q: $("#sq").value.trim()}); };
+  if ($("#srt")) $("#srt").onchange = () => location.hash = link({sort: $("#srt").value});
 }
 
 async function leadView(id) {
@@ -889,16 +934,18 @@ async function leadView(id) {
 
 /* ------------------------------------------------------------------ quotations */
 const QSTAT = ["draft", "sent", "accepted", "rejected", "expired"];
+const LIST_SORTS = [["", "Newest first"], ["oldest", "Oldest first"], ["total_desc", "Highest total"], ["total_asc", "Lowest total"], ["customer", "Customer A–Z"]];
+const sortSelect = p => `<select id="srt" aria-label="Sort">${LIST_SORTS.map(([v, t]) => `<option value="${v}" ${(p.sort || "") === v ? "selected" : ""}>${t}</option>`).join("")}</select>`;
 async function quotesView(p) {
   shell("quotes", topbar("Quotations") + loading());
   const page = +(p.page || 0), qs = new URLSearchParams({offset: page * 25, limit: 25});
-  if (p.status) qs.set("status", p.status); if (p.q) qs.set("q", p.q);
+  if (p.status) qs.set("status", p.status); if (p.q) qs.set("q", p.q); if (p.sort) qs.set("sort", p.sort);
   const r = await api("/quotes?" + qs);
   const link = ch => "#/quotes?" + new URLSearchParams(Object.fromEntries(Object.entries({...p, page: "", ...ch}).filter(([, v]) => v)));
   $("#view").innerHTML = topbar("Quotations", "From the showroom, the online shop and Ceramica Nova AI chats") + `
     <div class="filters"><div class="chips"><a class="chip ${!p.status ? "on" : ""}" href="${link({status: ""})}">All</a>
       ${QSTAT.map(s => `<a class="chip ${p.status === s ? "on" : ""}" href="${link({status: s})}">${label(s)}</a>`).join("")}</div>
-      <span style="flex:1"></span><form id="sf"><input id="sq" placeholder="Search Q-number or customer" value="${esc(p.q || "")}"></form></div>
+      <span style="flex:1"></span>${sortSelect(p)}<form id="sf"><input id="sq" placeholder="Search Q-number or customer" value="${esc(p.q || "")}"></form></div>
     <div class="card"><div class="tablewrap"><table><tr><th>Quote</th><th>Customer</th><th>Channel</th><th>Salesperson</th><th>Status</th><th class="right">Discount</th><th class="right">Total</th><th class="right">Margin</th><th class="right">Date</th></tr>
       ${r.items.map(q => `<tr class="click" onclick="location.hash='#/quotes/${q.id}'"><td>${esc(q.number)}</td><td>${esc(q.customer)}</td>
         <td class="small">${q.channel === "chat" ? "AI chat" : label(q.channel)}</td><td class="small">${esc(q.owner || "")}</td>
@@ -910,6 +957,7 @@ async function quotesView(p) {
         <a class="btn ghost sm" ${page ? `href="${link({page: page - 1 || ""})}"` : "style='opacity:.4;pointer-events:none'"}>Previous</a>
         <a class="btn ghost sm" ${(page + 1) * 25 < r.total ? `href="${link({page: page + 1})}"` : "style='opacity:.4;pointer-events:none'"}>Next</a></div></div>`;
   $("#sf").onsubmit = e => { e.preventDefault(); location.hash = link({q: $("#sq").value.trim()}); };
+  if ($("#srt")) $("#srt").onchange = () => location.hash = link({sort: $("#srt").value});
 }
 
 async function quoteView(id) {
@@ -971,13 +1019,13 @@ const OSTAT = ["pending", "confirmed", "delivered", "cancelled"];
 async function ordersView(p) {
   shell("orders", topbar("Orders") + loading());
   const page = +(p.page || 0), qs = new URLSearchParams({offset: page * 25, limit: 25});
-  if (p.status) qs.set("status", p.status); if (p.q) qs.set("q", p.q);
+  if (p.status) qs.set("status", p.status); if (p.q) qs.set("q", p.q); if (p.sort) qs.set("sort", p.sort);
   const r = await api("/orders?" + qs);
   const link = ch => "#/orders?" + new URLSearchParams(Object.fromEntries(Object.entries({...p, page: "", ...ch}).filter(([, v]) => v)));
   $("#view").innerHTML = topbar("Orders", "Online orders wait as pending until a salesperson confirms them") + `
     <div class="filters"><div class="chips"><a class="chip ${!p.status ? "on" : ""}" href="${link({status: ""})}">All</a>
       ${OSTAT.map(s => `<a class="chip ${p.status === s ? "on" : ""}" href="${link({status: s})}">${label(s)} ${num(r.status_counts[s] || 0)}</a>`).join("")}</div>
-      <span style="flex:1"></span><form id="sf"><input id="sq" placeholder="Search O-number or customer" value="${esc(p.q || "")}"></form></div>
+      <span style="flex:1"></span>${sortSelect(p)}<form id="sf"><input id="sq" placeholder="Search O-number or customer" value="${esc(p.q || "")}"></form></div>
     <div class="card"><div class="tablewrap"><table><tr><th>Order</th><th>Customer</th><th>Delivery area</th><th>From</th><th>Status</th><th class="right">Total</th><th class="right">Placed</th></tr>
       ${r.items.map(o => `<tr class="click" onclick="location.hash='#/orders/${o.id}'"><td>${esc(o.number)}</td><td>${esc(o.customer)}<br><span class="muted small">${esc(o.phone || "")}</span></td>
         <td class="small">${esc(o.area || "")}</td><td class="small">${o.channel === "chat" ? "AI chat" : label(o.channel)}</td>
@@ -987,6 +1035,7 @@ async function ordersView(p) {
         <a class="btn ghost sm" ${page ? `href="${link({page: page - 1 || ""})}"` : "style='opacity:.4;pointer-events:none'"}>Previous</a>
         <a class="btn ghost sm" ${(page + 1) * 25 < r.total ? `href="${link({page: page + 1})}"` : "style='opacity:.4;pointer-events:none'"}>Next</a></div></div>`;
   $("#sf").onsubmit = e => { e.preventDefault(); location.hash = link({q: $("#sq").value.trim()}); };
+  if ($("#srt")) $("#srt").onchange = () => location.hash = link({sort: $("#srt").value});
 }
 
 async function orderView(id) {
@@ -1039,7 +1088,7 @@ async function inventoryView(p) {
       r.can.receive ? `<div class="actions"><button class="btn sm" id="invAdd">+ Add stock</button></div>` : "") + `
     <div class="filters"><div class="chips"><a class="chip ${!p.status ? "on" : ""}" href="#/inventory">All ${r.items.length}</a>
       ${["out", "critical", "low", "ok"].map(s => `<a class="chip ${p.status === s ? "on" : ""}" href="#/inventory?status=${s}">${label(s)} ${counts[s] || 0}</a>`).join("")}</div></div>
-    <div class="card"><div class="tablewrap"><table><tr><th>Product</th><th class="right">Price</th><th class="right">In stock</th><th class="right">Largest batch</th><th class="right">Batches</th><th class="right">Sold / day</th><th class="right">Days left</th><th>Status</th></tr>
+    <div class="card"><div class="tablewrap"><table id="invT"><tr><th>Product</th><th class="right">Price</th><th class="right">In stock</th><th class="right">Largest batch</th><th class="right">Batches</th><th class="right">Sold / day</th><th class="right">Days left</th><th>Status</th></tr>
       ${show.map(s => `<tr class="click" onclick="location.hash='#/inventory/${s.sku}'"><td><div class="pcell"><img class="thumb" src="${esc(s.image || IMG_BLANK)}" onerror="this.src='${IMG_BLANK}'" alt="">
         <div>${esc(s.name)}<br><span class="muted small">${esc(s.sku)}</span></div></div></td>
         <td class="right num">${qar(s.price, 2)}<span class="muted small">/${s.unit === "m2" ? "m²" : "set"}</span></td>
@@ -1047,6 +1096,7 @@ async function inventoryView(p) {
         <td class="right">${s.batches}</td><td class="right">${num(s.sold_per_day, 1)}</td>
         <td class="right">${s.days_of_stock != null ? num(s.days_of_stock) : "-"}</td><td><span class="tag ${s.status}">${label(s.status)}</span></td></tr>`).join("")}</table></div></div>
     ${await choicesCard()}`;
+  tableTools($("#invT"), {search: "Search product name or code"});
   if ($("#invAdd")) $("#invAdd").onclick = () => receiveDialog(r.items);
 }
 /* Receive a delivery: pick the product (or it is given), quantity, shade and batch code. */
@@ -1096,9 +1146,10 @@ async function productView(sku) {
           <td class="right"><b>${num(b.left, 1)}</b><div class="meter"><i style="width:${b.received ? b.left / b.received * 100 : 0}%;background:var(--accent)"></i></div></td>
           <td class="right small">${date(b.received_at)}</td></tr>`).join("")}</table></div>
         <p class="muted small" style="margin:10px 0 0">Tiles from different production runs can differ in shade, so each order line is supplied from one batch.</p></div>
-      <div class="card"><div class="head"><h2>Stock movements</h2></div><div class="tablewrap"><table><tr><th>Date</th><th>What</th><th>Batch</th><th class="right">Qty</th></tr>
-        ${p.movements.map(m => `<tr><td class="small">${dateTime(m.at)}</td><td class="small">${label(m.reason)} <span class="muted">${esc(m.reference || "")}</span>${m.by ? `<br><span class="muted">${esc(m.by)}</span>` : ""}</td>
+      <div class="card"><div class="head"><h2>Stock movements</h2></div><div class="tablewrap"><table id="movT"><tr><th>Date</th><th>What</th><th>Batch</th><th class="right">Qty</th></tr>
+        ${p.movements.map(m => `<tr><td class="small" data-v="${esc(m.at || "")}">${dateTime(m.at)}</td><td class="small">${label(m.reason)} <span class="muted">${esc(m.reference || "")}</span>${m.by ? `<br><span class="muted">${esc(m.by)}</span>` : ""}</td>
           <td class="small">${esc(m.batch || "")}</td><td class="right num ${m.qty < 0 ? "delta down" : "delta up"}">${m.qty > 0 ? "+" : ""}${num(m.qty, 2)}</td></tr>`).join("")}</table></div></div></div>`;
+  if (p.movements.length > 8) tableTools($("#movT"), {filters: ["Batch"], search: "Search movements"});
   if ($("#bRec")) $("#bRec").onclick = () => receiveDialog(inv.items, sku);
   if ($("#bFix")) $("#bFix").onclick = async () => {
     const r = await ask(`Correct a quantity: ${p.name}`, [
@@ -1128,26 +1179,71 @@ async function productView(sku) {
 }
 
 /* ------------------------------------------------------------------ approvals */
+/* Long lists: a search box, drop-down filters and click-to-sort headers, all in the browser.
+ * filters = column headings to offer as drop-downs. A cell's data-v (e.g. an ISO date) is used for sorting when present. */
+function tableTools(table, {filters = [], search = "Search", sort = true} = {}) {
+  if (!table) return;
+  const head = [...table.rows].find(r => r.querySelector("th")); if (!head) return;
+  const body = [...table.rows].filter(r => r !== head), ths = [...head.cells];
+  const col = name => ths.findIndex(th => th.textContent.trim() === name);
+  const text = (r, i) => (r.cells[i] ? r.cells[i].textContent : "").replace(/\s+/g, " ").trim();
+  const fcols = filters.map(col).filter(i => i >= 0);
+  const bar = document.createElement("div"); bar.className = "filters ttools";
+  bar.innerHTML = `<input type="search" placeholder="${esc(search)}" aria-label="${esc(search)}">` + fcols.map(i => {
+      const vals = [...new Set(body.map(r => text(r, i)).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+      return `<select data-col="${i}" aria-label="${esc(ths[i].textContent.trim())}"><option value="">${esc(ths[i].textContent.trim())}: all</option>
+        ${vals.map(v => `<option>${esc(v)}</option>`).join("")}</select>`; }).join("") +
+    `<span style="flex:1"></span><span class="muted small tt-n"></span>`;
+  const wrap = table.closest(".tablewrap") || table; wrap.before(bar);
+  const none = document.createElement("div"); none.className = "tt-none"; none.textContent = "Nothing matches. Clear the search or a filter."; none.hidden = true; wrap.after(none);
+  const apply = () => {
+    const q = bar.querySelector("input").value.trim().toLowerCase(), sel = [...bar.querySelectorAll("select")].filter(x => x.value);
+    let n = 0;
+    body.forEach(r => { const ok = (!q || r.textContent.toLowerCase().includes(q)) && sel.every(x => text(r, +x.dataset.col) === x.value);
+      r.hidden = !ok; n += ok; });
+    bar.querySelector(".tt-n").textContent = n === body.length ? `${num(body.length)} rows` : `${num(n)} of ${num(body.length)}`;
+    none.hidden = n > 0;
+  };
+  bar.oninput = apply; apply();
+  if (!sort) return;
+  const val = (r, i) => { const c = r.cells[i]; if (!c) return ""; if (c.dataset.v != null) return c.dataset.v;
+    const t = text(r, i), n = t.replace(/QAR|%|,|\+|days?|m²|\s/gi, ""); return /^-?\d+(\.\d+)?$/.test(n) ? +n : t.toLowerCase(); };
+  let by = -1, dir = 1;
+  ths.forEach((th, i) => { if (!th.textContent.trim()) return; th.classList.add("sortable"); th.insertAdjacentHTML("beforeend", `<span class="arr">↕</span>`);
+    th.title = "Sort by " + th.textContent.replace("↕", "").trim();
+    th.onclick = () => { dir = by === i ? -dir : (th.classList.contains("right") ? -1 : 1); by = i;
+      ths.forEach(t => { t.classList.remove("sorted"); const a = t.querySelector(".arr"); if (a) a.textContent = "↕"; });
+      th.classList.add("sorted"); th.querySelector(".arr").textContent = dir > 0 ? "▲" : "▼";
+      body.sort((a, b) => { const x = val(a, i), y = val(b, i);
+        return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), undefined, {numeric: true})) * dir; });
+      body.forEach(r => head.parentNode.appendChild(r)); }; });
+}
+
 async function approvalsView() {
   shell("approvals", topbar("Approvals") + loading());
   const r = await api("/approvals");
   S.pending = r.pending.length;
+  const money = (t, v) => `<div><span>${t}</span><b>${v}</b></div>`;
   shell("approvals", topbar("Discount approvals", `Minimum gross margin ${r.min_margin_pct}%. Below it, only the owner can approve, with a reason.`) + `
-    ${r.pending.length ? `<div class="grid copilot">${r.pending.map(a => { const low = a.margin_after_pct < r.min_margin_pct; return `
-      <div class="cc"><div style="display:flex;gap:8px;align-items:center"><b style="font-size:18px">${a.percent}%</b><span class="muted small">on</span>
-        <a href="#/quotes/${a.quote_id}"><b>${esc(a.quote)}</b></a><span style="flex:1"></span><span class="tag ${low ? "out" : "ok"}">margin ${a.margin_after_pct}%</span></div>
-        <span class="small">${esc(a.customer)}${a.lead ? ` · <a class="muted" href="#/leads/${a.lead_id}">${esc(a.lead)}</a>` : ""}</span>
-        <span class="small">${qar(a.subtotal, 2)} → <b>${qar(a.total_after, 2)}</b></span>
-        <span class="small"><b>Why it's waiting:</b> ${esc(a.why)}</span>
-        <span class="why">Asked by ${esc(a.requested_by)} · ${dateTime(a.created_at)}${a.reason && !a.reason.includes("Needs approval") ? "<br>Note: " + esc(a.reason) : ""}</span>
-        <div class="actions"><button class="btn ok sm" data-ok="${a.id}" data-low="${low ? 1 : ""}" ${low && !r.is_owner ? "disabled title='Below the minimum margin: only the owner can approve'" : ""}>Approve</button>
-          <button class="btn danger sm" data-no="${a.id}">Reject</button></div></div>`; }).join("")}</div>`
+    <div class="sec-h">Waiting for a decision ${r.pending.length ? `<span class="cnt">${r.pending.length}</span>` : ""}</div>
+    ${r.pending.length ? `<div class="apr-grid">${r.pending.map(a => { const low = a.margin_after_pct < r.min_margin_pct; return `
+      <div class="card apr">
+        <div class="apr-top"><div class="apr-pct">${a.percent}%</div>
+          <div class="grow"><a class="q lnk" href="#/quotes/${a.quote_id}">${esc(a.quote)}</a>
+            <div class="small ellipsis">${esc(a.customer)}${a.lead ? ` · <a class="muted" href="#/leads/${a.lead_id}">${esc(a.lead)}</a>` : ""}</div></div>
+          <span class="tag ${low ? "out" : "ok"}">margin ${a.margin_after_pct}%</span></div>
+        <div class="apr-money">${money("Before", qar(a.subtotal, 2))}${money("After discount", qar(a.total_after, 2))}${money("Customer saves", qar(a.subtotal - a.total_after, 2))}</div>
+        <div class="apr-why ${low ? "low" : ""}"><b>Why it's waiting:</b> ${esc(a.why)}${a.reason && !a.reason.includes("Needs approval") ? `<br><span class="muted">Note: ${esc(a.reason)}</span>` : ""}</div>
+        <div class="apr-foot"><span class="who muted small">Asked by <b>${esc(a.requested_by)}</b> · ${dateTime(a.created_at)}</span>
+          <button class="btn danger sm" data-no="${a.id}">Reject</button>
+          <button class="btn ok sm" data-ok="${a.id}" data-low="${low ? 1 : ""}" ${low && !r.is_owner ? "disabled title='Below the minimum margin: only the owner can approve'" : ""}>Approve</button></div></div>`; }).join("")}</div>`
       : `<div class="card"><div class="empty">No discounts waiting. Discounts within a salesperson's limit and the minimum margin are applied automatically.</div></div>`}
-    <div class="card" style="margin-top:14px"><div class="head"><h2>Last 30 days</h2></div><div class="tablewrap"><table>
+    <div class="card" style="margin-top:18px"><div class="head"><h2>Decided in the last 30 days</h2></div><div class="tablewrap"><table id="aprHist">
       <tr><th>Quote</th><th class="right">Discount</th><th class="right">Margin after</th><th>Decision</th><th>Asked by</th><th>Decided by</th><th>Reason</th><th class="right">When</th></tr>
       ${r.history.map(h => `<tr class="click" onclick="location.hash='#/quotes/${h.quote_id}'"><td>${esc(h.quote)}</td><td class="right">${h.percent}%</td><td class="right">${h.margin_after_pct}%</td>
         <td><span class="tag ${h.status}">${label(h.status)}</span></td><td class="small">${esc(h.requested_by)}</td><td class="small">${esc(h.decided_by || (h.status === "auto_approved" ? "Automatic" : ""))}</td>
-        <td class="small muted">${esc(h.reason || "")}</td><td class="right small">${date(h.at)}</td></tr>`).join("")}</table></div></div>`);
+        <td class="small muted">${esc(h.reason || "")}</td><td class="right small" data-v="${esc(h.at || "")}">${date(h.at)}</td></tr>`).join("")}</table></div></div>`);
+  tableTools($("#aprHist"), {filters: ["Decision", "Asked by", "Decided by"], search: "Search quote or reason"});
   bindDecisions();
 }
 
@@ -1173,7 +1269,6 @@ function bindDecisions() {
 /* ------------------------------------------------------------------ Ask your data (feature 11) */
 const TOOL_NAMES = {get_kpis: "Key figures", sales_breakdown: "Sales breakdown", leads_breakdown: "Leads breakdown",
   top_products: "Top products", stock: "Stock levels", waiting_quotes: "Quotations waiting", pipeline: "Pipeline"};
-S.asks = [];
 function dataTable(out) {
   const list = Object.values(out).find(v => Array.isArray(v) && v.length && typeof v[0] === "object");
   const scal = Object.entries(out).filter(([, v]) => v !== null && typeof v !== "object");
@@ -1183,17 +1278,36 @@ function dataTable(out) {
     + (list ? `<div class="tablewrap"><table><tr>${Object.keys(list[0]).map(k => `<th>${esc(label(k))}</th>`).join("")}</tr>
         ${list.map(r => `<tr>${Object.values(r).map(v => `<td>${typeof v === "object" && v ? esc(JSON.stringify(v)) : cell(v)}</td>`).join("")}</tr>`).join("")}</table></div>` : "");
 }
-function askResult(r) {
-  const tag = r.mode === "claude" ? `<span class="ai-tag">AI answer · Claude · read-only</span>`
-    : `<span class="ai-tag off">${r.mode === "checked_fallback" ? "Figures only (AI answer hidden)" : "Offline mode · no AI"}</span>`;
-  return `<div class="card" style="margin-top:14px"><div class="head"><h2 class="grow">${esc(r.question)}</h2>${tag}</div>
-    ${r.answer ? `<div class="answer">${esc(r.answer)}</div>` : ""}
+/* A little Markdown for AI answers: paragraphs, **bold**, *italic*, bullet and numbered lists, headings. Escaped first. */
+function md(t) {
+  const inl = x => esc(x).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/(^|[^*\w])\*([^*\n]+)\*(?!\w)/g, "$1<i>$2</i>");
+  const out = []; let list = null, kind = "";
+  const flush = () => { if (list) out.push(`<${kind}>${list.join("")}</${kind}>`); list = null; };
+  for (const raw of String(t || "").split("\n")) {
+    const l = raw.trim(), b = l.match(/^[-*•]\s+(.*)/), n = l.match(/^\d+[.)]\s+(.*)/);
+    if (b || n) { const k = b ? "ul" : "ol"; if (list && k !== kind) flush(); if (!list) { list = []; kind = k; } list.push(`<li>${inl((b || n)[1])}</li>`); continue; }
+    flush(); if (!l) continue;
+    const h = l.match(/^#{1,4}\s+(.*)/);
+    out.push(`<p>${h ? `<b>${inl(h[1])}</b>` : inl(l)}</p>`);
+  }
+  flush(); return out.join("");
+}
+const BOT = `<span class="bot-av"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg></span>`;
+/* One turn of the staff chat: the question on the right, Nova's answer on the left. */
+function askResult(r, i) {
+  const me = `<div class="msg me">${esc(r.question)}</div>`;
+  if (r.pending) return me + `<div class="msg ai">${BOT}<div class="bub"><span class="typing" aria-label="Thinking"><i></i><i></i><i></i></span></div></div>`;
+  if (r.error) return me + `<div class="msg ai">${BOT}<div class="bub"><span class="err">${esc(r.error)}</span>
+    <div class="meta"><button type="button" class="btn ghost sm" data-retry="${i}">Try again</button></div></div></div>`;
+  const tag = r.mode === "claude" ? "AI answer · Claude · read-only" : r.mode === "checked_fallback" ? "Figures only (AI answer hidden)" : "Offline mode · no AI";
+  return me + `<div class="msg ai">${BOT}<div class="bub">
+    ${r.answer ? `<div class="md">${md(r.answer)}</div>` : r.calls.length ? `<div class="md"><p>Here are the figures I looked up:</p></div>` : ""}
     ${r.note ? `<div class="notice ${r.mode === "claude" ? "" : "warn"} small" style="margin-top:8px">${esc(r.note)}</div>` : ""}
     ${r.calls.length ? `<details class="data" ${r.answer ? "" : "open"}><summary>Data used (${r.calls.map(c => TOOL_NAMES[c.tool] || c.tool).join(", ")})</summary>
       ${r.calls.map(c => `<div style="margin-top:8px"><b>${esc(TOOL_NAMES[c.tool] || c.tool)}</b> <span class="muted">${esc(Object.entries(c.input).map(([k, v]) => label(k) + ": " + v).join(", "))}</span>${dataTable(c.output)}</div>`).join("")}</details>` : ""}
     ${r.learned ? `<div class="learned small" style="margin-top:8px">${ICON_LEARN} ${esc(r.learned)}</div>` : ""}
-    <div class="muted small" style="margin-top:8px">${r.scope === "company" ? "Whole company" : "Your leads only"} · demo data${r.usage ? ` · ${num(r.usage.input_tokens + r.usage.output_tokens)} tokens, about $${r.usage.cost_usd.toFixed(3)}` : ""}</div>
-    ${rateRow(r)}</div>`;
+    <div class="meta">${tag} · ${r.scope === "company" ? "whole company" : "your leads only"}${r.usage ? ` · about $${r.usage.cost_usd.toFixed(3)}` : ""}</div>
+    ${rateRow(r)}</div></div>`;
 }
 /* D2: thumbs up / down on AI answers and drafts. The AI reuses what the team liked and avoids what it didn't. */
 const ICON_LEARN = `<svg class="ico" viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-3px"><path d="M12 3a6 6 0 00-3.5 10.9V17h7v-3.1A6 6 0 0012 3z"/><path d="M9.5 20.5h5"/></svg>`;
@@ -1247,31 +1361,56 @@ async function learningCard() {
     ${list("Questions it couldn't answer yet", L.unanswered.map(q => `<li>${esc(q)}</li>`))}
     <p class="muted small" style="margin:12px 0 0">How it learns: a new question is matched with similar questions your team rated before. Claude is shown what was liked (which figures, which style) and what was not, and why. Without an AI key, the lookup your team liked is reused. Follow-up drafts copy the style of messages your team actually sent. Figures are always looked up fresh and checked. Nothing leaves your company.</p></details>`;
 }
+/* Staff chat: a real back-and-forth with Nova about the company's figures. Earlier turns go with each new question,
+ * so "and last month?" works. Kept for this browser tab only. */
+const CHAT_KEY = "nova_admin_chat";
+try { S.asks = JSON.parse(sessionStorage.getItem(CHAT_KEY) || "[]").filter(t => !t.pending); } catch { S.asks = []; }
+const saveChat = () => { try { sessionStorage.setItem(CHAT_KEY, JSON.stringify(S.asks.filter(t => !t.pending).slice(-30))); } catch {} };
 async function askView() {
   shell("ask", topbar("Ask your data") + loading());
   const info = await api("/ask");
-  $("#view").innerHTML = topbar("Ask your data", info.scope === "company" ? "Questions about the whole company's data" : "Questions about your own leads and sales",
-      info.ai_available ? `<span class="ai-tag">AI · Claude · read-only</span>` : `<span class="ai-tag off">Offline mode · no AI key</span>`) + `
-    <div class="card"><form class="askbox" id="af"><input id="aq" maxlength="300" placeholder="e.g. Which salesperson sold the most in the last 30 days?" autocomplete="off">
-      <button class="btn" id="ab">Ask</button></form>
-      <div class="chips" style="margin-top:10px">${info.suggestions.map(q => `<button type="button" class="chip" data-q="${esc(q)}">${esc(q)}</button>`).join("")}</div>
-      <p class="muted small" style="margin:10px 0 0">${info.ai_available
-        ? "Claude reads the figures through fixed, read-only lookups (it never sees the database and can't change anything). Every number in its answer is checked against the data; open “Data used” to see where it came from."
-        : "No Anthropic API key is set, so this page uses simple keyword matching and shows the figures directly. Add ANTHROPIC_API_KEY to .env to get written answers from Claude."}</p></div>
-    <div id="learn"></div>
-    <div id="answers">${S.asks.map(askResult).join("")}</div>`;
-  const redraw = () => { $("#answers").innerHTML = S.asks.map(askResult).join(""); wireRates(S.asks, redraw); learningCard().then(h => { if ($("#learn")) $("#learn").innerHTML = h; }); };
-  redraw();
-  const go = async q => {
-    if (!q.trim()) return;
-    $("#ab").disabled = true; $("#ab").textContent = "Thinking…";
-    try { const r = await api("/ask", {method: "POST", body: {question: q}}); S.asks.unshift(r); S.asks = S.asks.slice(0, 10);
-          redraw(); $("#aq").value = ""; }
-    catch (e) { toast(e.message, "bad"); }
-    $("#ab").disabled = false; $("#ab").textContent = "Ask";
+  const chips = info.suggestions.map(q => `<button type="button" class="chip" data-q="${esc(q)}">${esc(q)}</button>`).join("");
+  $("#view").innerHTML = topbar("Ask your data", info.scope === "company" ? "Chat with Nova about the whole company's figures" : "Chat with Nova about your own leads and sales",
+      `${info.ai_available ? `<span class="ai-tag">AI · Claude · read-only</span>` : `<span class="ai-tag off">Offline mode · no AI key</span>`}
+       <button class="btn ghost sm" id="newChat">New chat</button>`) + `
+    <div class="card chat">
+      <div class="chat-log" id="log" aria-live="polite"></div>
+      <div class="chat-sugg" id="sugg">${chips}</div>
+      <form class="chat-in" id="af"><textarea id="aq" rows="1" maxlength="300" placeholder="Ask about sales, profit, stock, leads… (Enter to send, Shift+Enter for a new line)"></textarea>
+        <button class="btn" id="ab">Send</button></form>
+      <div class="chat-note">${info.ai_available
+        ? "Nova reads the figures through fixed, read-only lookups. It never sees the database and can't change anything. Every number is checked against the data; open “Data used” under an answer to see where it came from."
+        : "No Anthropic API key is set, so Nova uses simple keyword matching and shows the figures directly, and follow-up questions aren't understood. Add ANTHROPIC_API_KEY to get written answers from Claude."}</div></div>
+    <div id="learn"></div>`;
+  const log = $("#log");
+  const grow = () => { const t = $("#aq"); t.style.height = "auto"; t.style.height = Math.min(140, t.scrollHeight) + "px"; };
+  const busy = on => { $("#ab").disabled = on; $("#ab").textContent = on ? "…" : "Send"; };
+  const refreshLearn = () => learningCard().then(h => { if ($("#learn")) $("#learn").innerHTML = h; });
+  const redraw = () => {
+    log.innerHTML = S.asks.length ? S.asks.map(askResult).join("")
+      : `<div class="chat-hello">${BOT}<h2 style="margin:0 0 6px">Hi ${esc((S.me.name || "").split(" ")[0])}, what would you like to know?</h2>
+          <p class="muted small" style="margin:0">Ask in your own words. You can follow up, for example “and last month?” or “only for bathroom tiles”.</p>
+          <div class="chips">${chips}</div></div>`;
+    $("#sugg").hidden = !S.asks.length;
+    wireRates(S.asks, redraw);
+    log.querySelectorAll("[data-q]").forEach(b => b.onclick = () => go(b.dataset.q));
+    log.querySelectorAll("[data-retry]").forEach(b => b.onclick = () => { const t = S.asks.splice(+b.dataset.retry, 1)[0]; go(t.question); });
+    log.scrollTop = log.scrollHeight;
   };
+  const go = async q => {
+    q = (q || "").trim(); if (!q || $("#ab").disabled) return;
+    const history = S.asks.filter(t => t.answer).slice(-6).map(t => ({question: t.question, answer: t.answer.slice(0, 3500)}));
+    const turn = {question: q, pending: true}; S.asks.push(turn); $("#aq").value = ""; grow(); busy(true); redraw();
+    try { Object.assign(turn, await api("/ask", {method: "POST", body: {question: q, history}}), {pending: false}); }
+    catch (e) { Object.assign(turn, {pending: false, error: e.message}); }
+    busy(false); saveChat(); redraw(); $("#aq").focus(); refreshLearn();
+  };
+  $("#aq").oninput = grow;
+  $("#aq").onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); go($("#aq").value); } };
   $("#af").onsubmit = e => { e.preventDefault(); go($("#aq").value); };
-  document.querySelectorAll("[data-q]").forEach(b => b.onclick = () => { $("#aq").value = b.dataset.q; go(b.dataset.q); });
+  $("#sugg").onclick = e => { const b = e.target.closest("[data-q]"); if (b) go(b.dataset.q); };
+  $("#newChat").onclick = () => { if ($("#ab").disabled) return; S.asks = []; saveChat(); redraw(); $("#aq").focus(); };
+  redraw(); $("#aq").focus(); refreshLearn();
 }
 
 /* ------------------------------------------------------------------ Follow-up drafts (feature 3) */
@@ -1283,12 +1422,13 @@ async function followupsView() {
     <div class="notice small" style="margin-bottom:14px">Nova Studio writes a draft; nothing is sent automatically. Read and edit it, send it yourself
       on WhatsApp or email, then press <b>Mark as sent</b> so it's logged on the lead. Drafts never offer discounts or new prices.</div>
     <div id="editor"></div>
-    <div class="card">${r.items.length ? `<div class="tablewrap"><table><tr><th>Quotation</th><th>Customer</th>${S.can.has("leads.view_all") ? "<th>Salesperson</th>" : ""}<th class="right">Total</th><th class="right">Waiting</th><th></th></tr>
+    <div class="card">${r.items.length ? `<div class="tablewrap"><table id="fuT"><tr><th>Quotation</th><th>Customer</th>${S.can.has("leads.view_all") ? "<th>Salesperson</th>" : ""}<th class="right">Total</th><th class="right">Waiting</th><th></th></tr>
       ${r.items.map(w => `<tr><td><a class="lnk" href="#/quotes/${w.quote_id}">${esc(w.quote)}</a></td><td><a href="#/leads/${w.lead_id}">${esc(w.customer)}</a></td>
-        ${S.can.has("leads.view_all") ? `<td class="small">${esc(w.owner || "")}</td>` : ""}<td class="right num">${qar(w.total)}</td><td class="right">${w.days_waiting} days</td>
+        ${S.can.has("leads.view_all") ? `<td class="small">${esc(w.owner || "")}</td>` : ""}<td class="right num">${qar(w.total)}</td><td class="right" data-v="${w.days_waiting}">${w.days_waiting} days</td>
         <td class="right nowrap"><button class="btn ghost sm" data-d="${w.quote_id}" data-ch="whatsapp">WhatsApp draft</button>
           <button class="btn ghost sm" data-d="${w.quote_id}" data-ch="email">Email draft</button></td></tr>`).join("")}</table></div>`
       : `<div class="empty">Nothing waiting. Every sent quotation has had a follow-up in the last 3 days.</div>`}</div>`;
+  tableTools($("#fuT"), {filters: ["Salesperson"], search: "Search quotation or customer"});
   document.querySelectorAll("[data-d]").forEach(b => b.onclick = async () => {
     const old = b.textContent; b.disabled = true; b.textContent = "Writing…";
     try { showDraft(await api(`/followups/${b.dataset.d}/draft`, {method: "POST", body: {channel: b.dataset.ch}})); }
@@ -1323,12 +1463,13 @@ function showDraft(d) {
 /* ------------------------------------------------------------------ audit + team */
 async function auditView() {
   shell("audit", topbar("Audit log") + loading());
-  const rows = await api("/audit?limit=200");
-  $("#view").innerHTML = topbar("Audit log", "Logins, discount decisions, price changes, stock and order actions. Read-only.") + `
-    <div class="card"><div class="tablewrap"><table><tr><th>When</th><th>Who</th><th>Action</th><th>Record</th><th>Details</th></tr>
-      ${rows.map(a => `<tr><td class="small nowrap">${dateTime(a.at)}</td><td class="small">${esc(a.user || (a.action.startsWith("shop") ? "Shop customer" : "System"))}</td>
+  const rows = await api("/audit?limit=500");
+  $("#view").innerHTML = backLink("#/settings") + topbar("Audit log", "Logins, discount decisions, price changes, stock and order actions. Read-only. Latest 500.") + `
+    <div class="card"><div class="tablewrap"><table id="audT"><tr><th>When</th><th>Who</th><th>Action</th><th>Record</th><th>Details</th></tr>
+      ${rows.map(a => `<tr><td class="small nowrap" data-v="${esc(a.at || "")}">${dateTime(a.at)}</td><td class="small">${esc(a.user || (a.action.startsWith("shop") ? "Shop customer" : "System"))}</td>
         <td><span class="tag">${esc(a.action)}</span></td><td class="small">${esc(a.entity || "")} ${esc(a.entity_id || "")}</td>
         <td class="small muted">${esc(a.after ? Object.entries(a.after).map(([k, v]) => k + ": " + (typeof v === "object" ? JSON.stringify(v) : v)).join(", ") : "")}</td></tr>`).join("")}</table></div></div>`;
+  tableTools($("#audT"), {filters: ["Who", "Action"], search: "Search records and details"});
 }
 /* ------------------------------------------------------------------ settings */
 /* One place for the owner's admin jobs: staff accounts, stock, the sample rooms and the 3D rooms. */
@@ -1363,7 +1504,7 @@ async function teamView() {
   const active = rows.filter(u => u.active).length;
   $("#view").innerHTML = backLink("#/settings") + topbar("Staff accounts", `${active} active · who can log in to Nova Studio and what each person may do`,
       `<button class="btn sm" id="uAdd">+ Add staff member</button>`) + `
-    <div class="card"><div class="tablewrap"><table><tr><th>Name</th><th>Email</th><th>Role</th><th>Branch</th><th class="right">Discount limit</th><th>Status</th><th class="right"></th></tr>
+    <div class="card"><div class="tablewrap"><table id="teamT"><tr><th>Name</th><th>Email</th><th>Role</th><th>Branch</th><th class="right">Discount limit</th><th>Status</th><th class="right"></th></tr>
       ${rows.map(u => `<tr class="${u.active ? "" : "muted"}"><td><b>${esc(u.name)}</b>${u.id === me ? ` <span class="tag">You</span>` : ""}</td><td class="small">${esc(u.email)}</td>
         <td><span class="tag" title="${esc((ROLE_INFO[u.role] || [])[1] || "")}">${esc((ROLE_INFO[u.role] || [label(u.role)])[0])}</span></td><td class="small">${esc(u.branch || "")}</td>
         <td class="right">${u.discount_limit_pct}%</td><td>${u.active ? `<span class="tag ok">Active</span>` : `<span class="tag out">Switched off</span>`}</td>
@@ -1374,6 +1515,7 @@ async function teamView() {
     <div class="card" style="margin-top:14px"><div class="head"><h2>What each role can do</h2></div>
       <div class="tablewrap"><table>${Object.values(ROLE_INFO).map(([n, d]) => `<tr><td class="nowrap"><b>${n}</b></td><td class="small">${d}</td></tr>`).join("")}</table></div></div>`;
   const roleOpts = Object.entries(ROLE_INFO).map(([k, v]) => [k, v[0]]);
+  if (rows.length > 6) tableTools($("#teamT"), {filters: ["Role", "Branch", "Status"], search: "Search name or email"});
   $("#uAdd").onclick = async () => {
     const r = await ask("Add a staff member", [
       {name: "name", label: "Full name", required: true, check: v => v.length < 2 ? "Please enter their full name." : ""},
@@ -1426,7 +1568,7 @@ async function rooms3dView() {
   const list = await fetch("/api/worlds", {cache: "no-store"}).then(r => r.json());
   const say = w => ({none: "Not made yet", pending: "Being made by World Labs (about 5 minutes). This page updates by itself.",
                      ready: "Ready. Customers see “Walk around freely” in its 360° view.", failed: "Failed: " + (w.error || "")})[w.status];
-  $("#view").innerHTML = topbar("3D rooms", "Sample rooms customers can walk around in") + `<div class="card">
+  $("#view").innerHTML = backLink("#/settings") + topbar("3D rooms", "Sample rooms customers can walk around in") + `<div class="card">
     <p class="muted small" style="margin:0 0 12px">World Labs turns a 360° room picture into a room customers can walk around in. Each room is made
     once (about 1,500 World Labs credits, about 5 minutes) and then kept on our server, so it is never paid for again.</p>
     <div class="tablewrap"><table><tr><th>Room</th><th>Status</th><th class="right"></th></tr>
@@ -1465,7 +1607,7 @@ async function sampleRoomsView() {
         ${r.status === "failed" ? `<button class="btn sm" data-retry="${r.id}">Try again</button>` : ""}
         <button class="btn ghost sm" data-del="${r.id}" data-name="${esc(r.name)}">Delete</button></div></div></div>`;
   };
-  $("#view").innerHTML = topbar("Sample rooms", "Your own room photos for the tile visualiser") + `
+  $("#view").innerHTML = backLink("#/settings") + topbar("Sample rooms", "Your own room photos for the tile visualiser") + `
     ${d.room_ai ? "" : `<div class="notice warn" style="margin-bottom:12px">The room AI is not switched on, so new rooms can't be marked.
       Add ROOMAI_URL and ROOMAI_TOKEN in Render (see backend/roomai/modal_app.py).</div>`}
     <div class="card" style="margin-bottom:14px"><h3 style="margin:0 0 4px">Add a room</h3>
@@ -1477,7 +1619,7 @@ async function sampleRoomsView() {
         <div><input id="srFile" type="file" accept="image/jpeg,image/png,image/webp"><div class="field-err" id="srFileErr"></div></div>
         <button class="btn" id="srAdd">Upload and mark it</button></form></div>
     ${d.rooms.length ? `<div class="sr-grid">${d.rooms.map(card).join("")}</div>`
-      : `<div class="card muted small">No rooms yet. Customers see the 9 built-in rooms until you publish your own.</div>`}
+      : `<div class="card muted small">No rooms yet. Customers see the built-in sample rooms until you publish your own.</div>`}
     <div class="card" style="margin-top:14px"><h3 style="margin:0 0 4px">Fixes shared by customers</h3>
       <p class="muted small" style="margin:0 0 8px">When customers fix an area on their own photo and tick "help improve the room AI",
       their photo, what the AI found and their fix are kept here. They are the answer sheets for training the room AI later.</p>

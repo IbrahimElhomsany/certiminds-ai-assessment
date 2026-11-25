@@ -183,3 +183,29 @@ def test_daily_ai_budget_stops_claude_and_features_fall_back(monkeypatch):
     monkeypatch.setattr(admin_api, "ai_client", lambda: capped)
     r = client.post("/api/admin/ask", json={"question": "Which products will run out first?"}, headers=H("owner")).json()
     assert r["mode"] == "offline" and "AIBudgetExceeded" in r["note"]
+
+
+def test_staff_chat_sends_earlier_turns_so_follow_ups_work(monkeypatch):
+    """Ask your data is a chat: the last turns go to Claude before the new question; numbers from them count as known."""
+    earlier = [{"question": f"q{i}", "answer": f"a{i}"} for i in range(8)] + [
+        {"question": "Revenue last month?", "answer": "Revenue was QAR 123,456."}, {"question": "no answer", "answer": None}]
+    fake = Fake([resp([text("That is down from QAR 123,456 last month.")])])
+    monkeypatch.setattr(admin_api, "ai_client", lambda: fake)
+    r = client.post("/api/admin/ask", json={"question": "And this month?", "history": earlier}, headers=H("manager")).json()
+    msgs = fake.requests[0]["messages"]
+    assert r["mode"] == "claude" and "123,456" in r["answer"]                # a figure from the chat is not flagged
+    assert len(msgs) == 2 * ask_data.MAX_HISTORY + 1 and msgs[-1] == {"role": "user", "content": "And this month?"}
+    assert msgs[-3:-1] == [{"role": "user", "content": "Revenue last month?"}, {"role": "assistant", "content": "Revenue was QAR 123,456."}]
+    too_many = client.post("/api/admin/ask", json={"question": "x?", "history": earlier * 2}, headers=H("manager"))
+    assert too_many.status_code == 422
+
+
+def test_quotes_and_orders_can_be_sorted():
+    for path in ("/api/admin/quotes", "/api/admin/orders"):
+        hi = client.get(path + "?sort=total_desc&limit=50", headers=H("manager")).json()["items"]
+        lo = client.get(path + "?sort=total_asc&limit=50", headers=H("manager")).json()["items"]
+        assert [x["total"] for x in hi] == sorted([x["total"] for x in hi], reverse=True)
+        assert [x["total"] for x in lo] == sorted([x["total"] for x in lo])
+        old = client.get(path + "?sort=oldest&limit=5", headers=H("manager")).json()["items"]
+        assert old[0]["created_at"] <= old[-1]["created_at"]
+        assert client.get(path + "?sort=nonsense", headers=H("manager")).status_code == 422

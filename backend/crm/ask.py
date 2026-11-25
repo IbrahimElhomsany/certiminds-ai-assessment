@@ -28,6 +28,7 @@ from backend.db.models import Customer, Lead, Product, Quote, Tenant, User
 
 MAX_ROUNDS = 5
 MAX_QUESTION = 300
+MAX_HISTORY = 6          # earlier chat turns sent to Claude with a new question
 GROUPS_SALES = ("day", "week", "month", "salesperson", "source", "product", "customer_type")
 GROUPS_LEADS = ("stage", "source", "salesperson", "room", "lost_reason")
 
@@ -255,8 +256,11 @@ def offline_pick(question: str, avoid: frozenset = frozenset()) -> tuple[Optiona
 
 
 # ------------------------------------------------------------------ main entry
-def ask(db: Session, user: User, question: str, client=None, model: Optional[str] = None) -> dict:
+def ask(db: Session, user: User, question: str, client=None, model: Optional[str] = None,
+        history: Optional[list] = None) -> dict:
     question = " ".join((question or "").split())[:MAX_QUESTION]
+    # the chat so far (staff chat): the last few turns, so follow-ups like "and last month?" make sense
+    history = [h for h in (history or []) if h.get("question") and h.get("answer")][-MAX_HISTORY:]
     if not question:
         raise ValueError("Type a question first.")
     calls: list[dict] = []
@@ -276,9 +280,10 @@ def ask(db: Session, user: User, question: str, client=None, model: Optional[str
         if extra:
             system += "\n\n" + extra
         try:
-            answer, usage = _claude(client, model, system, question, call)
+            answer, usage = _claude(client, model, system, question, call, history)
             mode = "claude"
-            bad = ungrounded(answer, [c["output"] for c in calls], question)
+            bad = ungrounded(answer, [c["output"] for c in calls],
+                           question + " " + " ".join(h["question"] + " " + h["answer"] for h in history))
             if bad:
                 note = ("The AI answer contained figures that don't match the data "
                         f"({', '.join(f'{b:g}' for b in bad[:3])}), so it was hidden. Here are the figures it looked up.")
@@ -310,10 +315,13 @@ def ask(db: Session, user: User, question: str, client=None, model: Optional[str
             "scope": "company" if A.own_leads(user) is None else "my leads"}
 
 
-def _claude(client, model: str, system: str, question: str, call) -> tuple[str, dict]:
+def _claude(client, model: str, system: str, question: str, call, history: Optional[list] = None) -> tuple[str, dict]:
     from backend.observability import METRICS
     from backend.providers import estimate_cost
-    messages = [{"role": "user", "content": question}]
+    messages = []
+    for h in history or []:
+        messages += [{"role": "user", "content": h["question"]}, {"role": "assistant", "content": h["answer"]}]
+    messages.append({"role": "user", "content": question})
     total_in = total_out = 0
     for _ in range(MAX_ROUNDS):
         t0 = time.perf_counter()

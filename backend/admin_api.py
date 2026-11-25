@@ -225,7 +225,8 @@ def list_leads(stage: Optional[str] = None, limit: int = 50,
 @router.get("/audit")
 def audit_log(limit: int = 50, user: User = Depends(require("audit.view")), db: Session = Depends(get_db)):
     rows = db.scalars(select(AuditLog).where(AuditLog.tenant_id == user.tenant_id)
-                      .order_by(AuditLog.created_at.desc(), AuditLog.id.desc()).limit(max(1, min(limit, 200))))
+                      .order_by(AuditLog.created_at.desc(), AuditLog.id.desc())
+                      .limit(max(1, min(limit, 500))))
     names = {u.id: u.name for u in db.scalars(select(User).where(User.tenant_id == user.tenant_id))}
     return [{"at": a.created_at, "user": names.get(a.user_id), "action": a.action, "entity": a.entity,
              "entity_id": a.entity_id, "after": a.after} for a in rows]
@@ -435,8 +436,16 @@ def visible_quotes(user: User):
     return q
 
 
+def _sorted(model, sort: str) -> tuple:
+    """Order for the Quotations and Orders lists (the query already joins Customer)."""
+    return {"oldest": (model.created_at.asc(), model.id.asc()), "total_desc": (model.total.desc(), model.id.desc()),
+            "total_asc": (model.total.asc(), model.id.asc()), "customer": (Customer.name.asc(), model.created_at.desc()),
+            }.get(sort, (model.created_at.desc(), model.id.desc()))
+
+
 @router.get("/quotes")
 def list_quotes(status: Optional[str] = None, q: Optional[str] = None, offset: int = 0, limit: int = 25,
+                sort: Literal["newest", "oldest", "total_desc", "total_asc", "customer"] = "newest",
                 user: User = Depends(current_user), db: Session = Depends(get_db)):
     need_any(user, "quotes.view_all", "quotes.view_own")
     query = visible_quotes(user).join(Customer, Customer.id == Quote.customer_id)
@@ -446,7 +455,7 @@ def list_quotes(status: Optional[str] = None, q: Optional[str] = None, offset: i
         like = f"%{q.strip()[:60]}%"
         query = query.where(or_(Quote.number.ilike(like), Customer.name.ilike(like)))
     total = db.scalar(select(func.count()).select_from(query.subquery()))
-    rows = db.scalars(query.order_by(Quote.created_at.desc()).offset(max(0, offset)).limit(max(1, min(limit, 100))))
+    rows = db.scalars(query.order_by(*_sorted(Quote, sort)).offset(max(0, offset)).limit(max(1, min(limit, 100))))
     return {"total": total, "items": [quote_row(db, x) for x in rows]}
 
 
@@ -534,6 +543,7 @@ def visible_orders(user: User):
 
 @router.get("/orders")
 def list_orders(status: Optional[str] = None, q: Optional[str] = None, offset: int = 0, limit: int = 25,
+                sort: Literal["newest", "oldest", "total_desc", "total_asc", "customer"] = "newest",
                 user: User = Depends(current_user), db: Session = Depends(get_db)):
     need_any(user, "orders.view_all", "orders.view_own")
     query = visible_orders(user).join(Customer, Customer.id == Order.customer_id)
@@ -543,7 +553,7 @@ def list_orders(status: Optional[str] = None, q: Optional[str] = None, offset: i
         like = f"%{q.strip()[:60]}%"
         query = query.where(or_(Order.number.ilike(like), Customer.name.ilike(like)))
     total = db.scalar(select(func.count()).select_from(query.subquery()))
-    rows = db.scalars(query.order_by(Order.created_at.desc()).offset(max(0, offset)).limit(max(1, min(limit, 100))))
+    rows = db.scalars(query.order_by(*_sorted(Order, sort)).offset(max(0, offset)).limit(max(1, min(limit, 100))))
     counts = {s: n for s, n in db.execute(select(Order.status, func.count(Order.id)).where(
         Order.id.in_(select(visible_orders(user).subquery().c.id))).group_by(Order.status))}
     return {"total": total, "items": [order_row(db, o) for o in rows], "status_counts": counts}
@@ -756,15 +766,22 @@ def ask_info(user: User = Depends(require("dashboard.view")), db: Session = Depe
             "scope": "company" if analytics.own_leads(user) is None else "my leads"}
 
 
+class AskTurn(BaseModel):
+    question: str = Field(max_length=ask_data.MAX_QUESTION)
+    answer: Optional[str] = Field(default=None, max_length=4000)
+
+
 class AskRequest(BaseModel):
     question: str = Field(min_length=2, max_length=ask_data.MAX_QUESTION)
+    history: list[AskTurn] = Field(default_factory=list, max_length=12)    # earlier turns of this chat, oldest first
 
 
 @router.post("/ask")
 def ask(req: AskRequest, user: User = Depends(require("dashboard.view")), db: Session = Depends(get_db)):
     ai_allowed(user)
     try:
-        return ask_data.ask(db, user, req.question, client=ai_client())
+        return ask_data.ask(db, user, req.question, client=ai_client(),
+                            history=[t.model_dump() for t in req.history])
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 

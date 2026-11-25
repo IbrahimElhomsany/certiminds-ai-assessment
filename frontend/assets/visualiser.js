@@ -261,12 +261,38 @@
           const [w, d] = pl.size;
           const H2 = homography([[0, 0], [w, 0], [w, d], [0, d]], pl.quad.map(([x, y]) => [x * sx, y * sx]));
           const hit = new Uint8Array(Math.ceil(W / 4) * Math.ceil(H / 4));   // coarse copy of the mask, to know what was clicked
-          for (let y = 0, k = 0; y < H; y += 4) for (let x = 0; x < W; x += 4, k++) hit[k] = md[(y * W + x) * 4 + 3];
-          planes.push({ surface, maskTex: texture(m.canvas), hinv: invert3(H2), mean: n ? Math.max(0.12, sum / n) : 0.6, hit,
+          // the things marked as standing in front of it (a bath, a WC, the customer's furniture brush)
+          const kc = Object.assign(document.createElement("canvas"), { width: W, height: H }).getContext("2d", { willReadFrequently: true });
+          kc.fillStyle = "#fff"; drawShapes(kc, pl.keep, sx); if (keepMask) kc.drawImage(keepMask, 0, 0, W, H);
+          const kd = kc.getImageData(0, 0, W, H).data, kept = new Uint8Array(hit.length);
+          for (let y = 0, k = 0; y < H; y += 4) for (let x = 0; x < W; x += 4, k++) {
+            const i = (y * W + x) * 4 + 3; hit[k] = md[i]; kept[k] = kd[i] > 110 ? 1 : 0;
+          }
+          planes.push({ surface, maskTex: texture(m.canvas), hinv: invert3(H2), mean: n ? Math.max(0.12, sum / n) : 0.6, hit, kept,
                         lightTex: own ? texture(own.canvas) : null, maxLight: own ? 1.2 : 1.75 });
         }
       }
-      scene = { photoTex, lightTex, planes, W, H, closeup: !!room.closeup };
+      // furniture on parts of the photo that are no tiled surface (a vanity counter, a wardrobe), as a coarse grid
+      let solid = null;
+      if (room.solid && room.solid.length) {
+        const c = Object.assign(document.createElement("canvas"), { width: W, height: H }).getContext("2d", { willReadFrequently: true });
+        c.fillStyle = "#fff"; drawShapes(c, room.solid, sx);
+        const d = c.getImageData(0, 0, W, H).data; solid = new Uint8Array(Math.ceil(W / 4) * Math.ceil(H / 4));
+        for (let y = 0, k = 0; y < H; y += 4) for (let x = 0; x < W; x += 4, k++) solid[k] = d[(y * W + x) * 4 + 3] > 110 ? 1 : 0;
+      }
+      // everything marked as standing in the room, and for each of its pixels the photo row where that thing
+      // ends at the bottom (where it meets the floor, roughly): what is lower in the photo stands in front of it
+      const cw = Math.ceil(W / 4), ch = Math.ceil(H / 4), bottom = new Float32Array(cw * ch).fill(-1);
+      for (let x = 0; x < cw; x++) {
+        let end = -1;
+        for (let y = ch - 1; y >= 0; y--) {
+          const k = y * cw + x, on = (solid && solid[k]) || planes.some(pl => pl.kept[k]);
+          if (!on) { end = -1; continue; }
+          if (end < 0) end = (y + 1) / ch;
+          bottom[k] = end;
+        }
+      }
+      scene = { photoTex, lightTex, planes, W, H, closeup: !!room.closeup, bottom };
       render();
       return { width: W, height: H, scale: sx };
     }
@@ -364,7 +390,25 @@
       return null;
     }
 
-    return { setRoom, setTile, setOptions, render, surfaceAt, get size() { return scene ? [scene.W, scene.H] : null; } };
+    /** Is the photo point (u, v), both 0..1, open floor (or bare wall)? Furniture and anything kept in front says no.
+     *  null when the room has no such surface. Used to stop placed products going over things in the photo. */
+    function isSurface(surface, u, v) {
+      if (!scene) return null;
+      const list = scene.planes.filter(pl => pl.surface === surface); if (!list.length) return null;
+      const cw = Math.ceil(scene.W / 4), x = Math.min(cw - 1, Math.max(0, (u * scene.W / 4) | 0)), y = Math.max(0, (v * scene.H / 4) | 0);
+      return list.some(pl => (pl.hit[y * cw + x] || 0) > 110);
+    }
+
+    /** Is something standing in the room at photo point (u, v) (a bath, a WC, a counter)? Then the photo row
+     *  (0..1) where it ends at the bottom, else null. */
+    function keptBottom(u, v) {
+      if (!scene) return null;
+      const cw = Math.ceil(scene.W / 4), x = Math.min(cw - 1, Math.max(0, (u * scene.W / 4) | 0)), y = Math.max(0, (v * scene.H / 4) | 0);
+      const b = scene.bottom[y * cw + x];
+      return b >= 0 ? b : null;
+    }
+
+    return { setRoom, setTile, setOptions, render, surfaceAt, isSurface, keptBottom, get size() { return scene ? [scene.W, scene.H] : null; } };
   }
 
   /** Real proportions of a rectangle seen in a photo: its 4 corners (pixels, in order around it) and the photo size.

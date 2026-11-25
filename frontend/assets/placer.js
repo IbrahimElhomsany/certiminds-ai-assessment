@@ -76,7 +76,8 @@ const contactTex = (() => {
   return new THREE.CanvasTexture(c);
 })();
 
-export function create(canvas, { onSelect = () => {}, onChange = () => {}, blocked = () => false } = {}) {
+export function create(canvas, { onSelect = () => {}, onChange = () => {}, blocked = () => false,
+                                 isSurface = () => null, keptBottom = () => null, onBlocked = () => {} } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -215,6 +216,106 @@ export function create(canvas, { onSelect = () => {}, onChange = () => {}, block
     obj.rotation.y = Math.round(Math.atan2(d.x, d.z) / (Math.PI / 12)) * (Math.PI / 12);   // 15° steps
   }
 
+  // ---------------------------------------------------------------- free space
+  /* A product may only stand where the photo shows open floor (and, on a wall, bare wall), and never inside
+     another placed product. Checked on a grid of points: the footprint on the floor for anything that reaches
+     down to it, and the back for anything hung on a wall. A few misses are allowed for the soft mask edges. */
+  const lerp = (a, b, t) => a + (b - a) * t, CLEAR = 0.5;
+  /** [u, v] in the photo; "below" when it is under the photo's bottom edge (the floor goes on); null when off
+   *  to the side or above, where we can't see what is there. */
+  function photoPoint(p) {
+    const q = p.clone().project(cam), u = (q.x + 1) / 2, v = (1 - q.y) / 2;
+    if (q.z >= 1 || u < 0 || u > 1 || v < 0) return null;
+    return v > 1 ? "below" : [u, v];
+  }
+  const behindWall = p => walls.some(w => {                               // pushed through one of the room's walls
+    const s = p.clone().sub(w.a).dot(w.u);
+    return s > -0.3 && s < w.len + 0.3 && p.clone().sub(w.a).dot(w.n) < -0.03;
+  });
+  /** Going from the camera along the floor towards p: the first wall foot on the way, or null. */
+  function wallFootOnRay(p) {
+    const o = cam.position.clone().setY(0), d = p.clone().sub(o).setY(0); let best = null;
+    for (const w of walls) {
+      const den = d.dot(w.n); if (Math.abs(den) < 1e-6) continue;
+      const t = w.a.clone().sub(o).dot(w.n) / den; if (t <= 0 || t >= 1) continue;
+      const q = o.clone().add(d.clone().multiplyScalar(t)), s = q.clone().sub(w.a).dot(w.u);
+      if (s > -0.3 && s < w.len + 0.3 && (!best || t < best.t)) best = { t, q };
+    }
+    return best && best.q;
+  }
+  function clashesWithPhoto(it) {
+    const b = it.box, m = 0.04, pts = [];
+    it.obj.updateMatrixWorld(true);
+    if (b.min.y < 0.9)                                                     // its footprint on the floor
+      for (let i = 0; i <= 6; i++) for (let j = 0; j <= 6; j++)
+        pts.push(["floor", it.obj.localToWorld(new THREE.Vector3(lerp(b.min.x + m, b.max.x - m, i / 6), 0, lerp(b.min.z + m, b.max.z - m, j / 6))).setY(0)]);
+    if (it.wall != null)                                                   // its back against the wall
+      for (let i = 0; i <= 6; i++) for (let k = 0; k <= 4; k++)
+        pts.push(["wall", it.obj.localToWorld(new THREE.Vector3(lerp(b.min.x + m, b.max.x - m, i / 6), lerp(b.min.y + m, b.max.y - m, k / 4), b.min.z))]);
+    let bad = 0, seen = 0, out = 0;
+    for (const [surf, p] of pts) {
+      if (surf === "floor" && behindWall(p)) { seen++; bad++; continue; }
+      const uv = photoPoint(p); if (!uv) { out++; continue; }
+      if (uv === "below") { seen++; continue; }
+      const ok = isSurface(surf, uv[0], uv[1]); if (ok === null) continue;
+      seen++; if (!ok) bad++;
+    }
+    if (pts.length && out > pts.length / 2) return true;                // mostly out of the picture
+    if (seen > 0 && bad / seen > 0.06) return true;
+    /* Things in the photo (a bath, a WC, a counter): where the product shows over one of them, it must stand
+       in front of it. Where that thing ends at the bottom of the photo, followed down to the floor, is about
+       its front edge, and the product must be nearer the camera than that. Otherwise it would be inside it,
+       or behind it and still drawn on top. */
+    const flat = q => Math.hypot(q.x - cam.position.x, q.z - cam.position.z);
+    let hit = 0, n = 0;
+    for (let i = 0; i <= 5; i++) for (let j = 0; j <= 5; j++) for (let k = 0; k <= 5; k++) {
+      const p = it.obj.localToWorld(new THREE.Vector3(lerp(b.min.x + m, b.max.x - m, i / 5), lerp(b.min.y + m, b.max.y - m, k / 5), lerp(b.min.z + m, b.max.z - m, j / 5)));
+      const uv = photoPoint(p); if (!uv || uv === "below") continue;
+      n++;
+      const end = keptBottom(uv[0], uv[1]); if (end == null) continue;
+      const front = floorAt(uv[0], Math.min(end, 0.999)); if (!front) continue;   // ends above the horizon: on a wall
+      // a hung thing (a WC, a vanity) ends in the air, so its edge followed down lands behind its wall:
+      // it then fills the space from that wall up to about 70 cm out. Anything less than half a metre in
+      // front of it still reads as overlapping in the picture, so that is kept free too.
+      const foot = behindWall(front) && wallFootOnRay(front);
+      if (flat(p) > (foot ? flat(foot) - 0.7 : flat(front)) - CLEAR) hit++;
+    }
+    return n > 0 && hit / n > 0.03;
+  }
+  function inside(it, other) {                                             // do two products' boxes overlap?
+    const b = it.box, ob = other.box, m = 0.02, p = new THREE.Vector3();
+    it.obj.updateMatrixWorld(true); other.obj.updateMatrixWorld(true);
+    for (let i = 0; i <= 4; i++) for (let j = 0; j <= 4; j++) for (let k = 0; k <= 2; k++) {
+      p.set(lerp(b.min.x + m, b.max.x - m, i / 4), lerp(b.min.y + m, b.max.y - m, k / 2), lerp(b.min.z + m, b.max.z - m, j / 4));
+      const q = other.obj.worldToLocal(it.obj.localToWorld(p.clone()));
+      if (q.x > ob.min.x + m && q.x < ob.max.x - m && q.y > ob.min.y + m && q.y < ob.max.y - m && q.z > ob.min.z + m && q.z < ob.max.z - m) return true;
+    }
+    return false;
+  }
+  /** Why it can't stand where it is now, or null if it can. */
+  function clash(it) {
+    if (items.some(o => o !== it && (inside(it, o) || inside(o, it)))) return "another product";
+    if (clashesWithPhoto(it)) return "the room";
+    return null;
+  }
+  const say = (it, why) => onBlocked(why === "another product"
+    ? `${it.product.name} can't go there: another product is in the way.`
+    : `${it.product.name} can't go there: something in the room is in the way.`);
+  function flash(it) {
+    it.wire.material.color.set(0xe5484d); render();
+    clearTimeout(it._flash); it._flash = setTimeout(() => { it.wire.material.color.set(0xffffff); render(); }, 700);
+  }
+  /** Keep the change only if the product then stands somewhere free (or it was already stuck, so it can get out). */
+  function tryMove(it, apply) {
+    const before = { pos: it.obj.position.clone(), rot: it.obj.rotation.y, wall: it.wall, s: it.s };
+    const wasStuck = !!clash(it);
+    apply();
+    const why = clash(it);
+    if (!why || wasStuck) return true;
+    it.obj.position.copy(before.pos); it.obj.rotation.y = before.rot; it.wall = before.wall; it.s = before.s;
+    return why;
+  }
+
   async function build(product, state) {
     const m = await loadModel(product.model);
     const obj = new THREE.Group(), model = m.scene.clone(true);
@@ -228,7 +329,7 @@ export function create(canvas, { onSelect = () => {}, onChange = () => {}, block
     const wire = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(size.x, size.y, size.z)),
       new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95, depthTest: false }));
     wire.position.copy(center); wire.visible = false; wire.renderOrder = 10; obj.add(wire);
-    const it = { product, obj, wire, size, wall: null, s: 0 };
+    const it = { product, obj, wire, size, box: m.box, wall: null, s: 0 };
     obj.userData.item = it;
     if (state) {
       obj.position.set(state.x, 0, state.z); obj.rotation.y = state.rot || 0;
@@ -240,21 +341,49 @@ export function create(canvas, { onSelect = () => {}, onChange = () => {}, block
   async function add(product) {
     if (!cam) return null;
     const it = await build(product);
-    const p = startSpot(Math.hypot(it.size.x, it.size.z) / 2 * 0.8); if (!p) return null;
-    it.obj.position.copy(p);
-    if (product.mount === "wall" && walls.length) {      // the middle of the longest wall in view
-      const i = walls.reduce((bi, w, j) => (w.to - w.from > walls[bi].to - walls[bi].from ? j : bi), 0);
-      it.wall = i; onWall(it, (walls[i].from + walls[i].to) / 2); freeSpotOnWall(it);
-    }
-    else faceCamera(it.obj);
+    if (!placeFree(it)) { onBlocked(`There's no free space in this view for ${product.name}. Move or remove something first.`); return null; }
     items.push(it); group.add(it.obj); select(it); changed();
     return it;
+  }
+  /** A free place for a new product: the middle of the longest wall (wall products), else the floor in view,
+   *  trying spots further and further out. false if nothing in view is free. */
+  function placeFree(it) {
+    const product = it.product;
+    if (product.mount === "wall" && walls.length) {
+      const order = [...walls.keys()].sort((a, b) => (walls[b].to - walls[b].from) - (walls[a].to - walls[a].from));
+      for (const i of order) {
+        const w = walls[i], mid = (w.from + w.to) / 2;
+        for (let k = 0; k <= 24; k++) {
+          const s = mid + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.15;
+          if (s < w.from - 0.2 || s > w.to + 0.2) continue;
+          it.wall = i; onWall(it, s); if (!clash(it)) return true;
+        }
+      }
+      it.wall = null;
+    }
+    const r = Math.hypot(it.size.x, it.size.z) / 2 * 0.8, c = startSpot(r); if (!c) return false;
+    const base = cam.position.clone().setY(0), flat = c.clone().sub(base).normalize(), side = new THREE.Vector3(-flat.z, 0, flat.x);
+    for (let row = -6; row <= 8; row++) for (let k = 0; k <= 24; k++) {
+      const off = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.2;
+      const p = c.clone().add(side.clone().multiplyScalar(off)).add(flat.clone().multiplyScalar(row * 0.3));
+      const q = p.clone().project(cam); if (Math.abs(q.x) > 0.95 || Math.abs(q.y) > 0.95) continue;
+      it.obj.position.copy(p); faceCamera(it.obj);
+      if (!clash(it)) return true;
+    }
+    return false;
   }
   async function duplicate() {
     if (!sel) return;
     const it = await build(sel.product, state(sel)), step = sel.size.x + 0.1;      // next to it, along its width
-    if (it.wall != null) onWall(it, it.s + step);
-    else it.obj.position.add(new THREE.Vector3(step, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), sel.obj.rotation.y));
+    const from = { pos: it.obj.position.clone(), s: it.s };
+    const tries = [step, -step, 2 * step, -2 * step];
+    let ok = false;
+    for (const t of tries) {
+      if (it.wall != null) onWall(it, from.s + t);
+      else it.obj.position.copy(from.pos).add(new THREE.Vector3(t, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), sel.obj.rotation.y));
+      if (!clash(it)) { ok = true; break; }
+    }
+    if (!ok && !placeFree(it)) { onBlocked(`There's no free space next to ${sel.product.name} for another one.`); return; }
     items.push(it); group.add(it.obj); select(it); changed();
   }
   function remove() {
@@ -263,13 +392,18 @@ export function create(canvas, { onSelect = () => {}, onChange = () => {}, block
   }
   function rotate(deg) {
     if (!sel || sel.wall != null) return;
-    sel.obj.rotation.y += deg * Math.PI / 180; changed();
+    const why = tryMove(sel, () => { sel.obj.rotation.y += deg * Math.PI / 180; });
+    if (why !== true) { say(sel, why); flash(sel); return; }
+    changed();
   }
   /** Take a wall product off its wall (to stand it anywhere and turn it), or put it back on the nearest wall. */
   function toggleWall() {
     if (!sel || sel.product.mount !== "wall" || !walls.length) return;
-    if (sel.wall != null) { sel.wall = null; faceCamera(sel.obj); }
-    else { const w = nearestWall(sel.obj.position); sel.wall = w.i; onWall(sel, w.s); }
+    const why = tryMove(sel, () => {
+      if (sel.wall != null) { sel.wall = null; faceCamera(sel.obj); }
+      else { const w = nearestWall(sel.obj.position); sel.wall = w.i; onWall(sel, w.s); }
+    });
+    if (why !== true) { say(sel, why); flash(sel); return; }
     select(sel); changed();
   }
   function select(it) {
@@ -340,14 +474,22 @@ export function create(canvas, { onSelect = () => {}, onChange = () => {}, block
       if (!drag || e.pointerId !== drag.id) return;
       e.stopPropagation(); e.preventDefault();
       const [u, v] = uv(e), it = drag.it;
-      if (it.wall != null) { const s = wallHit(it, u, v); if (s != null) onWall(it, drag.from + s - drag.start); }
+      // walk there in small steps and stop at the edge of whatever is in the way (never jump through it)
+      let at = null, to = null, put = null;
+      if (it.wall != null) { const s = wallHit(it, u, v); if (s == null) return; at = it.s; to = drag.from + s - drag.start; put = t => onWall(it, at + (to - at) * t); }
       else {
         const p = floorAt(u, Math.min(v, 0.995)); if (!p) return;
         const next = drag.from.clone().add(p.sub(drag.start));
         if (next.distanceTo(cam.position) > 15) return;
-        it.obj.position.copy(next);
+        const cur = it.obj.position.clone(); at = 0; to = cur.distanceTo(next); put = t => it.obj.position.lerpVectors(cur, next, t);
       }
-      drag.moved = true; render();
+      const n = Math.min(40, Math.max(1, Math.ceil(Math.abs(to - at) / 0.04)));
+      for (let i = 1; i <= n; i++) {
+        const why = tryMove(it, () => put(i / n));
+        if (why !== true) { flash(it); if (!drag.told) { drag.told = true; say(it, why); } break; }
+        drag.moved = true;
+      }
+      render();
     };
     const up = e => {
       if (!drag || e.pointerId !== drag.id) return;

@@ -446,6 +446,9 @@ async function placer() {
       onSelect: showSel,
       onChange: list => { S.vis.items = S.vis.items || {}; S.vis.items[roomKey(curRoom())] = list; save(); renderProd(); },
       blocked: () => cmp || !!vtool || is3d(curRoom()),
+      isSurface: (surf, u, v) => (V && V.isSurface ? V.isSurface(surf, u, v) : null),
+      keptBottom: (u, v) => (V && V.keptBottom ? V.keptBottom(u, v) : null),
+      onBlocked: text => toast(text),
     });
     PL.attach($("stage"));
   }

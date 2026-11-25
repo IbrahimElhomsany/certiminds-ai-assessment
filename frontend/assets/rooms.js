@@ -6,6 +6,8 @@
 window.NOVA_ROOMS = [
   {
     id: "living", name: "Living room", location: "indoor", photo: "/images/vis_living.jpg",
+    // furniture and fittings on unmarked parts of the photo: placed products may not cover them
+    solid: [[[1290, 95], [1600, 95], [1600, 450], [1290, 450]], [[300, 290], [450, 290], [450, 420], [300, 420]]],
     surfaces: {
       floor: [{
         quad: [[130, 598], [1672, 598], [2704, 941], [-741, 941]], size: [665, 319],
@@ -51,6 +53,8 @@ window.NOVA_ROOMS = [
   },
   {
     id: "bedroom", name: "Bedroom", location: "indoor", photo: "/images/vis_bedroom.jpg",
+    // furniture and fittings on unmarked parts of the photo: placed products may not cover them
+    solid: [[[1395, 0], [1672, 0], [1672, 890], [1395, 660]]],
     surfaces: {
       floor: [{
         quad: [[445, 652], [1390, 652], [1746, 941], [-613, 941]], size: [455, 318],
@@ -77,6 +81,8 @@ window.NOVA_ROOMS = [
   },
   {
     id: "kitchen", name: "Kitchen", location: "indoor", photo: "/images/vis_kitchen.jpg",
+    // furniture and fittings on unmarked parts of the photo: placed products may not cover them
+    solid: [[[140, 478], [1605, 478], [1605, 705], [140, 705]], [[145, 0], [1580, 0], [1580, 258], [145, 258]], [[1580, 0], [1672, 0], [1672, 740], [1605, 705]]],
     surfaces: {
       floor: [{
         quad: [[145, 712], [1605, 712], [2364, 941], [-537, 941]], size: [566, 258],
@@ -101,6 +107,8 @@ window.NOVA_ROOMS = [
   },
   {
     id: "bathroom", name: "Bathroom", location: "indoor", photo: "/images/vis_bathroom.jpg",
+    // furniture and fittings on unmarked parts of the photo: placed products may not cover them
+    solid: [[[1165, 505], [1672, 495], [1672, 941], [1400, 941], [1260, 860], [1165, 860]], [[1165, 20], [1400, 0], [1400, 520], [1165, 520]], [[1520, 290], [1672, 290], [1672, 520], [1520, 520]], [[550, 240], [745, 240], [745, 560], [550, 560]]],
     surfaces: {
       floor: [{
         quad: [[603, 625], [1063, 625], [1452, 941], [290, 941]], size: [256, 370],
@@ -128,6 +136,8 @@ window.NOVA_ROOMS = [
   },
   {
     id: "spa", name: "Spa bathroom", location: "indoor", photo: "/images/vis_spa.jpg",
+    // furniture and fittings on unmarked parts of the photo: placed products may not cover them
+    solid: [[[0, 480], [300, 485], [300, 680], [0, 690]], [[0, 30], [235, 30], [235, 420], [0, 420]], [[85, 455], [310, 455], [310, 520], [85, 520]], [[1140, 100], [1470, 100], [1470, 520], [1140, 520]], [[1460, 410], [1590, 410], [1590, 560], [1460, 560]]],
     surfaces: {
       floor: [{
         quad: [[320, 645], [1340, 645], [1983, 941], [-338, 941]], size: [528, 388],
@@ -147,6 +157,8 @@ window.NOVA_ROOMS = [
   },
   {
     id: "office", name: "Office", location: "indoor", photo: "/images/vis_office.jpg",
+    // furniture and fittings on unmarked parts of the photo: placed products may not cover them
+    solid: [[[390, 300], [590, 300], [590, 520], [390, 520]]],
     surfaces: {
       floor: [{
         quad: [[445, 577], [1200, 577], [2331, 941], [-280, 941]], size: [714, 740],
@@ -172,6 +184,8 @@ window.NOVA_ROOMS = [
   },
   {
     id: "terrace", name: "Terrace", location: "outdoor", photo: "/images/vis_terrace.jpg",
+    // furniture and fittings on unmarked parts of the photo: placed products may not cover them
+    solid: [[[205, 110], [565, 110], [565, 480], [205, 480]]],
     surfaces: {
       floor: [{
         quad: [[420, 597], [1550, 597], [2586, 941], [-184, 941]], size: [572, 401],

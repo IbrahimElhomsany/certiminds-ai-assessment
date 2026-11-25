@@ -216,6 +216,10 @@ function ownRoom() {
     return { id: "own", name: "Your room", location: o.location || "indoor", photo: o.photo.url,
              width: o.photo.width, height: o.photo.height, surfaces, keepMask: null };
   }
+  // new version: the photo goes straight to the AI, so it needs no dots; floor and walls only say what can be picked
+  if (o && o.photo && !OLD_VIS && !(o.floor && o.floor.size))
+    return { id: "own", name: "Your room", location: o.location || "indoor", photo: o.photo.url, aiOnly: true,
+             width: o.photo.width, height: o.photo.height, surfaces: { floor: [{}], wall: [{}] }, keepMask: null };
   if (!o || !o.photo || !o.floor || !o.floor.size) return null;
   // tiles cover the floor between the far dots and the bottom of the photo, not only up to the near dots
   const down = (a, b) => { const y = o.photo.height * 1.05, t = (y - a[1]) / ((b[1] - a[1]) || 1e-6); return t > 1 ? [a[0] + (b[0] - a[0]) * t, y] : b; };
@@ -354,7 +358,8 @@ async function loadRoom(room) {
       if (f) { room.mask = f.mask; room.floorMean = f.mean; room.wallMean = f.wallMean; room.rect = f.rect; }
     }
     // photo rooms carry the customer's "Fix the area" strokes (erased everywhere, added per surface)
-    const size = await viewer().setRoom(is3d(room) ? room : { ...room, edits: (S.vis.edits || {})[roomKey(room)] || null });
+    const size = await viewer().setRoom(is3d(room) ? room : room.aiOnly ? { ...room, surfaces: {} }   // just the photo
+      : { ...room, edits: (S.vis.edits || {})[roomKey(room)] || null });
     if (token !== roomToken) return;
     loadedKey = roomKey(room);
     await applyTiles();
@@ -404,10 +409,13 @@ function renderVisControls() {
     ? "Your 360° photo, with the tiles laid on a flat floor about 1.5 m below the camera. Look all around; measure your room before you order."
     : room.id === "own" && S.own.ai
     ? `Your photo. Our room AI found the floor${S.own.ai.surfaces.some(a => a.kind === "wall") ? " and walls" : ""} and keeps the furniture in front${S.own.ai.floorM2 ? `; the floor it can see is about <b>${S.own.ai.floorM2.toFixed(1)} m²</b>` : ""}. Tiles too big or small? Use <b>Room size</b> under Position. A spot missed? Use <b>Fix the area</b>. Or <a href="#/mark">place the dots by hand</a>. Measure your room before you order.`
+    : room.aiOnly
+    ? "Your photo. Pick a floor or wall tile, or write what you'd like, then press Generate: the AI redraws your room. Measure your room before you order."
     : room.id === "own"
     ? `Your photo. The tiles follow the dots you placed${S.own.areaM2 ? `, and your floor is about <b>${S.own.areaM2.toFixed(1)} m²</b>` : ""}. <a href="#/mark">Adjust the dots</a>. Measure your room before you order.`
     : "Sample room. Tiles are drawn at their real size and follow the room's light, but colours on screen can look slightly different from the real tile. Ask for a sample in the showroom before you order.";
   document.querySelectorAll("#vsurf button").forEach(b => { b.disabled = !room.surfaces[b.dataset.s]; b.classList.toggle("on", b.dataset.s === surf); });
+  $("vclickHint").hidden = !!room.aiOnly;              // a photo with no floor or walls marked: nothing to click
   $("swTitle").textContent = `${SURF[surf]} tiles for ${room.location === "outdoor" ? "outdoors" : "indoors"}`;
   const tiles = CAT.filter(p => p.kind === "tile" && (p.surfaces || []).includes(surf) && (p.locations || []).includes(room.location));
   const cur = S.vis[surf] && tiles.some(p => p.sku === S.vis[surf]) ? S.vis[surf] : null;
@@ -694,7 +702,7 @@ function wireBrush() {
 // under the picture: the tile on the selected surface, its price and stock, and "Add to project"
 function renderPbar(room, surf, p, unfit) {
   if (!p) {
-    $("pbar").innerHTML = `<div class="nm"><b>Pick a ${surf} tile on the right</b><small>${unfit ? `${esc(unfit.name)} isn't made for this room's ${room.location} ${surf}.` : "Click the floor or a wall in the picture to switch."}</small></div>`;
+    $("pbar").innerHTML = `<div class="nm"><b>Pick a ${surf} tile on the right</b><small>${unfit ? `${esc(unfit.name)} isn't made for this room's ${room.location} ${surf}.` : room.aiOnly ? "Then press Generate." : "Click the floor or a wall in the picture to switch."}</small></div>`;
     return;
   }
   const a = AVAIL[p.sku], tag = a ? `<span class="tag ${a === "In stock" ? "ok" : a === "Low stock" ? "low" : "out"}">${esc(a)}</span>` : "";
@@ -993,6 +1001,10 @@ function newOwn(photo) {
   S.own = { photo, location: "indoor", rev: ((S.own && S.own.rev) || 0) + 1, auto: "pending", keep: null, areaM2: null, wallM2: null,
             floor: { pts: [[0.24 * W, 0.6 * H], [0.76 * W, 0.6 * H], [1.03 * W, 1.03 * H], [-0.03 * W, 1.03 * H]], widthM: null, depthM: null },
             wall: { on: false, pts: [[0.24 * W, 0.14 * H], [0.76 * W, 0.14 * H], [0.76 * W, 0.58 * H], [0.24 * W, 0.58 * H]], widthM: null } };
+  if (!OLD_VIS) {                       // new version: no dots, straight into the room view, ready for Generate
+    S.own.auto = "skipped"; resetPicks(); S.vis.room = "own"; S.vis.picked = true; S.vis.surface = "floor";
+    save(); location.hash = "#/visual"; return;
+  }
   save(); location.hash = "#/mark";
 }
 let hand = null, handTimer = null;
@@ -1027,6 +1039,7 @@ let mtab = "floor", mtool = "paint", msize = 28;
 const DOT_NAMES = { floor: ["far left", "far right", "near right", "near left"], wall: ["top left", "top right", "bottom right", "bottom left"] };
 function showMark() {
   if (!S.own || !S.own.photo) { location.replace("#/rooms"); return; }
+  if (!OLD_VIS) { location.replace("#/visual"); return; }      // the dots screen belongs to the old version
   const o = S.own, img = $("mphoto");
   if (img.dataset.src !== o.photo.url) {
     img.dataset.src = o.photo.url; img.src = o.photo.url;

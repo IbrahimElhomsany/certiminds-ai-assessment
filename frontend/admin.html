@@ -353,7 +353,7 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
   .apr-foot .who { flex:1; min-width:160px; }
   .sec-h { display:flex; align-items:center; gap:8px; margin:4px 0 10px; font-size:14px; font-weight:600; }
   .sec-h .cnt { background:var(--warn); color:#fff; border-radius:9px; font-size:11px; padding:1px 7px; }
-  /* staff chat (Ask your data) */
+  /* staff chat (Nova Insights) */
   .chat { display:flex; flex-direction:column; height:calc(100vh - 200px); min-height:480px; padding:0; overflow:hidden; }
   .chat-log { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:16px; }
   .msg { max-width:min(760px, 86%); line-height:1.55; font-size:13.5px; }
@@ -373,8 +373,6 @@ try { if (localStorage.getItem("nova_admin_theme") === "dark") document.document
   .chat-hello .chips { justify-content:center; margin-top:14px; }
   .chat-in { border-top:1px solid var(--line); padding:12px 14px; display:flex; gap:8px; align-items:flex-end; background:var(--panel); }
   .chat-in textarea { flex:1; resize:none; min-height:44px; max-height:140px; padding:11px 14px; line-height:1.4; font:inherit; }
-  .chat-sugg { display:flex; gap:6px; overflow-x:auto; padding:10px 14px 0; border-top:1px solid var(--line); }
-  .chat-sugg .chip { white-space:nowrap; }
   .chat-note { font-size:11.5px; color:var(--muted); padding:0 14px 10px; background:var(--panel); }
   .msg .err { color:var(--bad); }
 </style>
@@ -572,7 +570,7 @@ function modules() {
     ["inventory", "Inventory", c("inventory.view")],
     ["followups", "Follow-ups", c("quotes.edit")],
     ["approvals", "Approvals", c("discounts.approve")],
-    ["ask", "Ask your data", c("dashboard.view")],
+    ["ask", "Nova Insights", c("dashboard.view")],
     ["audit", "Audit log", c("audit.view")],
     ["settings", "Settings", c("users.manage") || c("settings.manage") || c("inventory.edit")],
     // opened from Settings (not listed in the side menu)
@@ -677,7 +675,7 @@ async function dashboardView() {
     ["approvals", "Approve discounts", "#/approvals", S.can.has("discounts.approve")],
     ["orders", "Confirm orders", "#/orders?status=pending", S.can.has("orders.create")],
     ["inventory", "Receive stock", "#/inventory", S.can.has("inventory.edit")],
-    ["ask", "Ask your data", "#/ask", S.can.has("dashboard.view")],
+    ["ask", "Nova Insights", "#/ask", S.can.has("dashboard.view")],
     ["leads", "Find a lead", "#/leads", S.can.has("leads.view_all") || S.can.has("leads.view_own")],
     ["team", "Manage staff", "#/team", S.can.has("users.manage")],
     ["shop", "Open the shop", "/", true],
@@ -1266,7 +1264,7 @@ function bindDecisions() {
 }
 
 
-/* ------------------------------------------------------------------ Ask your data (feature 11) */
+/* ------------------------------------------------------------------ Nova Insights (feature 11) */
 const TOOL_NAMES = {get_kpis: "Key figures", sales_breakdown: "Sales breakdown", leads_breakdown: "Leads breakdown",
   top_products: "Top products", stock: "Stock levels", waiting_quotes: "Quotations waiting", pipeline: "Pipeline"};
 function dataTable(out) {
@@ -1350,7 +1348,7 @@ async function learningCard() {
   return `<details class="card learncard" style="margin-top:14px"><summary><b>${ICON_LEARN} What the AI has learned from your team</b>
       <span class="muted small">&nbsp;${total ? `${total} ratings · answers helpful this week: ${pct(L.ask.this_week)}` : "No ratings yet: use 👍 / 👎 under each answer"}</span></summary>
     <div class="learngrid">
-      <div><div class="muted small">Ask your data</div><div class="kv" style="margin:6px 0">
+      <div><div class="muted small">Nova Insights</div><div class="kv" style="margin:6px 0">
         <span>Helpful</span><span>${L.ask.helpful}</span><span>Not helpful</span><span>${L.ask.not_helpful}</span>
         <span>Helpful this week</span><span>${pct(L.ask.this_week)}${trend(L.ask.this_week, L.ask.last_week)}</span></div></div>
       <div><div class="muted small">Follow-up drafts</div><div class="kv" style="margin:6px 0">
@@ -1367,16 +1365,15 @@ const CHAT_KEY = "nova_admin_chat";
 try { S.asks = JSON.parse(sessionStorage.getItem(CHAT_KEY) || "[]").filter(t => !t.pending); } catch { S.asks = []; }
 const saveChat = () => { try { sessionStorage.setItem(CHAT_KEY, JSON.stringify(S.asks.filter(t => !t.pending).slice(-30))); } catch {} };
 async function askView() {
-  shell("ask", topbar("Ask your data") + loading());
+  shell("ask", topbar("Nova Insights") + loading());
   const info = await api("/ask");
   const chips = info.suggestions.map(q => `<button type="button" class="chip" data-q="${esc(q)}">${esc(q)}</button>`).join("");
-  $("#view").innerHTML = topbar("Ask your data", info.scope === "company" ? "Chat with Nova about the whole company's figures" : "Chat with Nova about your own leads and sales",
+  $("#view").innerHTML = topbar("Nova Insights", info.scope === "company" ? "Chat with Nova about the whole company's figures" : "Chat with Nova about your own leads and sales",
       `${info.ai_available ? `<span class="ai-tag">AI · Claude · read-only</span>` : `<span class="ai-tag off">Offline mode · no AI key</span>`}
        <button class="btn ghost sm" id="newChat">New chat</button>`) + `
     <div class="card chat">
       <div class="chat-log" id="log" aria-live="polite"></div>
-      <div class="chat-sugg" id="sugg">${chips}</div>
-      <form class="chat-in" id="af"><textarea id="aq" rows="1" maxlength="300" placeholder="Ask about sales, profit, stock, leads… (Enter to send, Shift+Enter for a new line)"></textarea>
+      <form class="chat-in" id="af"><textarea id="aq" rows="1" maxlength="300" placeholder="Ask about sales, profit, stock or leads"></textarea>
         <button class="btn" id="ab">Send</button></form>
       <div class="chat-note">${info.ai_available
         ? "Nova reads the figures through fixed, read-only lookups. It never sees the database and can't change anything. Every number is checked against the data; open “Data used” under an answer to see where it came from."
@@ -1388,10 +1385,9 @@ async function askView() {
   const refreshLearn = () => learningCard().then(h => { if ($("#learn")) $("#learn").innerHTML = h; });
   const redraw = () => {
     log.innerHTML = S.asks.length ? S.asks.map(askResult).join("")
-      : `<div class="chat-hello">${BOT}<h2 style="margin:0 0 6px">Hi ${esc((S.me.name || "").split(" ")[0])}, what would you like to know?</h2>
+      : `<div class="chat-hello">${BOT}<h2 style="margin:0 0 6px">Hi ${esc(((S.me.user || {}).name || "").trim() || "there")}, what would you like to know?</h2>
           <p class="muted small" style="margin:0">Ask in your own words. You can follow up, for example “and last month?” or “only for bathroom tiles”.</p>
           <div class="chips">${chips}</div></div>`;
-    $("#sugg").hidden = !S.asks.length;
     wireRates(S.asks, redraw);
     log.querySelectorAll("[data-q]").forEach(b => b.onclick = () => go(b.dataset.q));
     log.querySelectorAll("[data-retry]").forEach(b => b.onclick = () => { const t = S.asks.splice(+b.dataset.retry, 1)[0]; go(t.question); });
@@ -1408,7 +1404,6 @@ async function askView() {
   $("#aq").oninput = grow;
   $("#aq").onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); go($("#aq").value); } };
   $("#af").onsubmit = e => { e.preventDefault(); go($("#aq").value); };
-  $("#sugg").onclick = e => { const b = e.target.closest("[data-q]"); if (b) go(b.dataset.q); };
   $("#newChat").onclick = () => { if ($("#ab").disabled) return; S.asks = []; saveChat(); redraw(); $("#aq").focus(); };
   redraw(); $("#aq").focus(); refreshLearn();
 }
@@ -1856,7 +1851,7 @@ async function sampleRoomView(id) {
 /* ------------------------------------------------------------------ router */
 /* Back = where you actually came from inside the admin (keeps list filters and page);
    opened directly from a link or bookmark, Back goes to that section's list. */
-const SECTION = {ask: "Ask your data", followups: "Follow-ups", dashboard: "Dashboard", leads: "Leads", quotes: "Quotations", orders: "Orders", inventory: "Inventory",
+const SECTION = {ask: "Nova Insights", followups: "Follow-ups", dashboard: "Dashboard", leads: "Leads", quotes: "Quotations", orders: "Orders", inventory: "Inventory",
                  approvals: "Approvals", audit: "Audit log", team: "Staff accounts", rooms3d: "3D rooms", samplerooms: "Sample rooms", homepage: "Home page", settings: "Settings"};
 function titleOf(hash) {
   if (S.titles[hash]) return S.titles[hash];

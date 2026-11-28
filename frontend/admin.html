@@ -1368,7 +1368,8 @@ const saveChat = () => { try { sessionStorage.setItem(CHAT_KEY, JSON.stringify(S
 async function askView() {
   shell("ask", topbar("Nova Insights") + loading());
   const info = await api("/ask");
-  const chips = info.suggestions.map(q => `<button type="button" class="chip" data-q="${esc(q)}">${esc(q)}</button>`).join("");
+  const AR_SUGG = ["من باع أكثر في آخر ٣٠ يوم؟", "ما هي المنتجات الأكثر ربحاً؟"];     // Arabic, for demos
+  const chips = [...AR_SUGG, ...info.suggestions].map(q => `<button type="button" class="chip" dir="auto" data-q="${esc(q)}">${esc(q)}</button>`).join("");
   $("#view").innerHTML = topbar("Nova Insights", info.scope === "company" ? "Chat with Nova about the whole company's figures" : "Chat with Nova about your own leads and sales",
       `${info.ai_available ? `<span class="ai-tag">AI · Claude · read-only</span>` : `<span class="ai-tag off">Offline mode · no AI key</span>`}
        <button class="btn ghost sm" id="newChat">New chat</button>`) + `

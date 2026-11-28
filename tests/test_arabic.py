@@ -78,3 +78,13 @@ def test_staff_chat_offline_understands_arabic():
         assert ask_data.offline_pick(q)[0] == tool, q
     assert ask_data.offline_pick("المبيعات في آخر ٩٠ يوم")[1]["days"] == 90
     assert 123456.5 in ask_data.numbers_in("الإيرادات ١٢٣٬٤٥٦٫٥ ريال")
+
+
+def test_arabic_demo_chips_reach_a_quote_in_two_taps():
+    """The two Arabic suggestion buttons in the customer chat: needs, then tile + basin + shower + quote."""
+    agent = SalesAgent(GW, client=None)
+    agent.chat("USR-1001", "أحتاج بلاط لأرضية الحمام ٢٠ متر مربع", "t-ar-chips")
+    r = agent.chat("USR-1001", "أريد الأول مع مغسلة ودش، وجهز لي عرض سعر", "t-ar-chips")
+    assert r["quote"] and arabic_only(r["reply"]) and r["guardrails"]["output_violations"] == []
+    assert {"SN001", "SN002"} <= {ln["sku"] for ln in r["quote"]["products"]}
+    assert find_mentioned_sets("دشداشة") == {}

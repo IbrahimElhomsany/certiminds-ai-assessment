@@ -159,7 +159,7 @@ def check_suitability(sku: str, req: CustomerRequirements) -> list[str]:
 
 SET_KEYWORDS = {      # bathroom sets (sold per set) and the words customers use for them
     "SN001": [r"luna", r"\bbasins?\b", r"wash ?basins?", r"\bsinks?\b", r"مغسل[ةه]", r"مغاسل"],
-    "SN002": [r"aria", r"shower sets?", r"hand ?shower", r"shower ?heads?", r"rain ?shower", r"shower mixer", r"(?<![\u0600-\u06FF])(و|ال|وال|بال)?دش(?![\u0600-\u06FF])", r"شاور(?! ?زجاج)", r"دوش"],
+    "SN002": [r"aria", r"shower sets?", r"hand ?shower", r"shower ?heads?", r"rain ?shower", r"shower mixer", r"(?<![\u0621-\u064A])(و|ال|وال|بال)?دش(?![\u0621-\u064A])", r"شاور(?! ?زجاج)", r"دوش"],
     "SN003": [r"\bwc\b", r"toilets?", r"water closet", r"مرحاض", r"كرسي (حمام|افرنجي|إفرنجي)", r"تواليت"],
     "SN004": [r"vanity", r"vanities", r"basin cabinet", r"sink cabinet", r"خزان[ةه] (ال)?مغسل[ةه]", r"فانيتي"],
     "SN005": [r"bath ?tubs?", r"freestanding baths?", r"بانيو", r"حوض استحمام", r"بانيوهات"],

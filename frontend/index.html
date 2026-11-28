@@ -102,6 +102,7 @@
   .act { border:1px solid var(--line); background:#fff; border-radius:99px; padding:3px 10px; display:inline-flex; gap:5px; align-items:center; font-size:11.5px; line-height:1.5; white-space:nowrap; }
   .act:hover { border-color:var(--green); }
   .act .ico { width:13px; height:13px; }
+  .act.ar { font-size:12.5px; }
   .tests { display:none; flex-wrap:wrap; gap:6px; margin-top:6px; width:100%; }
   body.tech .tests { display:flex; }
   .test { border:1px dashed var(--red); color:var(--red); background:#fff; border-radius:99px; padding:3px 10px; font-size:11.5px; }
@@ -491,6 +492,8 @@
       </div>
       <div id="log"></div>
       <div class="helpers">
+        <button class="act ar" type="button" dir="rtl" data-say="أحتاج بلاط لأرضية الحمام ٢٠ متر مربع">بلاط لأرضية الحمام ٢٠ م²</button>
+        <button class="act ar" type="button" dir="rtl" data-say="أريد الأول مع مغسلة ودش، وجهز لي عرض سعر">الأول مع مغسلة ودش وعرض سعر</button>
         <button class="act" type="button" data-say="Show me the most affordable suitable options.">Value</button>
         <button class="act" type="button" data-say="Show me premium options.">Premium</button>
         <button class="act" type="button" data-act="compare"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3v18M5 7h14M5 7l-3 6h6zM19 7l-3 6h6z"/></svg>Compare options</button>

@@ -23,6 +23,8 @@ from sqlalchemy.orm import Session
 from backend.auth import audit, has_permission
 from backend.crm import analytics as A
 from backend.crm import learning
+from backend.guardrails import to_western
+from backend.rule_extractor import normalize
 from backend.db.database import local_now
 from backend.db.models import Customer, Lead, Product, Quote, Tenant, User
 
@@ -174,7 +176,7 @@ NUM = re.compile(r"(?<![A-Za-z])-?\d[\d,]*(?:\.\d+)?")
 
 def numbers_in(text: str) -> list[float]:
     out = []
-    for m in NUM.findall(text):
+    for m in NUM.findall(to_western(text)):
         try:
             out.append(float(m.replace(",", "")))
         except ValueError:
@@ -207,7 +209,9 @@ Rules:
 - If the tools can't answer (for example the data isn't recorded), say so plainly and suggest what they can ask.
 - Keep it short: 2 to 5 sentences or a few bullet points. Lead with the answer. Write money as "QAR 12,345".
 - Say which period the figures cover. Don't mention tool names, JSON or SQL.
-- You can only read data. If asked to change something, say that is done in the admin screens."""
+- You can only read data. If asked to change something, say that is done in the admin screens.
+- Answer in the language of the question. For Arabic, use clear Modern Standard Arabic, keep names of people and
+  products as they are, and write numbers with Western digits (e.g. "QAR 12,345", "35.6%")."""
 
 
 def _system(db: Session, user: User) -> str:
@@ -219,33 +223,40 @@ def _system(db: Session, user: User) -> str:
 
 
 # ------------------------------------------------------------------ offline mode
+# English and Arabic (Arabic written as rule_extractor.normalize() leaves it: ا for أ/إ/آ, ه for ة, ي for ى)
 OFFLINE_RULES = [
-    (r"\b(lost|lose|losing)\b", "leads_breakdown", {"group_by": "lost_reason"}),
-    (r"\b(stock|inventory|run(ning)? out|reorder|batch)", "stock", {}),
-    (r"\b(follow|waiting|stalled|no reply|chase)", "waiting_quotes", {}),
-    (r"\b(funnel|pipeline|stage)", "pipeline", {}),
-    (r"\b(source|channel|where .* come|chat|walk.?in)", "leads_breakdown", {"group_by": "source"}),
-    (r"\b(best|top|sell(ing)?|popular) .*product|\bproducts?\b", "top_products", {}),
-    (r"\b(salesperson|salespeople|team|who sold|staff|omar|lina|yusuf)", "sales_breakdown", {"group_by": "salesperson"}),
-    (r"\b(week|weekly)", "sales_breakdown", {"group_by": "week"}),
-    (r"\b(revenue|sales|profit|margin|conversion|orders?|kpi|how .* doing)", "get_kpis", {}),
+    (r"\b(lost|lose|losing)\b|خسر|نخسر|خساره|نفقد|فقدنا|ضاع|يضيع|المفقود", "leads_breakdown", {"group_by": "lost_reason"}),
+    (r"\b(stock|inventory|run(ning)? out|reorder|batch)|مخزون|ينفد|تنفد|نفاد|ينتهي|تنتهي|اعاده طلب|دفعه|الكميات", "stock", {}),
+    (r"\b(follow|waiting|stalled|no reply|chase)|متابع|تابع|ينتظر|بانتظار|بدون رد|لم يرد|ما رد", "waiting_quotes", {}),
+    (r"\b(funnel|pipeline|stage)|مراحل|مرحله|خط المبيعات|القمع", "pipeline", {}),
+    (r"\b(source|channel|where .* come|chat|walk.?in)|مصدر|مصادر|من اين|منين|قناه|قنوات|يجون|ياتون|ياتي", "leads_breakdown", {"group_by": "source"}),
+    (r"\b(best|top|sell(ing)?|popular) .*product|\bproducts?\b|منتج|المنتجات|الاكثر مبيعا|اصناف", "top_products", {}),
+    (r"\b(salesperson|salespeople|team|who sold|staff|omar|lina|yusuf)|موظف|مندوب|بائع|البائعين|الفريق|من باع|عمر|لينا|يوسف",
+     "sales_breakdown", {"group_by": "salesperson"}),
+    (r"\b(week|weekly)|اسبوع|اسبوعي", "sales_breakdown", {"group_by": "week"}),
+    (r"\b(revenue|sales|profit|margin|conversion|orders?|kpi|how .* doing)|مبيعات|ايراد|ارباح|ربح|هامش|طلبات|ادا[ءؤئ]|مقارنه|"
+     r"كيف حالنا|كيف وضعنا|بعنا|نتائج", "get_kpis", {}),
 ]
+ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
 
 
 def _period(question: str) -> Optional[int]:
-    q = question.lower()
-    m = re.search(r"(\d{1,3})\s*(day|week|month)", q)
+    q = normalize(question)
+    m = re.search(r"(\d{1,3})\s*(day|week|month|يوم|ايام|اسبوع|اسابيع|شهر|اشهر|شهور)", q)
     if m:
-        return int(m.group(1)) * {"day": 1, "week": 7, "month": 30}[m.group(2)]
+        unit = m.group(2)
+        days = 1 if unit in ("day", "يوم", "ايام") else 7 if unit in ("week", "اسبوع", "اسابيع") else 30
+        return int(m.group(1)) * days
     for word, d in (("today", 1), ("this week", 7), ("last week", 7), ("quarter", 90), ("this month", 30),
-                    ("last month", 30), ("year", 365)):
+                    ("last month", 30), ("year", 365), ("اليوم", 1), ("هذا الاسبوع", 7), ("الاسبوع الماضي", 7),
+                    ("ربع", 90), ("ثلاث اشهر", 90), ("هذا الشهر", 30), ("الشهر الماضي", 30), ("السنه", 365), ("سنه", 365)):
         if word in q:
             return d
     return None
 
 
 def offline_pick(question: str, avoid: frozenset = frozenset()) -> tuple[Optional[str], dict]:
-    q = question.lower()
+    q = normalize(question)
     for pattern, tool, args in OFFLINE_RULES:
         if tool not in avoid and re.search(pattern, q):
             args = dict(args)
@@ -303,8 +314,11 @@ def ask(db: Session, user: User, question: str, client=None, model: Optional[str
         if tool:
             call(tool, args)
         else:
-            note = note or ("Offline mode only understands simple questions about sales, profit, products, stock, "
-                            "leads, lost reasons, the pipeline and quotations waiting for a reply.")
+            note = note or (("وضع عدم الاتصال يفهم فقط الأسئلة البسيطة عن المبيعات والأرباح والمنتجات والمخزون "
+                             "والعملاء المحتملين وأسباب الخسارة ومراحل البيع وعروض الأسعار التي تنتظر ردًا.")
+                            if ARABIC_RE.search(question) else
+                            ("Offline mode only understands simple questions about sales, profit, products, stock, "
+                             "leads, lost reasons, the pipeline and quotations waiting for a reply."))
     audit(db, user.tenant_id, "ai.ask", user.id, after={"question": question, "mode": mode,
                                                          "tools": [c["tool"] for c in calls]})
     row = learning.record(db, user, "ask", question, answer, mode,

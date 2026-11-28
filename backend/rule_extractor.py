@@ -12,27 +12,64 @@ from backend.catalog import usd_to_qar
 
 from backend.schemas import CustomerRequirements, StructuredAnalysis
 
-ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
+ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹٬٫", "01234567890123456789,.")
+_TASHKEEL = re.compile(r"[\u064B-\u0652\u0640]")          # vowel marks and tatweel
+
+
+def normalize(text: str) -> str:
+    """Lower-case, Western digits, and one spelling for Arabic letters (أ إ آ -> ا, ى -> ي, ة -> ه), no vowel marks.
+    Arabic words in the lists below are matched after the same normalising."""
+    t = _TASHKEEL.sub("", text.lower().translate(ARABIC_DIGITS))
+    return t.translate(str.maketrans("أإآىة", "ااايه"))
+
 
 OUTDOOR = ["outdoor", "balcony", "terrace", "patio", "garden", "pool", "deck", "outside",
-           "شرفة", "خارجي", "خارجية", "حديقة", "مسبح"]
+           "شرفة", "بلكونة", "بلكونه", "خارجي", "خارجية", "حديقة", "مسبح", "حوض السباحة", "تراس", "سطح", "فناء", "حوش"]
 INDOOR = ["indoor", "living room", "bedroom", "kitchen", "bathroom", "restaurant", "office", "shop",
-          "home", "house", "داخلي", "مطبخ", "حمام"]
-WALL = ["wall", "backsplash", "splashback", "جدار", "حائط"]
-FLOOR = ["floor", "flooring", "deck", "balcony", "terrace", "patio", "restaurant", "living room", "أرضية", "شرفة"]
-SLIP = ["slip", "slippery", "children", "kids", "elderly", "wet", "pool", "انزلاق"]
-HIGH_TRAFFIC = ["restaurant", "commercial", "traffic", "shop", "office", "hotel", "mall", "مطعم", "تجاري"]
-URGENT = ["urgent", "asap", "today", "tomorrow", "this week", "immediately", "عاجل", "اليوم"]
+          "home", "house", "داخلي", "داخلية", "مطبخ", "حمام", "دورة مياه", "صالة", "صالون", "مجلس", "غرفة نوم",
+          "غرفة المعيشة", "مكتب", "مطعم", "محل", "فيلا", "شقة", "بيت", "منزل"]
+WALL = ["wall", "backsplash", "splashback", "جدار", "حائط", "حيطان", "جدران", "الحيط"]
+FLOOR = ["floor", "flooring", "deck", "balcony", "terrace", "patio", "restaurant", "living room", "أرضية", "ارضية", "الأرض", "ارضيات", "أرضيات", "شرفة", "تراس", "بلاط ارض", "مسبح", "حوض السباحة", "ممر", "حوش"]
+SLIP = ["slip", "slippery", "children", "kids", "elderly", "wet", "pool", "انزلاق", "يزلق", "زلق", "أطفال", "اطفال",
+        "كبار السن", "مبلل", "رطب"]
+HIGH_TRAFFIC = ["restaurant", "commercial", "traffic", "shop", "office", "hotel", "mall", "مطعم", "تجاري", "فندق", "مول", "محل", "مكتب"]
+URGENT = ["urgent", "asap", "today", "tomorrow", "this week", "immediately", "عاجل", "اليوم", "بكرة", "بكره", "غدا", "غداً", "هذا الأسبوع", "مستعجل", "ضروري"]
 STYLES = ["marble", "wood", "stone", "modern", "rustic", "minimal", "luxury", "industrial", "slate",
-          "subway", "contemporary", "decorative", "natural", "رخام", "خشب"]
-COLORS = ["white", "black", "grey", "gray", "beige", "cream", "blue", "brown", "dark", "light"]
+          "subway", "contemporary", "decorative", "natural", "رخام", "خشب", "حجر", "مودرن", "حديث", "عصري",
+          "كلاسيك", "ريفي", "فاخر", "بسيط", "طبيعي"]
+COLORS = ["white", "black", "grey", "gray", "beige", "cream", "blue", "brown", "dark", "light",
+          "أبيض", "ابيض", "بيضاء", "أسود", "اسود", "سوداء", "رمادي", "رماديه", "بيج", "كريمي", "أزرق", "ازرق", "بني",
+          "غامق", "داكن", "فاتح"]
 APPLICATIONS = ["pool deck", "balcony", "terrace", "patio", "kitchen", "bathroom", "living room",
-                "bedroom", "restaurant", "office", "shop", "garden", "شرفة", "مطبخ", "حمام"]
+                "bedroom", "restaurant", "office", "shop", "garden",
+                "مسبح", "حوض السباحة", "شرفة", "بلكونة", "بلكونه", "تراس", "مطبخ", "حمام", "دورة مياه", "صالة", "صالون",
+                "مجلس", "غرفة المعيشة", "غرفة نوم", "مطعم", "مكتب", "محل", "حديقة", "حوش"]
 INJECTION = ["ignore all", "ignore your", "ignore previous", "system prompt", "system message",
              "administrator", "admin pricing", "reveal", "management approved", "another customer",
              "as system instructions", "jailbreak"]
 TILE_WORDS = ["tile", "tiles", "porcelain", "ceramic", "floor", "wall", "sqm", "m2", "m²", "square",
-              "quote", "price", "stock", "بلاط", "متر"] + OUTDOOR + STYLES
+              "quote", "price", "stock", "بلاط", "متر", "سيراميك", "بورسلين", "رخام", "سعر", "أسعار", "اسعار", "كم",
+              "عرض", "مخزون", "متوفر", "موجود", "كمية", "تسعير", "مغسلة", "دش", "شاور", "مرحاض", "كرسي"] + OUTDOOR + INDOOR + STYLES
+# Arabic words -> the English values the rest of the app uses
+AR_MAP = {"مسبح": "pool deck", "حوض السباحة": "pool deck", "شرفة": "balcony", "بلكونة": "balcony", "بلكونه": "balcony",
+          "تراس": "terrace", "مطبخ": "kitchen", "حمام": "bathroom", "دورة مياه": "bathroom", "صالة": "living room",
+          "صالون": "living room", "مجلس": "living room", "غرفة المعيشة": "living room", "غرفة نوم": "bedroom",
+          "مطعم": "restaurant", "مكتب": "office", "محل": "shop", "حديقة": "garden", "حوش": "garden",
+          "رخام": "marble", "خشب": "wood", "حجر": "stone", "مودرن": "modern", "حديث": "modern", "عصري": "contemporary",
+          "كلاسيك": "classic", "ريفي": "rustic", "فاخر": "luxury", "بسيط": "minimal", "طبيعي": "natural",
+          "أبيض": "white", "ابيض": "white", "بيضاء": "white", "أسود": "black", "اسود": "black", "سوداء": "black",
+          "رمادي": "grey", "رماديه": "grey", "بيج": "beige", "كريمي": "cream", "أزرق": "blue", "ازرق": "blue",
+          "بني": "brown", "غامق": "dark", "داكن": "dark", "فاتح": "light"}
+QUOTE_WORDS = ["quote", "quotation", "invoice", "عرض سعر", "عرض أسعار", "عرض اسعار", "تسعيرة", "تسعيره", "فاتورة",
+               "سوي لي عرض", "جهز لي عرض", "جهز العرض", "اطلب", "أطلب"]
+GREETING_AR = ["مرحبا", "السلام", "اهلا", "أهلا", "هلا", "صباح الخير", "مساء الخير", "هاي"]
+OBJECTION = ["competitor", "cheaper", "% less", "why should i buy", "ارخص", "أرخص عند", "منافس", "غالي", "غالية"]
+
+
+for _name in ("OUTDOOR", "INDOOR", "WALL", "FLOOR", "SLIP", "HIGH_TRAFFIC", "URGENT", "STYLES", "COLORS",
+              "APPLICATIONS", "TILE_WORDS", "QUOTE_WORDS", "GREETING_AR", "OBJECTION"):
+    globals()[_name] = [normalize(w) for w in globals()[_name]]
+AR_MAP = {normalize(k): v for k, v in AR_MAP.items()}
 
 
 def _has(text: str, words: list[str]) -> bool:
@@ -44,10 +81,10 @@ def _first(text: str, words: list[str]):
 
 
 def extract(message: str) -> StructuredAnalysis:
-    t = message.lower().translate(ARABIC_DIGITS)
+    t = normalize(message)
     req = CustomerRequirements()
 
-    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:m2|m²|sqm|sq\.? ?m|square met|متر)", t)
+    m = re.search(r"(\d+(?:\.\d+)?)\s*(?:m2|m²|sqm|sq\.? ?m|square met|متر|م2|م²|م\b)", t)
     if m:
         req.area_m2 = float(m.group(1))
     usd = re.search(r"\$\s?(\d[\d,]*)|(\d[\d,]*)\s?(?:usd|dollars?)\b", t)
@@ -71,9 +108,10 @@ def extract(message: str) -> StructuredAnalysis:
         req.floor_or_wall = "floor"
 
     app = _first(t, APPLICATIONS)
-    req.application = {"شرفة": "balcony", "مطبخ": "kitchen", "حمام": "bathroom"}.get(app, app)
-    req.preferred_style = _first(t, STYLES)
-    req.preferred_color = _first(t, COLORS)
+    req.application = AR_MAP.get(app, app)
+    style, color = _first(t, STYLES), _first(t, COLORS)
+    req.preferred_style = AR_MAP.get(style, style)
+    req.preferred_color = AR_MAP.get(color, color)
     if _has(t, SLIP) or req.indoor_outdoor == "outdoor":
         req.slip_requirement = "high"
     if _has(t, HIGH_TRAFFIC):
@@ -83,12 +121,12 @@ def extract(message: str) -> StructuredAnalysis:
 
     if _has(t, INJECTION):
         intent = "unsafe_request"
-    elif _has(t, ["competitor", "cheaper", "% less", "why should i buy"]):
+    elif _has(t, OBJECTION):
         intent = "objection"
-    elif _has(t, ["quote", "quotation", "invoice"]):
+    elif _has(t, QUOTE_WORDS):
         intent = "quotation_request"
     elif not _has(t, TILE_WORDS) and (re.search(r"\b(hi|hello|hey|good (morning|afternoon|evening))\b", t)
-                                      or "مرحبا" in t or "السلام" in t):
+                                      or _has(t, GREETING_AR)):
         intent = "greeting"
     elif not _has(t, TILE_WORDS):
         intent = "off_topic"

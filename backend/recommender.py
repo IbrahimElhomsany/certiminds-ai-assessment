@@ -158,18 +158,19 @@ def check_suitability(sku: str, req: CustomerRequirements) -> list[str]:
 
 
 SET_KEYWORDS = {      # bathroom sets (sold per set) and the words customers use for them
-    "SN001": [r"luna", r"\bbasins?\b", r"wash ?basins?", r"\bsinks?\b", r"مغسلة"],
-    "SN002": [r"aria", r"shower sets?", r"hand ?shower", r"shower ?heads?", r"rain ?shower", r"shower mixer", r"\bدش\b"],
-    "SN003": [r"\bwc\b", r"toilets?", r"water closet", r"مرحاض"],
-    "SN004": [r"vanity", r"vanities", r"basin cabinet", r"sink cabinet"],
-    "SN005": [r"bath ?tubs?", r"freestanding baths?", r"بانيو"],
-    "SN006": [r"bidets?", r"شطاف"],
-    "SN007": [r"(?<!polished )(?<!mirror )\bmirrors?\b(?! finish| polish)", r"مرآة"],
-    "SN008": [r"shower screens?", r"shower glass", r"glass shower panel"],
+    "SN001": [r"luna", r"\bbasins?\b", r"wash ?basins?", r"\bsinks?\b", r"مغسل[ةه]", r"مغاسل"],
+    "SN002": [r"aria", r"shower sets?", r"hand ?shower", r"shower ?heads?", r"rain ?shower", r"shower mixer", r"(?<![\u0600-\u06FF])(و|ال|وال|بال)?دش(?![\u0600-\u06FF])", r"شاور(?! ?زجاج)", r"دوش"],
+    "SN003": [r"\bwc\b", r"toilets?", r"water closet", r"مرحاض", r"كرسي (حمام|افرنجي|إفرنجي)", r"تواليت"],
+    "SN004": [r"vanity", r"vanities", r"basin cabinet", r"sink cabinet", r"خزان[ةه] (ال)?مغسل[ةه]", r"فانيتي"],
+    "SN005": [r"bath ?tubs?", r"freestanding baths?", r"بانيو", r"حوض استحمام", r"بانيوهات"],
+    "SN006": [r"bidets?", r"شطاف", r"بيديه"],
+    "SN007": [r"(?<!polished )(?<!mirror )\bmirrors?\b(?! finish| polish)", r"مرآة", r"مراية", r"مرايه", r"مرآه"],
+    "SN008": [r"shower screens?", r"shower glass", r"glass shower panel", r"زجاج (ال)?شاور", r"فاصل (ال)?شاور", r"كابينة شاور"],
 }
 BUNDLE = ("SN001", "SN002", "SN003")      # "a complete bathroom": basin, shower and WC
-BUNDLE_WORDS = r"complete bathroom|full bathroom|bathroom bundle|whole bathroom|everything for the bathroom"
-NUMBER_WORDS = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
+BUNDLE_WORDS = r"complete bathroom|full bathroom|bathroom bundle|whole bathroom|everything for the bathroom|حمام كامل|كل (أغراض|اغراض|مستلزمات) الحمام|طقم حمام كامل"
+NUMBER_WORDS = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+                "واحد": 1, "وحدة": 1, "اثنين": 2, "اثنان": 2, "ثنتين": 2, "ثلاث": 3, "ثلاثة": 3, "اربع": 4, "أربع": 4, "خمس": 5}
 
 
 def find_mentioned_sets(text: str) -> dict[str, int]:
@@ -183,7 +184,7 @@ def find_mentioned_sets(text: str) -> dict[str, int]:
         for pat in patterns:
             m = re.search(pat, t)
             if m:
-                before = t[:m.start()].split()[-2:]          # "2 basins", "two luna basins"
+                before = t[:m.start()].translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")).split()[-2:]   # "2 basins", "٢ مغسلة"
                 qty = 1
                 for w in reversed(before):
                     if w.isdigit() and 0 < int(w) <= 50:

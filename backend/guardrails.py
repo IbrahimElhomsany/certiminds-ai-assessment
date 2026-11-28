@@ -16,15 +16,19 @@ CANARY = "CNV-CANARY-7731"   # secret marker placed in the system prompt; must n
 
 INPUT_RULES = {
     "prompt_injection": [r"ignore (all |any )?(of )?(your|previous|prior|the) (rules|instructions)",
-                         r"ignore all", r"you are now", r"new instructions", r"developer mode", r"jailbreak"],
+                         r"ignore all", r"you are now", r"new instructions", r"developer mode", r"jailbreak",
+                         r"تجاهل (كل |جميع )?(التعليمات|القواعد|الأوامر)", r"تعليمات جديدة", r"انت الان", r"أنت الآن"],
     "system_prompt_extraction": [r"system prompt", r"hidden (prompt|instructions)", r"your instructions",
-                                 r"reveal (your|the) (prompt|rules|instructions)"],
+                                 r"reveal (your|the) (prompt|rules|instructions)",
+                                 r"(اعرض|أظهر|اظهر|اكشف) (لي )?(تعليماتك|التعليمات|البرومبت)", r"تعليماتك"],
     "other_customer_data": [r"another customer", r"other customer", r"someone else'?s", r"all quotes",
-                            r"customer (list|data|database)"],
+                            r"customer (list|data|database)",
+                            r"عميل (آخر|اخر)", r"عملاء (آخرين|اخرين)", r"بيانات العملاء"],
     "inventory_manipulation": [r"ignore (the )?inventory", r"everything is available", r"say .* available",
                                r"tell me .* available today"],
     "price_manipulation": [r"for (\$|qar|qr)\s?\d+ per", r"for \d+\s?(qar|qr|riyals?) per", r"\bfor free\b", r"\bis free\b", r"management approved",
-                           r"manager approved", r"pretend .* (discount|approved)"],
+                           r"manager approved", r"pretend .* (discount|approved)",
+                           r"(اعطني|أعطني|اجعل|خل).{0,25}(مجان|ببلاش)", r"(المدير|الإدارة|الادارة) (وافق|وافقت)"],
     "admin_pricing": [r"admin(istrator)? pric", r"staff pric", r"internal pric", r"cost price",
                       r"admin(istrator)? credential"],
     "retrieved_doc_as_instructions": [r"run (this|the) .*document as", r"(document|retrieved).* as system instructions",
@@ -32,22 +36,32 @@ INPUT_RULES = {
 }
 
 
+# Arabic-Indic digits and separators, so "١٢٣٬٤٥٦٫٥" is read and checked like "123,456.5"
+AR_NUM = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹٬٫", "01234567890123456789,.")
+
+
+def to_western(text: str) -> str:
+    return text.translate(AR_NUM)
+
+
 def inspect_input(message: str) -> list[str]:
-    t = message.lower()
+    t = to_western(message.lower())
     return [cat for cat, patterns in INPUT_RULES.items() if any(re.search(p, t) for p in patterns)]
 
 
-# An amount written as "QAR 1,234.56", "QR 50", "1,234 riyals" or "$1,234": all are checked.
-MONEY = re.compile(r"(?:\$|\bQAR|\bQR)\s?(\d[\d,]*(?:\.\d+)?)|(\d[\d,]*(?:\.\d+)?)\s?(?:QAR|QR|riyals?)\b",
+# An amount written as "QAR 1,234.56", "QR 50", "1,234 riyals", "$1,234", "١٥٠ ريال" or "ر.ق 150": all are checked.
+MONEY = re.compile(r"(?:\$|\bQAR|\bQR|ر\.\s?ق\.?|ريال)\s?(\d[\d,]*(?:\.\d+)?)"
+                   r"|(\d[\d,]*(?:\.\d+)?)\s?(?:(?:QAR|QR|riyals?)\b|ر\.\s?ق|ريال|ريالات)",
                    re.IGNORECASE)
 NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
 FORBIDDEN_OUTPUT = [r"management (has )?approved", r"manager (has )?approved", r"discount (is |has been )?approved",
-                    r"\b(is|are) free\b", r"administrator password", r"admin credentials"]
+                    r"\b(is|are) free\b", r"administrator password", r"admin credentials",
+                    r"(المدير|الإدارة|الادارة) (قد )?(وافق|وافقت)", r"تمت? الموافقة على (الخصم|التخفيض)", r"(البلاط|الطلب|السعر|المنتج) (مجاني|مجانا|مجاناً)"]
 
 
 def numbers_in(text: str) -> set[float]:
     out = set()
-    for n in NUMBER.findall(text):
+    for n in NUMBER.findall(to_western(text)):
         try:
             out.add(round(float(n.replace(",", "")), 2))
         except ValueError:
@@ -82,7 +96,7 @@ def check_output(reply: str, allowed_numbers: set[float]) -> list[str]:
     if CANARY.lower() in reply.lower():
         violations.append("system_prompt_leak")
     grounded = _expand_grounded(allowed_numbers)
-    for groups in MONEY.findall(reply):
+    for groups in MONEY.findall(to_western(reply)):
         amount = groups[0] or groups[1]
         value = round(float(amount.replace(",", "")), 2)
         if not _is_grounded(value, amount, grounded):
